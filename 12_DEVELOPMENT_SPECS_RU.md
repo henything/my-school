@@ -160,23 +160,29 @@
 
 ## 5. Технические решения для стартовой реализации
 
-Документы оставляют часть технических деталей открытыми. Чтобы разработка могла стартовать без зависания, этот spec принимает следующие решения по умолчанию. Их можно изменить до создания репозитория.
+Технологический стек зафиксирован в `13_TECH_STACK_DECISIONS_RU.md`. Этот раздел хранит короткую выжимку решений, влияющих на backlog.
 
 | Решение | Значение v1 |
 |---|---|
-| Стек | Next.js / React fullstack, PostgreSQL, Prisma, Docker для локального запуска |
+| Стек | Next.js App Router + React + TypeScript, PostgreSQL, Prisma, Docker Compose |
+| Runtime | Node.js 24 LTS |
+| Package manager | pnpm через Corepack |
+| UI | Tailwind CSS + shadcn/ui + Radix primitives + lucide-react |
+| Validation | Zod |
 | ID | UUID для основных сущностей |
-| Auth | login/password, password hash, session/cookie auth, без social login |
+| Auth | custom DB-backed login/password auth, Argon2id password hash, opaque session cookie |
 | RBAC | backend guards обязательны, UI только скрывает недоступные действия |
 | Балансы | application service создаёт транзакции и обновляет cached fields в одной transaction |
 | Audit | application-level `AuditLogService`, без DB triggers в v1 |
 | Tasks | `TaskService` с dedupe по `(type, related_entity_type, related_entity_id, status=open)` |
 | Attendance save | для v1 табель считается завершённым только когда отмечены все дети занятия |
-| Scheduler | application cron/job для 18:00, sickness follow-up, not admitted checks |
-| Excel import | create-only, validation-first, preview-before-write, no upsert |
+| Scheduler | idempotent job functions + protected cron trigger |
+| Excel import | ExcelJS, create-only, validation-first, preview-before-write, no upsert |
 | School model | `school_id` в ключевых таблицах, без выбора школы в UI |
+| Tests | Vitest + Testing Library + Playwright |
+| Deploy | Docker-compatible Node service + managed PostgreSQL |
 
-Если команда выбирает другой стек, сохранить доменные инварианты и AC-ID без изменений.
+Если команда позже меняет стек, нужно обновить `13_TECH_STACK_DECISIONS_RU.md` отдельным ADR-решением и сохранить доменные инварианты и AC-ID без изменений.
 
 ---
 
@@ -1224,12 +1230,12 @@ Manual pilot checklist: 1 full operational cycle
 
 ## 11. Open decisions before coding
 
-These are not product blockers, but they should be decided when creating the repo.
+Major stack decisions are now closed in `13_TECH_STACK_DECISIONS_RU.md`. These remaining decisions are implementation details, not product blockers.
 
 | Decision | Default in this spec | Why |
 |---|---|---|
-| Exact stack | Next.js fullstack + Prisma + PostgreSQL | matches roadmap recommendation |
-| Hosting | not selected | depends on available accounts and budget |
+| Exact stack | see `13_TECH_STACK_DECISIONS_RU.md` | stack decision is now documented |
+| Hosting | Docker-compatible Node service; Render is the recommended default | predictable server behavior for Prisma, cron and Excel processing |
 | Backups | daily managed DB backup at minimum | attendance/balance data must not be lost |
 | Russian holidays | start with configurable holiday dates table/list | avoids external integration in v1 |
 | Partial attendance save | not completed until all children marked | safest v1 behavior |
@@ -1260,16 +1266,21 @@ Use this prompt to start development from a clean repository:
 10_ACCEPTANCE_CRITERIA_RU.md
 11_ROADMAP_RU.md
 12_DEVELOPMENT_SPECS_RU.md
+13_TECH_STACK_DECISIONS_RU.md
 
 Начни с DEV-00:
-- создай Next.js/React fullstack проект;
-- настрой PostgreSQL, Prisma, Docker local dev;
+- создай Next.js App Router + React + TypeScript проект;
+- используй Node.js 24 LTS и pnpm через Corepack;
+- настрой PostgreSQL, Prisma, Docker Compose local dev;
 - реализуй School, User, AdminProfile, CoachProfile, AuditLog;
+- реализуй Session для custom DB-backed auth;
 - реализуй роли SUPER_ADMIN, ADMIN, COACH;
-- реализуй login/password auth;
+- реализуй login/password auth с Argon2id password hash и opaque httpOnly session cookie;
 - создай seed SUPER_ADMIN;
 - добавь admin layout и mobile-first coach layout;
 - добавь базовые backend guards;
+- добавь базовый AuditLogService;
+- добавь минимальные Vitest/Playwright-ready тестовые команды;
 - не реализуй parent login, online payment, chat, external notifications, certificate/vacation file storage или SaaS UI.
 
 После реализации дай список созданных файлов, миграций, seed credentials, команды запуска и тесты.
