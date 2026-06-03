@@ -137,6 +137,12 @@ Radix primitives
 lucide-react
 ```
 
+DEV-00 implementation note:
+
+- use Tailwind CSS 3.x with standard PostCSS/Autoprefixer pipeline;
+- avoid Tailwind 4 `oxide` in the first block because local macOS native bindings are currently blocked by code-signing checks in this workspace;
+- keep shadcn-compatible component structure, Radix primitives and lucide icons.
+
 Правила реализации:
 
 1. Admin UI должен быть плотным operational dashboard, не landing page.
@@ -242,6 +248,11 @@ Opaque session tokens in httpOnly cookies
 Argon2id password hashing
 Server-side RBAC guards
 ```
+
+DEV-00 implementation note:
+
+- Argon2id is implemented through `hash-wasm` and stores standard encoded `$argon2id$...` hashes;
+- this avoids native `.node` binding failures on the current macOS workspace while keeping the selected password hashing algorithm.
 
 Почему не Auth.js/NextAuth в DEV-00:
 
@@ -616,12 +627,12 @@ Language: TypeScript strict
 Runtime: Node.js 24 LTS
 Package manager: pnpm via Corepack
 App framework: Next.js App Router
-UI: React + Tailwind CSS + shadcn/ui + Radix + lucide-react
+UI: React + Tailwind CSS 3 + shadcn/ui-compatible components + Radix + lucide-react
 Backend: Next.js Route Handlers + service layer
 Validation: Zod
 Database: PostgreSQL 16+
 ORM: Prisma
-Auth: custom DB-backed sessions + Argon2id
+Auth: custom DB-backed sessions + Argon2id via hash-wasm
 RBAC: server-side guards + role-aware serializers
 Audit: application-level AuditLogService
 Jobs: idempotent job functions + protected cron trigger
@@ -631,3 +642,12 @@ Local infra: Docker Compose
 Deploy: Docker-compatible Node service + managed PostgreSQL
 CI/CD: GitHub Actions
 ```
+
+DEV-00 local toolchain note:
+
+```text
+next dev --webpack
+next build --webpack
+```
+
+The current local macOS environment rejects several downloaded native bindings by code signature. Webpack + WASM fallbacks keep local development and CI commands reproducible without changing the product architecture.

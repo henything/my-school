@@ -14,7 +14,15 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 
 ## Current Status
 
-This repository currently contains product and engineering specifications. Implementation starts from `DEV-00` after the stack decision is accepted.
+`DEV-00` is the first implementation block:
+
+- Next.js App Router project foundation;
+- PostgreSQL + Prisma schema;
+- custom login/password auth with Argon2id hashes and opaque httpOnly session cookie;
+- roles `SUPER_ADMIN`, `ADMIN`, `COACH`;
+- admin and coach shell layouts;
+- seed `SUPER_ADMIN`;
+- base audit log service and backend guards.
 
 ## Key Documents
 
@@ -45,7 +53,7 @@ Short version:
 Next.js App Router + React + TypeScript
 PostgreSQL + Prisma
 Custom DB-backed auth with Argon2id and opaque sessions
-Tailwind CSS + shadcn/ui + Radix + lucide-react
+Tailwind CSS 3 + shadcn/ui-compatible components + Radix + lucide-react
 Vitest + Playwright
 Docker Compose local infra
 Docker-compatible deployment + managed PostgreSQL
@@ -66,3 +74,65 @@ Backend guards
 ```
 
 Do not implement the full MVP in one pass.
+
+## Local Setup
+
+Requirements:
+
+```text
+Node.js 24 LTS
+pnpm 11.x
+Docker Desktop or another local PostgreSQL 16+ instance
+```
+
+Install dependencies:
+
+```bash
+pnpm install
+```
+
+Create local env:
+
+```bash
+cp .env.example .env
+```
+
+Start local PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+Generate Prisma client, apply schema and seed the first owner:
+
+```bash
+pnpm db:generate
+pnpm db:push
+pnpm db:seed
+```
+
+Run the app:
+
+```bash
+pnpm dev
+```
+
+`pnpm dev` and `pnpm build` use Next.js Webpack mode in DEV-00 because this local macOS workspace rejects some downloaded native bindings by code signature. The app remains a standard Next.js App Router application.
+
+Default local seed credentials:
+
+```text
+login: owner
+password: ChangeMe-DEV-00!
+```
+
+## Quality Commands
+
+```bash
+pnpm typecheck
+pnpm lint
+pnpm test
+pnpm build
+```
+
+`pnpm db:push` and the login flow require a reachable PostgreSQL database.

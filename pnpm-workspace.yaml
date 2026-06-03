@@ -1,0 +1,20 @@
+packages:
+  - .
+
+allowBuilds:
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  sharp: true
+  unrs-resolver: true
+
+onlyBuiltDependencies:
+  - "@prisma/engines"
+  - esbuild
+  - prisma
+  - sharp
+  - unrs-resolver
+
+overrides:
+  lightningcss: "npm:lightningcss-wasm@1.32.0"
+  rollup: "npm:@rollup/wasm-node@4.61.0"
