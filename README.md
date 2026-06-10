@@ -24,6 +24,16 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 - seed `SUPER_ADMIN`;
 - base audit log service and backend guards.
 
+`DEV-01` adds the first operational directories:
+
+- branches;
+- coach profiles and coach user creation;
+- parent contacts without parent login;
+- children with medical notes and comments;
+- groups with branch and main coach;
+- child attach/transfer through `current_group_id`;
+- group occupancy and `GROUP_OVER_CAPACITY` internal tasks.
+
 ## Key Documents
 
 | File | Purpose |
@@ -74,6 +84,19 @@ Backend guards
 ```
 
 Do not implement the full MVP in one pass.
+
+Continue with `DEV-01`:
+
+```text
+Branches
+Coaches
+Parents as contacts
+Children
+Groups
+Group occupancy
+Child transfer audit
+GROUP_OVER_CAPACITY task
+```
 
 ## Local Setup
 

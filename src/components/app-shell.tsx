@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, ShieldCheck } from "lucide-react";
+import { CalendarDays, LayoutDashboard, MapPinned, ShieldCheck, Users } from "lucide-react";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { LogoutButton } from "@/components/logout-button";
 
@@ -37,6 +37,34 @@ export function AppShell({ user, area, children }: AppShellProps) {
           </div>
         </div>
       </header>
+
+      {isAdmin ? (
+        <nav className="border-b border-[var(--line)] bg-white">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
+            <Link
+              href="/admin"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <Users aria-hidden="true" size={16} />
+              Пользователи
+            </Link>
+            <Link
+              href="/admin/directories"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <MapPinned aria-hidden="true" size={16} />
+              Справочники
+            </Link>
+            <Link
+              href="/admin/schedule"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <CalendarDays aria-hidden="true" size={16} />
+              Расписание
+            </Link>
+          </div>
+        </nav>
+      ) : null}
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">{children}</div>
     </main>

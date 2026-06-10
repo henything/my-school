@@ -19,6 +19,98 @@ enum UserStatus {
   ARCHIVED
 }
 
+enum EntityStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
+
+enum ChildStatus {
+  ACTIVE
+  PAUSED
+  LEFT
+  TRIAL
+  ARCHIVED
+}
+
+enum AdmissionStatus {
+  ADMITTED
+  CREDIT_LESSON_USED
+  NOT_ADMITTED
+}
+
+enum LessonStatus {
+  SCHEDULED
+  ATTENDANCE_PENDING
+  ATTENDANCE_COMPLETED
+  MOVED
+  CANCELLED
+}
+
+enum LessonChangeReason {
+  QUARANTINE
+  KINDERGARTEN_EVENT
+  RUSSIAN_HOLIDAY
+  COACH_UNAVAILABLE
+  GROUP_TRANSFER
+  OTHER
+}
+
+enum CoachAttendanceStatus {
+  NOT_MARKED
+  PRESENT
+  ABSENT_UNEXCUSED
+  ABSENT_SICK_PENDING
+}
+
+enum AdminFinalAttendanceStatus {
+  ABSENT_SICK_CONFIRMED
+  ABSENT_VACATION_APPROVED
+  ABSENT_QUARANTINE
+  ABSENT_EVENT
+  ABSENT_UNEXCUSED_FINAL
+}
+
+enum BalanceType {
+  LESSON_BALANCE
+  MAKEUP_BALANCE
+}
+
+enum BalanceTransactionType {
+  PRESENT_DEDUCTION
+  UNEXCUSED_ABSENCE_DEDUCTION
+  ATTENDANCE_DEDUCTION_REVERSAL
+}
+
+enum TaskPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  CLOSED
+  CANCELLED
+}
+
+enum TaskType {
+  ATTENDANCE_NOT_FILLED
+  CHILD_TOOK_CREDIT_LESSON
+  CHILD_NOT_ADMITTED
+  SICKNESS_FOLLOW_UP
+  CERTIFICATE_PENDING
+  MAKEUP_NEEDS_ASSIGNMENT
+  GROUP_OVER_CAPACITY
+  TRIAL_NEEDS_PROCESSING
+  ABSENCE_NEEDS_FINALIZATION
+  COACH_SUBSTITUTION_ASSIGNED
+  CHILD_WITHOUT_ACTIVE_SUBSCRIPTION
+  MANUAL_TASK
+}
+
 model School {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
@@ -29,7 +121,15 @@ model School {
   users         User[]
   adminProfiles AdminProfile[]
   coachProfiles CoachProfile[]
+  branches      Branch[]
+  parents       Parent[]
+  children      Child[]
+  groups        TrainingGroup[]
+  scheduleTemplates ScheduleTemplate[]
+  lessons       Lesson[]
+  lessonBalanceTransactions LessonBalanceTransaction[]
   sessions      Session[]
+  tasks         Task[]
   auditLogs     AuditLog[]
 
   @@map("schools")
@@ -50,6 +150,11 @@ model User {
   adminProfile  AdminProfile?
   coachProfile  CoachProfile?
   sessions      Session[]
+  assignedTasks Task[]        @relation("TaskAssignee")
+  closedTasks   Task[]        @relation("TaskClosedBy")
+  markedAttendance AttendanceRecord[] @relation("AttendanceMarkedBy")
+  finalizedAttendance AttendanceRecord[] @relation("AttendanceFinalizedBy")
+  createdBalanceTransactions LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
   auditLogs     AuditLog[]    @relation("AuditActor")
 
   @@unique([schoolId, login])
@@ -82,11 +187,243 @@ model CoachProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  school School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user   User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  groups TrainingGroup[]
+  scheduleTemplates ScheduleTemplate[]
+  lessons Lesson[] @relation("LessonCoach")
+  substituteLessons Lesson[] @relation("LessonSubstituteCoach")
 
   @@index([schoolId])
   @@map("coach_profiles")
+}
+
+model Branch {
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @map("school_id") @db.Uuid
+  name           String
+  address        String?
+  status         EntityStatus @default(ACTIVE)
+  inventoryNotes String?      @map("inventory_notes")
+  comment        String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  school School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  groups TrainingGroup[]
+  scheduleTemplates ScheduleTemplate[]
+  lessons Lesson[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([status])
+  @@map("branches")
+}
+
+model Parent {
+  id           String   @id @default(uuid()) @db.Uuid
+  schoolId     String   @map("school_id") @db.Uuid
+  fullName     String?  @map("full_name")
+  phone        String?
+  vkProfileUrl String?  @map("vk_profile_url")
+  comment      String?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  school   School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  children Child[]
+
+  @@index([schoolId])
+  @@index([phone])
+  @@map("parents")
+}
+
+model Child {
+  id                  String          @id @default(uuid()) @db.Uuid
+  schoolId            String          @map("school_id") @db.Uuid
+  parentId            String?         @map("parent_id") @db.Uuid
+  currentGroupId      String?         @map("current_group_id") @db.Uuid
+  fullName            String          @map("full_name")
+  birthDate           DateTime?       @map("birth_date") @db.Date
+  status              ChildStatus     @default(ACTIVE)
+  medicalNotes        String?         @map("medical_notes")
+  coachComment        String?         @map("coach_comment")
+  adminComment        String?         @map("admin_comment")
+  admissionStatus     AdmissionStatus @default(ADMITTED) @map("admission_status")
+  cachedLessonBalance Int             @default(0) @map("cached_lesson_balance")
+  cachedMakeupBalance Int             @default(0) @map("cached_makeup_balance")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  parent       Parent?        @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  currentGroup TrainingGroup? @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
+  attendanceRecords AttendanceRecord[]
+  lessonBalanceTransactions LessonBalanceTransaction[]
+  tasks        Task[]
+
+  @@index([schoolId])
+  @@index([parentId])
+  @@index([currentGroupId])
+  @@index([status])
+  @@index([admissionStatus])
+  @@index([fullName])
+  @@map("children")
+}
+
+model TrainingGroup {
+  id             String       @id @default(uuid()) @db.Uuid
+  schoolId       String       @map("school_id") @db.Uuid
+  branchId       String       @map("branch_id") @db.Uuid
+  mainCoachId    String       @map("main_coach_id") @db.Uuid
+  name           String
+  status         EntityStatus @default(ACTIVE)
+  capacityLimit  Int          @default(15) @map("capacity_limit")
+  inventoryNotes String?      @map("inventory_notes")
+  comment        String?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  school    School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  mainCoach CoachProfile @relation(fields: [mainCoachId], references: [id], onDelete: Restrict)
+  children  Child[]      @relation("CurrentGroup")
+  scheduleTemplates ScheduleTemplate[]
+  lessons Lesson[]
+  tasks     Task[]
+
+  @@unique([branchId, name])
+  @@index([schoolId])
+  @@index([branchId])
+  @@index([mainCoachId])
+  @@index([status])
+  @@map("groups")
+}
+
+model ScheduleTemplate {
+  id        String       @id @default(uuid()) @db.Uuid
+  schoolId  String       @map("school_id") @db.Uuid
+  groupId   String       @map("group_id") @db.Uuid
+  branchId  String       @map("branch_id") @db.Uuid
+  coachId   String       @map("coach_id") @db.Uuid
+  weekday   Int
+  startTime String       @map("start_time")
+  endTime   String       @map("end_time")
+  status    EntityStatus @default(ACTIVE)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  school  School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  group   TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  branch  Branch        @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  coach   CoachProfile  @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  lessons Lesson[]
+
+  @@unique([groupId, weekday, startTime])
+  @@index([schoolId])
+  @@index([groupId])
+  @@index([branchId])
+  @@index([coachId])
+  @@index([status])
+  @@map("schedule_templates")
+}
+
+model Lesson {
+  id                 String              @id @default(uuid()) @db.Uuid
+  schoolId           String              @map("school_id") @db.Uuid
+  groupId            String              @map("group_id") @db.Uuid
+  branchId           String              @map("branch_id") @db.Uuid
+  coachId            String              @map("coach_id") @db.Uuid
+  substituteCoachId  String?             @map("substitute_coach_id") @db.Uuid
+  scheduleTemplateId String?             @map("schedule_template_id") @db.Uuid
+  lessonDate         DateTime            @map("lesson_date") @db.Date
+  startTime          String              @map("start_time")
+  endTime            String              @map("end_time")
+  status             LessonStatus        @default(SCHEDULED)
+  changeReason       LessonChangeReason? @map("change_reason")
+  changeComment      String?             @map("change_comment")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  group            TrainingGroup     @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  coach            CoachProfile      @relation("LessonCoach", fields: [coachId], references: [id], onDelete: Restrict)
+  substituteCoach  CoachProfile?     @relation("LessonSubstituteCoach", fields: [substituteCoachId], references: [id], onDelete: SetNull)
+  scheduleTemplate ScheduleTemplate? @relation(fields: [scheduleTemplateId], references: [id], onDelete: SetNull)
+  attendanceRecords AttendanceRecord[]
+  lessonBalanceTransactions LessonBalanceTransaction[]
+
+  @@unique([groupId, lessonDate, startTime])
+  @@index([schoolId])
+  @@index([groupId])
+  @@index([branchId])
+  @@index([coachId])
+  @@index([substituteCoachId])
+  @@index([scheduleTemplateId])
+  @@index([lessonDate])
+  @@index([status])
+  @@map("lessons")
+}
+
+model AttendanceRecord {
+  id                String                      @id @default(uuid()) @db.Uuid
+  lessonId          String                      @map("lesson_id") @db.Uuid
+  childId           String                      @map("child_id") @db.Uuid
+  status            CoachAttendanceStatus       @default(NOT_MARKED)
+  finalStatus       AdminFinalAttendanceStatus? @map("final_status")
+  markedByUserId    String?                     @map("marked_by_user_id") @db.Uuid
+  markedAt          DateTime?                   @map("marked_at")
+  finalizedByUserId String?                     @map("finalized_by_user_id") @db.Uuid
+  finalizedAt       DateTime?                   @map("finalized_at")
+  comment           String?
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  updatedAt         DateTime                    @updatedAt @map("updated_at")
+
+  lesson             Lesson                     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  child              Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
+  markedBy           User?                      @relation("AttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+  finalizedBy        User?                      @relation("AttendanceFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
+  balanceTransactions LessonBalanceTransaction[]
+
+  @@unique([lessonId, childId])
+  @@index([lessonId])
+  @@index([childId])
+  @@index([status])
+  @@index([finalStatus])
+  @@index([markedByUserId])
+  @@index([finalizedByUserId])
+  @@map("attendance_records")
+}
+
+model LessonBalanceTransaction {
+  id                 String                 @id @default(uuid()) @db.Uuid
+  schoolId           String                 @map("school_id") @db.Uuid
+  childId            String                 @map("child_id") @db.Uuid
+  lessonId           String?                @map("lesson_id") @db.Uuid
+  attendanceRecordId String?                @map("attendance_record_id") @db.Uuid
+  type               BalanceTransactionType
+  balanceType        BalanceType            @map("balance_type")
+  amount             Int
+  reason             String?
+  createdByUserId    String?                @map("created_by_user_id") @db.Uuid
+  comment            String?
+  createdAt          DateTime               @default(now()) @map("created_at")
+
+  school           School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  child            Child             @relation(fields: [childId], references: [id], onDelete: Restrict)
+  lesson           Lesson?           @relation(fields: [lessonId], references: [id], onDelete: SetNull)
+  attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: SetNull)
+  createdBy        User?             @relation("BalanceTransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([childId])
+  @@index([lessonId])
+  @@index([attendanceRecordId])
+  @@index([type])
+  @@index([balanceType])
+  @@index([createdAt])
+  @@map("lesson_balance_transactions")
 }
 
 model Session {
@@ -106,17 +443,54 @@ model Session {
   @@map("sessions")
 }
 
+model Task {
+  id                String       @id @default(uuid()) @db.Uuid
+  schoolId          String       @map("school_id") @db.Uuid
+  type              TaskType
+  priority          TaskPriority
+  assigneeUserId    String?      @map("assignee_user_id") @db.Uuid
+  relatedEntityType String?      @map("related_entity_type")
+  relatedEntityId   String?      @map("related_entity_id") @db.Uuid
+  title             String
+  description       String?
+  status            TaskStatus   @default(OPEN)
+  dueAt             DateTime?    @map("due_at")
+  closedAt          DateTime?    @map("closed_at")
+  closedByUserId    String?      @map("closed_by_user_id") @db.Uuid
+  childId           String?      @map("child_id") @db.Uuid
+  groupId           String?      @map("group_id") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+
+  school       School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  assigneeUser User?          @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  closedByUser User?          @relation("TaskClosedBy", fields: [closedByUserId], references: [id], onDelete: SetNull)
+  child        Child?         @relation(fields: [childId], references: [id], onDelete: SetNull)
+  group        TrainingGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([assigneeUserId])
+  @@index([type])
+  @@index([priority])
+  @@index([status])
+  @@index([dueAt])
+  @@index([relatedEntityType, relatedEntityId])
+  @@index([childId])
+  @@index([groupId])
+  @@map("tasks")
+}
+
 model AuditLog {
-  id         String   @id @default(uuid()) @db.Uuid
-  schoolId   String   @map("school_id") @db.Uuid
+  id          String   @id @default(uuid()) @db.Uuid
+  schoolId    String   @map("school_id") @db.Uuid
   actorUserId String?  @map("actor_user_id") @db.Uuid
-  action     String
-  entityType String   @map("entity_type")
-  entityId   String?  @map("entity_id")
-  oldValue   Json?    @map("old_value")
-  newValue   Json?    @map("new_value")
-  comment    String?
-  createdAt  DateTime @default(now()) @map("created_at")
+  action      String
+  entityType  String   @map("entity_type")
+  entityId    String?  @map("entity_id")
+  oldValue    Json?    @map("old_value")
+  newValue    Json?    @map("new_value")
+  comment     String?
+  createdAt   DateTime @default(now()) @map("created_at")
 
   school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   actor  User?  @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
