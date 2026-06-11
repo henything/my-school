@@ -39,6 +39,15 @@ enum AdmissionStatus {
   NOT_ADMITTED
 }
 
+enum PaymentStatus {
+  NOT_INVOICED
+  INVOICED
+  NOT_PAID
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+}
+
 enum LessonStatus {
   SCHEDULED
   ATTENDANCE_PENDING
@@ -77,8 +86,16 @@ enum BalanceType {
 }
 
 enum BalanceTransactionType {
+  SUBSCRIPTION_CREATED
   PRESENT_DEDUCTION
   UNEXCUSED_ABSENCE_DEDUCTION
+  SICKNESS_MAKEUP_CREATED
+  VACATION_MAKEUP_CREATED
+  QUARANTINE_MAKEUP_CREATED
+  EVENT_MAKEUP_CREATED
+  CREDIT_LESSON_USED
+  MAKEUP_USED
+  MANUAL_ADJUSTMENT
   ATTENDANCE_DEDUCTION_REVERSAL
 }
 
@@ -127,6 +144,7 @@ model School {
   groups        TrainingGroup[]
   scheduleTemplates ScheduleTemplate[]
   lessons       Lesson[]
+  subscriptions Subscription[]
   lessonBalanceTransactions LessonBalanceTransaction[]
   sessions      Session[]
   tasks         Task[]
@@ -154,6 +172,7 @@ model User {
   closedTasks   Task[]        @relation("TaskClosedBy")
   markedAttendance AttendanceRecord[] @relation("AttendanceMarkedBy")
   finalizedAttendance AttendanceRecord[] @relation("AttendanceFinalizedBy")
+  createdSubscriptions Subscription[] @relation("SubscriptionCreatedBy")
   createdBalanceTransactions LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
   auditLogs     AuditLog[]    @relation("AuditActor")
 
@@ -259,6 +278,7 @@ model Child {
   parent       Parent?        @relation(fields: [parentId], references: [id], onDelete: SetNull)
   currentGroup TrainingGroup? @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
   attendanceRecords AttendanceRecord[]
+  subscriptions Subscription[]
   lessonBalanceTransactions LessonBalanceTransaction[]
   tasks        Task[]
 
@@ -396,12 +416,42 @@ model AttendanceRecord {
   @@map("attendance_records")
 }
 
+model Subscription {
+  id                  String        @id @default(uuid()) @db.Uuid
+  schoolId            String        @map("school_id") @db.Uuid
+  childId             String        @map("child_id") @db.Uuid
+  periodStart         DateTime      @map("period_start") @db.Date
+  periodEnd           DateTime      @map("period_end") @db.Date
+  plannedLessonsCount Int           @map("planned_lessons_count")
+  lessonPriceKopeks   Int           @default(45000) @map("lesson_price_kopeks")
+  totalAmountKopeks   Int           @map("total_amount_kopeks")
+  paymentStatus       PaymentStatus @default(NOT_INVOICED) @map("payment_status")
+  paymentStatusChangedAt DateTime?  @map("payment_status_changed_at")
+  paymentStatusComment   String?    @map("payment_status_comment")
+  createdByUserId     String        @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+
+  school              School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  child               Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
+  createdBy           User                       @relation("SubscriptionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  balanceTransactions LessonBalanceTransaction[]
+
+  @@index([schoolId])
+  @@index([childId])
+  @@index([createdByUserId])
+  @@index([paymentStatus])
+  @@index([periodStart, periodEnd])
+  @@map("subscriptions")
+}
+
 model LessonBalanceTransaction {
   id                 String                 @id @default(uuid()) @db.Uuid
   schoolId           String                 @map("school_id") @db.Uuid
   childId            String                 @map("child_id") @db.Uuid
   lessonId           String?                @map("lesson_id") @db.Uuid
   attendanceRecordId String?                @map("attendance_record_id") @db.Uuid
+  subscriptionId     String?                @map("subscription_id") @db.Uuid
   type               BalanceTransactionType
   balanceType        BalanceType            @map("balance_type")
   amount             Int
@@ -414,12 +464,14 @@ model LessonBalanceTransaction {
   child            Child             @relation(fields: [childId], references: [id], onDelete: Restrict)
   lesson           Lesson?           @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: SetNull)
+  subscription     Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
   createdBy        User?             @relation("BalanceTransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
   @@index([childId])
   @@index([lessonId])
   @@index([attendanceRecordId])
+  @@index([subscriptionId])
   @@index([type])
   @@index([balanceType])
   @@index([createdAt])

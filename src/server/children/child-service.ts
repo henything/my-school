@@ -283,6 +283,15 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
       }
     }
 
-    return serializeChild(updated);
+    const serialized = serializeChild(updated);
+
+    if (isCoach && !isAdmin) {
+      const { cachedLessonBalance, cachedMakeupBalance, ...coachVisibleChild } = serialized;
+      void cachedLessonBalance;
+      void cachedMakeupBalance;
+      return coachVisibleChild;
+    }
+
+    return serialized;
   });
 }

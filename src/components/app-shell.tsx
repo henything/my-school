@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarDays, LayoutDashboard, MapPinned, ShieldCheck, Users } from "lucide-react";
+import { CalendarDays, LayoutDashboard, MapPinned, ShieldCheck, Users, WalletCards } from "lucide-react";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { LogoutButton } from "@/components/logout-button";
 
@@ -61,6 +61,13 @@ export function AppShell({ user, area, children }: AppShellProps) {
             >
               <CalendarDays aria-hidden="true" size={16} />
               Расписание
+            </Link>
+            <Link
+              href="/admin/billing"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <WalletCards aria-hidden="true" size={16} />
+              Балансы
             </Link>
           </div>
         </nav>

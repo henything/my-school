@@ -1,15 +1,11 @@
 import type { CoachAttendanceStatus, TaskStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
+import { applyAttendanceBalanceEffect } from "@/server/billing/billing-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
-import {
-  attendanceBalanceDelta,
-  debitTransactionTypeForStatus,
-  desiredAttendanceLessonBalanceNet
-} from "./effects";
 import type {
   AttendanceNotFilledJobInput,
   AttendanceRecordInput,
@@ -280,7 +276,7 @@ export async function runAttendanceNotFilledCheck(currentUser: CurrentUser, inpu
       const coachTask = await ensureTask(tx, {
         schoolId: currentUser.schoolId,
         type: "ATTENDANCE_NOT_FILLED",
-        priority: "HIGH",
+        priority: "CRITICAL",
         assigneeUserId,
         relatedEntityType: "Lesson",
         relatedEntityId: lesson.id,
@@ -292,7 +288,7 @@ export async function runAttendanceNotFilledCheck(currentUser: CurrentUser, inpu
       const adminTask = await ensureTask(tx, {
         schoolId: currentUser.schoolId,
         type: "ATTENDANCE_NOT_FILLED",
-        priority: "HIGH",
+        priority: "CRITICAL",
         assigneeUserId: adminUserId,
         relatedEntityType: "Lesson",
         relatedEntityId: lesson.id,
@@ -394,7 +390,7 @@ async function applyAttendanceSideEffects(
   lesson: LessonDetailRecord,
   record: AttendanceRecordForUpdate
 ) {
-  await applyBalanceEffect(tx, currentUser, lesson, record);
+  await applyAttendanceBalanceEffect(tx, currentUser, lesson, record);
 
   if (record.status === "ABSENT_SICK_PENDING") {
     await ensureCertificatePendingTask(tx, currentUser, lesson, record.childId, record.id);
@@ -403,70 +399,6 @@ async function applyAttendanceSideEffects(
   if (record.status === "ABSENT_UNEXCUSED") {
     await ensureConsecutiveUnexcusedTask(tx, currentUser, lesson, record.childId);
   }
-}
-
-async function applyBalanceEffect(
-  tx: Prisma.TransactionClient,
-  currentUser: CurrentUser,
-  lesson: LessonDetailRecord,
-  record: AttendanceRecordForUpdate
-) {
-  const aggregate = await tx.lessonBalanceTransaction.aggregate({
-    _sum: { amount: true },
-    where: {
-      attendanceRecordId: record.id,
-      balanceType: "LESSON_BALANCE"
-    }
-  });
-  const currentNet = aggregate._sum.amount ?? 0;
-  const delta = attendanceBalanceDelta(record.status, currentNet);
-
-  if (delta === 0) {
-    return null;
-  }
-
-  const transaction = await tx.lessonBalanceTransaction.create({
-    data: {
-      schoolId: currentUser.schoolId,
-      childId: record.childId,
-      lessonId: lesson.id,
-      attendanceRecordId: record.id,
-      type: delta < 0 ? debitTransactionTypeForStatus(record.status) : "ATTENDANCE_DEDUCTION_REVERSAL",
-      balanceType: "LESSON_BALANCE",
-      amount: delta,
-      reason: record.status,
-      createdByUserId: currentUser.id,
-      comment: delta < 0 ? "Списание по табелю" : "Коррекция табеля"
-    }
-  });
-
-  await tx.child.update({
-    where: { id: record.childId },
-    data: {
-      cachedLessonBalance: { increment: delta }
-    }
-  });
-
-  await writeAuditLog(
-    {
-      schoolId: currentUser.schoolId,
-      actorUserId: currentUser.id,
-      action: "LESSON_BALANCE_TRANSACTION_CREATED",
-      entityType: "LessonBalanceTransaction",
-      entityId: transaction.id,
-      newValue: {
-        childId: record.childId,
-        lessonId: lesson.id,
-        attendanceRecordId: record.id,
-        amount: delta,
-        desiredNet: desiredAttendanceLessonBalanceNet(record.status),
-        status: record.status
-      }
-    },
-    tx
-  );
-
-  return transaction;
 }
 
 async function refreshLessonAttendanceStatus(tx: Prisma.TransactionClient, lessonId: string, childIds: string[]) {
@@ -598,7 +530,7 @@ async function ensureTask(
   input: {
     schoolId: string;
     type: "ATTENDANCE_NOT_FILLED" | "CERTIFICATE_PENDING" | "ABSENCE_NEEDS_FINALIZATION";
-    priority: "HIGH";
+    priority: "CRITICAL" | "HIGH";
     assigneeUserId: string | null;
     relatedEntityType: string;
     relatedEntityId: string;
