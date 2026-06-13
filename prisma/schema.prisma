@@ -614,6 +614,7 @@ model Task {
   dueAt             DateTime?    @map("due_at")
   closedAt          DateTime?    @map("closed_at")
   closedByUserId    String?      @map("closed_by_user_id") @db.Uuid
+  closedComment     String?      @map("closed_comment")
   childId           String?      @map("child_id") @db.Uuid
   groupId           String?      @map("group_id") @db.Uuid
   createdAt         DateTime     @default(now()) @map("created_at")
@@ -631,6 +632,7 @@ model Task {
   @@index([priority])
   @@index([status])
   @@index([dueAt])
+  @@index([schoolId, status, priority, dueAt])
   @@index([relatedEntityType, relatedEntityId])
   @@index([childId])
   @@index([groupId])

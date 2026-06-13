@@ -17,7 +17,21 @@ export function StatusBadge({ status }: { status: string }) {
       ? "bg-[#dff1ea] text-[#075a3d]"
       : status === "INACTIVE"
         ? "bg-[#f7e4d1] text-[#7a3f0d]"
-        : "bg-[#ececec] text-[#555]";
+        : status === "CRITICAL"
+          ? "bg-[#f8d8d4] text-[#8f1d17]"
+          : status === "HIGH"
+            ? "bg-[#f7e4d1] text-[#7a3f0d]"
+            : status === "MEDIUM"
+              ? "bg-[#e6eff8] text-[#214f78]"
+              : status === "LOW"
+                ? "bg-[#dff1ea] text-[#075a3d]"
+                : status === "OPEN" || status === "IN_PROGRESS"
+                  ? "bg-[#e6eff8] text-[#214f78]"
+                  : status === "CLOSED"
+                    ? "bg-[#dff1ea] text-[#075a3d]"
+                    : status === "CANCELLED"
+                      ? "bg-[#f8d8d4] text-[#8f1d17]"
+                      : "bg-[#ececec] text-[#555]";
 
   return <span className={cn("badge", className)}>{status}</span>;
 }
