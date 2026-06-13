@@ -104,6 +104,7 @@ export default async function DirectoriesPage() {
                   <th>Группа</th>
                   <th>Статус</th>
                   <th>Допуск</th>
+                  <th>Переносы</th>
                   <th>Перевод</th>
                 </tr>
               </thead>
@@ -122,6 +123,7 @@ export default async function DirectoriesPage() {
                     <td>
                       <RoleBadge role={child.admissionStatus} />
                     </td>
+                    <td className="font-semibold">{child.cachedMakeupBalance}</td>
                     <td>
                       <ChildTransferForm childId={child.id} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
                     </td>

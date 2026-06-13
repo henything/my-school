@@ -80,6 +80,29 @@ enum AdminFinalAttendanceStatus {
   ABSENT_UNEXCUSED_FINAL
 }
 
+enum MakeupReason {
+  SICKNESS
+  VACATION
+  QUARANTINE
+  KINDERGARTEN_EVENT
+  RUSSIAN_HOLIDAY
+  COACH_UNAVAILABLE
+  GROUP_TRANSFER
+  OTHER
+}
+
+enum MakeupStatus {
+  AVAILABLE
+  ASSIGNED
+  USED
+  REFUNDED
+  CANCELLED
+}
+
+enum GroupEventActionType {
+  MAKEUP_AND_CANCEL_LESSONS
+}
+
 enum BalanceType {
   LESSON_BALANCE
   MAKEUP_BALANCE
@@ -146,6 +169,8 @@ model School {
   lessons       Lesson[]
   subscriptions Subscription[]
   lessonBalanceTransactions LessonBalanceTransaction[]
+  makeupCredits MakeupCredit[]
+  groupEvents   GroupEvent[]
   sessions      Session[]
   tasks         Task[]
   auditLogs     AuditLog[]
@@ -174,6 +199,8 @@ model User {
   finalizedAttendance AttendanceRecord[] @relation("AttendanceFinalizedBy")
   createdSubscriptions Subscription[] @relation("SubscriptionCreatedBy")
   createdBalanceTransactions LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
+  createdMakeupCredits MakeupCredit[] @relation("MakeupCreditCreatedBy")
+  createdGroupEvents GroupEvent[] @relation("GroupEventCreatedBy")
   auditLogs     AuditLog[]    @relation("AuditActor")
 
   @@unique([schoolId, login])
@@ -280,6 +307,7 @@ model Child {
   attendanceRecords AttendanceRecord[]
   subscriptions Subscription[]
   lessonBalanceTransactions LessonBalanceTransaction[]
+  makeupCredits MakeupCredit[]
   tasks        Task[]
 
   @@index([schoolId])
@@ -311,6 +339,8 @@ model TrainingGroup {
   scheduleTemplates ScheduleTemplate[]
   lessons Lesson[]
   tasks     Task[]
+  makeupCredits MakeupCredit[]
+  groupEvents   GroupEvent[]
 
   @@unique([branchId, name])
   @@index([schoolId])
@@ -373,6 +403,8 @@ model Lesson {
   scheduleTemplate ScheduleTemplate? @relation(fields: [scheduleTemplateId], references: [id], onDelete: SetNull)
   attendanceRecords AttendanceRecord[]
   lessonBalanceTransactions LessonBalanceTransaction[]
+  sourceMakeupCredits MakeupCredit[] @relation("MakeupCreditSourceLesson")
+  assignedMakeupCredits MakeupCredit[] @relation("MakeupCreditAssignedLesson")
 
   @@unique([groupId, lessonDate, startTime])
   @@index([schoolId])
@@ -405,6 +437,7 @@ model AttendanceRecord {
   markedBy           User?                      @relation("AttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
   finalizedBy        User?                      @relation("AttendanceFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
   balanceTransactions LessonBalanceTransaction[]
+  makeupCredits MakeupCredit[]
 
   @@unique([lessonId, childId])
   @@index([lessonId])
@@ -445,6 +478,75 @@ model Subscription {
   @@map("subscriptions")
 }
 
+model MakeupCredit {
+  id                       String       @id @default(uuid()) @db.Uuid
+  schoolId                 String       @map("school_id") @db.Uuid
+  childId                  String       @map("child_id") @db.Uuid
+  groupId                  String       @map("group_id") @db.Uuid
+  sourceLessonId           String?      @map("source_lesson_id") @db.Uuid
+  sourceAttendanceRecordId String?      @map("source_attendance_record_id") @db.Uuid
+  groupEventId             String?      @map("group_event_id") @db.Uuid
+  reason                   MakeupReason
+  status                   MakeupStatus @default(AVAILABLE)
+  assignedLessonId         String?      @map("assigned_lesson_id") @db.Uuid
+  assignedDate             DateTime?    @map("assigned_date") @db.Date
+  createdByUserId          String?      @map("created_by_user_id") @db.Uuid
+  comment                  String?
+  usedAt                   DateTime?    @map("used_at")
+  refundedAt               DateTime?    @map("refunded_at")
+  cancelledAt              DateTime?    @map("cancelled_at")
+  createdAt                DateTime     @default(now()) @map("created_at")
+  updatedAt                DateTime     @updatedAt @map("updated_at")
+
+  school                 School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  child                  Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
+  group                  TrainingGroup              @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  sourceLesson           Lesson?                    @relation("MakeupCreditSourceLesson", fields: [sourceLessonId], references: [id], onDelete: SetNull)
+  sourceAttendanceRecord AttendanceRecord?          @relation(fields: [sourceAttendanceRecordId], references: [id], onDelete: SetNull)
+  groupEvent             GroupEvent?                @relation(fields: [groupEventId], references: [id], onDelete: SetNull)
+  assignedLesson         Lesson?                    @relation("MakeupCreditAssignedLesson", fields: [assignedLessonId], references: [id], onDelete: SetNull)
+  createdBy              User?                      @relation("MakeupCreditCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  balanceTransactions    LessonBalanceTransaction[]
+
+  @@unique([childId, sourceLessonId, reason])
+  @@unique([childId, sourceAttendanceRecordId, reason])
+  @@index([schoolId])
+  @@index([childId])
+  @@index([groupId])
+  @@index([sourceLessonId])
+  @@index([sourceAttendanceRecordId])
+  @@index([groupEventId])
+  @@index([status])
+  @@index([reason])
+  @@index([assignedLessonId])
+  @@map("makeup_credits")
+}
+
+model GroupEvent {
+  id              String               @id @default(uuid()) @db.Uuid
+  schoolId        String               @map("school_id") @db.Uuid
+  groupId         String               @map("group_id") @db.Uuid
+  reason          LessonChangeReason
+  actionType      GroupEventActionType @default(MAKEUP_AND_CANCEL_LESSONS) @map("action_type")
+  periodStart     DateTime             @map("period_start") @db.Date
+  periodEnd       DateTime             @map("period_end") @db.Date
+  createdByUserId String               @map("created_by_user_id") @db.Uuid
+  comment         String?
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  school        School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  group         TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  createdBy     User          @relation("GroupEventCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  makeupCredits MakeupCredit[]
+
+  @@index([schoolId])
+  @@index([groupId])
+  @@index([reason])
+  @@index([periodStart, periodEnd])
+  @@map("group_events")
+}
+
 model LessonBalanceTransaction {
   id                 String                 @id @default(uuid()) @db.Uuid
   schoolId           String                 @map("school_id") @db.Uuid
@@ -452,6 +554,7 @@ model LessonBalanceTransaction {
   lessonId           String?                @map("lesson_id") @db.Uuid
   attendanceRecordId String?                @map("attendance_record_id") @db.Uuid
   subscriptionId     String?                @map("subscription_id") @db.Uuid
+  makeupCreditId     String?                @map("makeup_credit_id") @db.Uuid
   type               BalanceTransactionType
   balanceType        BalanceType            @map("balance_type")
   amount             Int
@@ -465,6 +568,7 @@ model LessonBalanceTransaction {
   lesson           Lesson?           @relation(fields: [lessonId], references: [id], onDelete: SetNull)
   attendanceRecord AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: SetNull)
   subscription     Subscription?     @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  makeupCredit     MakeupCredit?     @relation(fields: [makeupCreditId], references: [id], onDelete: SetNull)
   createdBy        User?             @relation("BalanceTransactionCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([schoolId])
@@ -472,6 +576,7 @@ model LessonBalanceTransaction {
   @@index([lessonId])
   @@index([attendanceRecordId])
   @@index([subscriptionId])
+  @@index([makeupCreditId])
   @@index([type])
   @@index([balanceType])
   @@index([createdAt])
