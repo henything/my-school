@@ -14,6 +14,7 @@ import type {
 } from "./schemas";
 
 const OPEN_TASK_STATUSES: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
+const trialParticipantOrderBy: Prisma.TrialParticipantOrderByWithRelationInput[] = [{ status: "asc" }, { createdAt: "asc" }];
 
 const lessonDetailInclude = {
   branch: { select: { id: true, name: true } },
@@ -50,8 +51,16 @@ const lessonDetailInclude = {
       markedByUserId: true,
       finalStatus: true
     }
+  },
+  trialParticipants: {
+    include: {
+      coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
+      convertedChild: { select: { id: true, fullName: true, status: true } },
+      createdBy: { select: { id: true, displayName: true, login: true, role: true } }
+    },
+    orderBy: trialParticipantOrderBy
   }
-} as const;
+} satisfies Prisma.LessonInclude;
 
 type LessonDetailRecord = Prisma.LessonGetPayload<{ include: typeof lessonDetailInclude }>;
 type AttendanceRecordForUpdate = {
@@ -137,7 +146,32 @@ export function serializeCoachLessonDetail(lesson: LessonDetailRecord) {
               finalStatus: null
             }
       };
-    })
+    }),
+    trials: lesson.trialParticipants.map((trial) => ({
+      id: trial.id,
+      lessonId: trial.lessonId,
+      groupId: trial.groupId,
+      coachId: trial.coachId,
+      convertedChildId: trial.convertedChildId,
+      childName: trial.childName,
+      childAge: trial.childAge,
+      parentName: trial.parentName,
+      parentPhone: trial.parentPhone,
+      parentVkUrl: trial.parentVkUrl,
+      source: trial.source,
+      status: trial.status,
+      comment: trial.comment,
+      convertedAt: trial.convertedAt?.toISOString() ?? null,
+      createdAt: trial.createdAt.toISOString(),
+      coach: {
+        id: trial.coach.id,
+        userId: trial.coach.userId,
+        displayName: trial.coach.user.displayName,
+        login: trial.coach.user.login
+      },
+      convertedChild: trial.convertedChild,
+      createdBy: trial.createdBy
+    }))
   };
 }
 

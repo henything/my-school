@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/badges";
 import { requireRole } from "@/server/auth/current-user";
 import { getCoachLessonDetail } from "@/server/attendance/attendance-service";
 import { AttendanceForm } from "./attendance-form";
+import { TrialPanel } from "./trial-panel";
 
 export default async function CoachLessonPage({ params }: { params: Promise<{ id: string }> }) {
   const currentUser = await requireRole(["COACH"]);
@@ -36,6 +37,7 @@ export default async function CoachLessonPage({ params }: { params: Promise<{ id
         </div>
       </section>
 
+      <TrialPanel lessonId={lesson.id} trials={lesson.trials} />
       <AttendanceForm lessonId={lesson.id} lessonChildren={lesson.children} />
     </div>
   );

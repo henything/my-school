@@ -777,6 +777,33 @@ async function autoCloseResolvedTasks(tx: Prisma.TransactionClient, currentUser:
     comment: "Автозакрытие: группа больше не переполнена."
   })).count;
 
+  const trialTasks = await tx.task.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      type: "TRIAL_NEEDS_PROCESSING",
+      relatedEntityType: "TrialParticipant",
+      status: { in: OPEN_TASK_STATUSES }
+    },
+    select: { relatedEntityId: true }
+  });
+  const processedTrials = await tx.trialParticipant.findMany({
+    where: {
+      id: { in: trialTasks.map((task) => task.relatedEntityId).filter(Boolean) as string[] },
+      status: { in: ["CONVERTED_TO_ACTIVE", "TRANSFERRED_TO_ADMIN"] }
+    },
+    select: { id: true }
+  });
+  closedCount += (await closeTasksByCondition(tx, {
+    schoolId: currentUser.schoolId,
+    actorUserId: currentUser.id,
+    where: {
+      type: "TRIAL_NEEDS_PROCESSING",
+      relatedEntityType: "TrialParticipant",
+      relatedEntityId: { in: processedTrials.map((trial) => trial.id) }
+    },
+    comment: "Автозакрытие: пробник обработан."
+  })).count;
+
   return closedCount;
 }
 

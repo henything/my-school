@@ -151,6 +151,24 @@ enum TaskType {
   MANUAL_TASK
 }
 
+enum TrialStatus {
+  TRIAL_BOOKED
+  TRIAL_ATTENDED
+  TRIAL_NO_SHOW
+  CONTACT_COLLECTED
+  TRANSFERRED_TO_ADMIN
+  CONVERTED_TO_ACTIVE
+}
+
+enum TrialSource {
+  VK
+  REFERRAL
+  KINDERGARTEN
+  ADVERTISING
+  OTHER
+  UNKNOWN
+}
+
 model School {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
@@ -174,6 +192,7 @@ model School {
   sessions      Session[]
   tasks         Task[]
   auditLogs     AuditLog[]
+  trialParticipants TrialParticipant[]
 
   @@map("schools")
 }
@@ -201,6 +220,7 @@ model User {
   createdBalanceTransactions LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
   createdMakeupCredits MakeupCredit[] @relation("MakeupCreditCreatedBy")
   createdGroupEvents GroupEvent[] @relation("GroupEventCreatedBy")
+  createdTrialParticipants TrialParticipant[] @relation("TrialParticipantCreatedBy")
   auditLogs     AuditLog[]    @relation("AuditActor")
 
   @@unique([schoolId, login])
@@ -239,6 +259,7 @@ model CoachProfile {
   scheduleTemplates ScheduleTemplate[]
   lessons Lesson[] @relation("LessonCoach")
   substituteLessons Lesson[] @relation("LessonSubstituteCoach")
+  trialParticipants TrialParticipant[]
 
   @@index([schoolId])
   @@map("coach_profiles")
@@ -308,6 +329,7 @@ model Child {
   subscriptions Subscription[]
   lessonBalanceTransactions LessonBalanceTransaction[]
   makeupCredits MakeupCredit[]
+  convertedTrials TrialParticipant[] @relation("TrialConvertedChild")
   tasks        Task[]
 
   @@index([schoolId])
@@ -341,6 +363,7 @@ model TrainingGroup {
   tasks     Task[]
   makeupCredits MakeupCredit[]
   groupEvents   GroupEvent[]
+  trialParticipants TrialParticipant[]
 
   @@unique([branchId, name])
   @@index([schoolId])
@@ -405,6 +428,7 @@ model Lesson {
   lessonBalanceTransactions LessonBalanceTransaction[]
   sourceMakeupCredits MakeupCredit[] @relation("MakeupCreditSourceLesson")
   assignedMakeupCredits MakeupCredit[] @relation("MakeupCreditAssignedLesson")
+  trialParticipants TrialParticipant[]
 
   @@unique([groupId, lessonDate, startTime])
   @@index([schoolId])
@@ -637,6 +661,44 @@ model Task {
   @@index([childId])
   @@index([groupId])
   @@map("tasks")
+}
+
+model TrialParticipant {
+  id               String      @id @default(uuid()) @db.Uuid
+  schoolId         String      @map("school_id") @db.Uuid
+  lessonId         String      @map("lesson_id") @db.Uuid
+  groupId          String      @map("group_id") @db.Uuid
+  coachId          String      @map("coach_id") @db.Uuid
+  convertedChildId String?     @map("converted_child_id") @db.Uuid
+  childName        String?     @map("child_name")
+  childAge         Int?        @map("child_age")
+  parentName       String?     @map("parent_name")
+  parentPhone      String?     @map("parent_phone")
+  parentVkUrl      String?     @map("parent_vk_url")
+  source           TrialSource @default(UNKNOWN)
+  status           TrialStatus @default(TRIAL_BOOKED)
+  comment          String?
+  createdByUserId  String?     @map("created_by_user_id") @db.Uuid
+  convertedAt      DateTime?   @map("converted_at")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  updatedAt        DateTime    @updatedAt @map("updated_at")
+
+  school         School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  lesson         Lesson        @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  group          TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  coach          CoachProfile  @relation(fields: [coachId], references: [id], onDelete: Restrict)
+  convertedChild Child?        @relation("TrialConvertedChild", fields: [convertedChildId], references: [id], onDelete: SetNull)
+  createdBy      User?         @relation("TrialParticipantCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([lessonId])
+  @@index([groupId])
+  @@index([coachId])
+  @@index([status])
+  @@index([convertedChildId])
+  @@index([createdByUserId])
+  @@index([schoolId, status])
+  @@map("trial_participants")
 }
 
 model AuditLog {
