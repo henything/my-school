@@ -169,6 +169,20 @@ enum TrialSource {
   UNKNOWN
 }
 
+enum ImportBatchStatus {
+  UPLOADED
+  VALIDATING
+  VALIDATION_FAILED
+  READY_TO_IMPORT
+  IMPORTED
+  FAILED
+}
+
+enum ImportIssueSeverity {
+  ERROR
+  WARNING
+}
+
 model School {
   id        String   @id @default(uuid()) @db.Uuid
   name      String
@@ -193,6 +207,7 @@ model School {
   tasks         Task[]
   auditLogs     AuditLog[]
   trialParticipants TrialParticipant[]
+  importBatches ImportBatch[]
 
   @@map("schools")
 }
@@ -221,6 +236,7 @@ model User {
   createdMakeupCredits MakeupCredit[] @relation("MakeupCreditCreatedBy")
   createdGroupEvents GroupEvent[] @relation("GroupEventCreatedBy")
   createdTrialParticipants TrialParticipant[] @relation("TrialParticipantCreatedBy")
+  uploadedImportBatches ImportBatch[] @relation("ImportBatchUploadedBy")
   auditLogs     AuditLog[]    @relation("AuditActor")
 
   @@unique([schoolId, login])
@@ -699,6 +715,52 @@ model TrialParticipant {
   @@index([createdByUserId])
   @@index([schoolId, status])
   @@map("trial_participants")
+}
+
+model ImportBatch {
+  id               String            @id @default(uuid()) @db.Uuid
+  schoolId         String            @map("school_id") @db.Uuid
+  uploadedByUserId String?           @map("uploaded_by_user_id") @db.Uuid
+  fileName         String            @map("file_name")
+  fileHash         String?           @map("file_hash")
+  status           ImportBatchStatus @default(UPLOADED)
+  totalRows        Int               @default(0) @map("total_rows")
+  successRows      Int               @default(0) @map("success_rows")
+  failedRows       Int               @default(0) @map("failed_rows")
+  preview          Json?
+  parsedPayload    Json?             @map("parsed_payload")
+  result           Json?
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  school     School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  uploadedBy User?         @relation("ImportBatchUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  errors     ImportError[]
+
+  @@index([schoolId])
+  @@index([uploadedByUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("import_batches")
+}
+
+model ImportError {
+  id            String              @id @default(uuid()) @db.Uuid
+  importBatchId String              @map("import_batch_id") @db.Uuid
+  severity      ImportIssueSeverity @default(ERROR)
+  sheetName     String              @map("sheet_name")
+  rowNumber     Int?                @map("row_number")
+  fieldName     String?             @map("field_name")
+  errorMessage  String              @map("error_message")
+  rawRow        Json?               @map("raw_row")
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  importBatch ImportBatch @relation(fields: [importBatchId], references: [id], onDelete: Cascade)
+
+  @@index([importBatchId])
+  @@index([severity])
+  @@index([sheetName])
+  @@map("import_errors")
 }
 
 model AuditLog {
