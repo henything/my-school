@@ -9,6 +9,11 @@ export const optionalTextSchema = z
   .optional()
   .nullable();
 
+export const requiredCommentSchema = z.preprocess(
+  (value) => (typeof value === "string" ? value : ""),
+  z.string().trim().min(1, "Комментарий обязателен.")
+);
+
 export const optionalDateSchema = z
   .string()
   .trim()

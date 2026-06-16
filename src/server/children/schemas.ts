@@ -38,6 +38,7 @@ export const updateChildSchema = z.object({
   medicalNotes: optionalTextSchema,
   coachComment: optionalTextSchema,
   adminComment: optionalTextSchema,
+  statusChangeComment: optionalTextSchema,
   admissionStatus: admissionStatusSchema.optional()
 });
 

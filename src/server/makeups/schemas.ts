@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
+import { optionalTextSchema, requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 import { lessonChangeReasonSchema } from "@/server/schedule/schemas";
 
 const dateOnlySchema = z
@@ -39,7 +39,7 @@ export const createGroupEventSchema = z
     reason: lessonChangeReasonSchema,
     periodStart: dateOnlySchema,
     periodEnd: dateOnlySchema,
-    comment: optionalTextSchema
+    comment: requiredCommentSchema
   })
   .refine((input) => input.periodEnd >= input.periodStart, {
     message: "Дата окончания события должна быть не раньше даты начала.",
@@ -48,12 +48,12 @@ export const createGroupEventSchema = z
 
 export const assignMakeupSchema = z.object({
   assignedLessonId: uuidSchema,
-  comment: optionalTextSchema
+  comment: requiredCommentSchema
 });
 
 export const closeMakeupSchema = z.object({
   status: z.enum(["USED", "REFUNDED", "CANCELLED"]),
-  comment: optionalTextSchema
+  comment: requiredCommentSchema
 });
 
 export const sicknessFollowUpJobSchema = z.object({

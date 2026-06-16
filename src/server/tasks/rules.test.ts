@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildTaskDedupeWhere, requiresCloseComment } from "./task-service";
+import { containsCoachForbiddenFinancialField } from "@/server/rbac/rbac";
+import { buildTaskDedupeWhere, requiresCloseComment, serializeTask } from "./task-service";
 
 describe("task rules", () => {
   it("deduplicates by open task type, entity and assignee", () => {
@@ -39,5 +40,40 @@ describe("task rules", () => {
     expect(requiresCloseComment({ priority: "LOW", type: "CHILD_TOOK_CREDIT_LESSON" })).toBe(true);
     expect(requiresCloseComment({ priority: "LOW", type: "ATTENDANCE_NOT_FILLED" })).toBe(true);
     expect(requiresCloseComment({ priority: "MEDIUM", type: "MANUAL_TASK" })).toBe(false);
+  });
+
+  it("redacts child balance from coach-visible task payloads", () => {
+    const task = {
+      id: "task-1",
+      type: "CHILD_NOT_ADMITTED",
+      priority: "CRITICAL",
+      title: "Недопуск",
+      description: null,
+      status: "OPEN",
+      assigneeUser: null,
+      closedByUser: null,
+      relatedEntityType: "Child",
+      relatedEntityId: "child-1",
+      dueAt: null,
+      closedAt: null,
+      closedComment: null,
+      child: {
+        id: "child-1",
+        fullName: "Иван Петров",
+        admissionStatus: "NOT_ADMITTED",
+        cachedLessonBalance: -1
+      },
+      group: null,
+      createdAt: new Date("2026-06-16T10:00:00.000Z")
+    } as Parameters<typeof serializeTask>[0];
+
+    const coachVisibleTask = serializeTask(task, { includeFinancialFields: false });
+
+    expect(coachVisibleTask.child).toEqual({
+      id: "child-1",
+      fullName: "Иван Петров",
+      admissionStatus: "NOT_ADMITTED"
+    });
+    expect(containsCoachForbiddenFinancialField(coachVisibleTask)).toBe(false);
   });
 });

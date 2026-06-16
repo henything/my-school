@@ -380,7 +380,7 @@ function GroupEventForm({ groups }: { groups: Group[] }) {
       </div>
       <label className="label">
         Комментарий
-        <input className="field" name="comment" disabled={disabled} />
+        <input className="field" name="comment" minLength={1} required disabled={disabled} />
       </label>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Применить" disabled={disabled} />
     </form>
@@ -534,7 +534,7 @@ function AssignMakeupForm({ makeup, lessons }: { makeup: Makeup; lessons: Lesson
       </label>
       <label className="label">
         Комментарий
-        <input className="field" name="comment" disabled={disabled} />
+        <input className="field" name="comment" minLength={1} required disabled={disabled} />
       </label>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Назначить" disabled={disabled} />
     </form>
@@ -544,15 +544,18 @@ function AssignMakeupForm({ makeup, lessons }: { makeup: Makeup; lessons: Lesson
 function CloseMakeupButtons({ makeup, compact = false }: { makeup: Makeup; compact?: boolean }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
+  const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const canSubmit = comment.trim().length > 0 && !isSubmitting;
 
   async function close(status: "USED" | "REFUNDED" | "CANCELLED") {
     setMessage("");
     setIsSubmitting(true);
 
     try {
-      await submitJson(`/api/makeups/${makeup.id}/use`, { status });
+      await submitJson(`/api/makeups/${makeup.id}/use`, { status, comment });
       setMessage(status);
+      setComment("");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось закрыть.");
@@ -563,17 +566,25 @@ function CloseMakeupButtons({ makeup, compact = false }: { makeup: Makeup; compa
 
   return (
     <div className={compact ? "mt-3 grid gap-2" : "mt-4 grid gap-2"}>
+      <input
+        className="field min-h-9"
+        value={comment}
+        onChange={(event) => setComment(event.target.value)}
+        placeholder="Комментарий"
+        minLength={1}
+        required
+      />
       <div className="flex flex-wrap gap-2">
         {!compact ? (
-          <Button type="button" size="sm" onClick={() => void close("USED")} disabled={isSubmitting}>
+          <Button type="button" size="sm" onClick={() => void close("USED")} disabled={!canSubmit}>
             {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <RefreshCcw aria-hidden="true" size={14} />}
             Использован
           </Button>
         ) : null}
-        <Button type="button" size="sm" variant="secondary" onClick={() => void close("REFUNDED")} disabled={isSubmitting}>
+        <Button type="button" size="sm" variant="secondary" onClick={() => void close("REFUNDED")} disabled={!canSubmit}>
           Возврат
         </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={() => void close("CANCELLED")} disabled={isSubmitting}>
+        <Button type="button" size="sm" variant="secondary" onClick={() => void close("CANCELLED")} disabled={!canSubmit}>
           Отмена
         </Button>
       </div>

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { uuidSchema } from "@/server/shared/schemas";
+import { requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 import { DEFAULT_LESSON_PRICE_KOPEKS } from "./calculations";
 
 export const paymentStatusSchema = z.enum(["NOT_INVOICED", "INVOICED", "NOT_PAID", "PAID", "PARTIALLY_PAID", "OVERDUE"]);
@@ -9,8 +9,6 @@ const dateOnlySchema = z
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Дата должна быть в формате YYYY-MM-DD.")
   .transform((value) => new Date(`${value}T00:00:00.000Z`));
-
-const requiredCommentSchema = z.string().trim().min(1, "Комментарий обязателен.");
 
 export const createSubscriptionSchema = z
   .object({

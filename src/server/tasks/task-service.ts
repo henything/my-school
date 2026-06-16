@@ -57,7 +57,22 @@ type CloseTasksByConditionInput = {
   status?: Extract<TaskStatus, "CLOSED" | "CANCELLED">;
 };
 
-export function serializeTask(task: TaskRecord) {
+type SerializeTaskOptions = {
+  includeFinancialFields?: boolean;
+};
+
+export function serializeTask(task: TaskRecord, options: SerializeTaskOptions = {}) {
+  const includeFinancialFields = options.includeFinancialFields ?? true;
+  const child = task.child
+    ? includeFinancialFields
+      ? task.child
+      : {
+          id: task.child.id,
+          fullName: task.child.fullName,
+          admissionStatus: task.child.admissionStatus
+        }
+    : null;
+
   return {
     id: task.id,
     type: task.type,
@@ -72,7 +87,7 @@ export function serializeTask(task: TaskRecord) {
     closedAt: task.closedAt?.toISOString() ?? null,
     closedByUser: task.closedByUser,
     closedComment: task.closedComment,
-    child: task.child,
+    child,
     group: task.group,
     createdAt: task.createdAt.toISOString()
   };
@@ -110,7 +125,7 @@ export async function listTasks(currentUser: CurrentUser) {
     orderBy: taskOrderBy
   });
 
-  return tasks.map(serializeTask);
+  return tasks.map((task) => serializeTask(task));
 }
 
 export async function listMyTasks(currentUser: CurrentUser) {
@@ -144,7 +159,7 @@ export async function getTasksForUser(currentUser: CurrentUser) {
     orderBy: taskOrderBy
   });
 
-  return tasks.map(serializeTask);
+  return tasks.map((task) => serializeTask(task, { includeFinancialFields: false }));
 }
 
 export async function getOperationalTasksForAdmin(currentUser: CurrentUser) {
@@ -162,7 +177,7 @@ export async function getOperationalTasksForAdmin(currentUser: CurrentUser) {
     orderBy: taskOrderBy
   });
 
-  return tasks.map(serializeTask);
+  return tasks.map((task) => serializeTask(task));
 }
 
 export async function createManualTask(currentUser: CurrentUser, input: CreateManualTaskInput) {
@@ -260,7 +275,7 @@ export async function closeTask(currentUser: CurrentUser, taskId: string, input:
       tx
     );
 
-    return serializeTask(updated);
+    return serializeTask(updated, { includeFinancialFields: hasRole(currentUser, ADMIN_ROLES) });
   });
 }
 

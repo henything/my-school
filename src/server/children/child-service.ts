@@ -48,6 +48,10 @@ type ChildRecord = {
   } | null;
 };
 
+export function requiresChildStatusChangeComment(previousStatus: string, nextStatus: string | undefined) {
+  return Boolean(nextStatus && nextStatus !== previousStatus && ["LEFT", "ARCHIVED"].includes(nextStatus));
+}
+
 export function serializeChild(child: ChildRecord) {
   const activeChildrenCount = child.currentGroup ? countActiveChildren(child.currentGroup.children) : 0;
 
@@ -158,6 +162,7 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
 
 export async function updateChild(currentUser: CurrentUser, childId: string, input: UpdateChildInput) {
   return getPrisma().$transaction(async (tx) => {
+    const { statusChangeComment, ...childUpdateData } = input;
     const existing = await tx.child.findFirstOrThrow({
       where: {
         id: childId,
@@ -172,13 +177,14 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
     if (isCoach) {
       const coachCanAccess = existing.currentGroup?.mainCoach.userId === currentUser.id;
       const attemptedAdminOnlyChange =
-        input.fullName !== undefined ||
-        input.parentId !== undefined ||
-        input.currentGroupId !== undefined ||
-        input.birthDate !== undefined ||
-        input.status !== undefined ||
-        input.adminComment !== undefined ||
-        input.admissionStatus !== undefined;
+        childUpdateData.fullName !== undefined ||
+        childUpdateData.parentId !== undefined ||
+        childUpdateData.currentGroupId !== undefined ||
+        childUpdateData.birthDate !== undefined ||
+        childUpdateData.status !== undefined ||
+        childUpdateData.adminComment !== undefined ||
+        childUpdateData.admissionStatus !== undefined ||
+        statusChangeComment !== undefined;
 
       if (!coachCanAccess || attemptedAdminOnlyChange) {
         throw new Error("Недостаточно прав для изменения карточки ребёнка.");
@@ -189,19 +195,23 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
       throw new Error("Недостаточно прав для изменения карточки ребёнка.");
     }
 
-    if (input.parentId) {
+    if (requiresChildStatusChangeComment(existing.status, childUpdateData.status) && !statusChangeComment) {
+      throw new Error("Для статуса LEFT или ARCHIVED нужен комментарий.");
+    }
+
+    if (childUpdateData.parentId) {
       await tx.parent.findFirstOrThrow({
         where: {
-          id: input.parentId,
+          id: childUpdateData.parentId,
           schoolId: currentUser.schoolId
         }
       });
     }
 
-    if (input.currentGroupId) {
+    if (childUpdateData.currentGroupId) {
       await tx.trainingGroup.findFirstOrThrow({
         where: {
-          id: input.currentGroupId,
+          id: childUpdateData.currentGroupId,
           schoolId: currentUser.schoolId,
           status: { not: "ARCHIVED" }
         }
@@ -210,9 +220,25 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
 
     const updated = await tx.child.update({
       where: { id: existing.id },
-      data: input,
+      data: childUpdateData,
       include: childInclude
     });
+
+    if (existing.status !== updated.status) {
+      await writeAuditLog(
+        {
+          schoolId: currentUser.schoolId,
+          actorUserId: currentUser.id,
+          action: "CHILD_STATUS_UPDATED",
+          entityType: "Child",
+          entityId: updated.id,
+          oldValue: { status: existing.status },
+          newValue: { status: updated.status },
+          comment: statusChangeComment
+        },
+        tx
+      );
+    }
 
     if (existing.currentGroup?.id !== updated.currentGroup?.id) {
       await writeAuditLog(
@@ -230,6 +256,36 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
             currentGroupId: updated.currentGroup?.id ?? null,
             currentGroupName: updated.currentGroup?.name ?? null
           }
+        },
+        tx
+      );
+    }
+
+    if (existing.admissionStatus !== updated.admissionStatus) {
+      await writeAuditLog(
+        {
+          schoolId: currentUser.schoolId,
+          actorUserId: currentUser.id,
+          action: "CHILD_ADMISSION_STATUS_UPDATED",
+          entityType: "Child",
+          entityId: updated.id,
+          oldValue: { admissionStatus: existing.admissionStatus },
+          newValue: { admissionStatus: updated.admissionStatus }
+        },
+        tx
+      );
+    }
+
+    if (existing.coachComment !== updated.coachComment) {
+      await writeAuditLog(
+        {
+          schoolId: currentUser.schoolId,
+          actorUserId: currentUser.id,
+          action: "CHILD_COACH_COMMENT_UPDATED",
+          entityType: "Child",
+          entityId: updated.id,
+          oldValue: { coachComment: existing.coachComment },
+          newValue: { coachComment: updated.coachComment }
         },
         tx
       );

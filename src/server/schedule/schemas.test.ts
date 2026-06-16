@@ -35,4 +35,27 @@ describe("schedule schemas", () => {
   it("requires a reason when cancelling a lesson", () => {
     expect(() => cancelLessonSchema.parse({ comment: "Нет доступа в зал" })).toThrow();
   });
+
+  it("requires comments when moving or cancelling a lesson", () => {
+    expect(
+      moveLessonSchema.safeParse({
+        lessonDate: "2026-06-10",
+        startTime: "10:00",
+        endTime: "11:00",
+        reason: "OTHER",
+        comment: "Перенос по просьбе сада"
+      }).success
+    ).toBe(true);
+    expect(
+      moveLessonSchema.safeParse({
+        lessonDate: "2026-06-10",
+        startTime: "10:00",
+        endTime: "11:00",
+        reason: "OTHER",
+        comment: " "
+      }).success
+    ).toBe(false);
+    expect(cancelLessonSchema.safeParse({ reason: "QUARANTINE", comment: "Карантин в группе" }).success).toBe(true);
+    expect(cancelLessonSchema.safeParse({ reason: "QUARANTINE", comment: "" }).success).toBe(false);
+  });
 });

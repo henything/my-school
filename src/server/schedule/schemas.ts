@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
+import { requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 
 const timeSchema = z
   .string()
@@ -64,13 +64,13 @@ export const moveLessonSchema = addTimeRangeValidation(
     startTime: timeSchema,
     endTime: timeSchema,
     reason: lessonChangeReasonSchema,
-    comment: optionalTextSchema
+    comment: requiredCommentSchema
   })
 );
 
 export const cancelLessonSchema = z.object({
   reason: lessonChangeReasonSchema,
-  comment: optionalTextSchema
+  comment: requiredCommentSchema
 });
 
 export const substituteLessonSchema = z.object({

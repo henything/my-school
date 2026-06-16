@@ -370,7 +370,7 @@ function MoveLessonForm({ lesson }: { lesson: Lesson }) {
       </div>
       <div className="grid grid-cols-[1fr_1fr_40px] gap-2">
         <ReasonSelect />
-        <input className="field min-h-9" name="comment" placeholder="Комментарий" />
+        <input className="field min-h-9" name="comment" placeholder="Комментарий" minLength={1} required />
         <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Перенести">
           {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <Repeat2 aria-hidden="true" size={15} />}
         </Button>
@@ -400,7 +400,7 @@ function CancelLessonForm({ lessonId }: { lessonId: string }) {
   return (
     <form className="grid min-w-[220px] grid-cols-[1fr_1fr_40px] gap-2" onSubmit={onSubmit}>
       <ReasonSelect />
-      <input className="field min-h-9" name="comment" placeholder="Комментарий" />
+      <input className="field min-h-9" name="comment" placeholder="Комментарий" minLength={1} required />
       <Button type="submit" size="icon" variant="danger" disabled={isSubmitting} title="Отменить">
         {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <Ban aria-hidden="true" size={15} />}
       </Button>

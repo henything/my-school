@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   CalendarDays,
   FileSpreadsheet,
+  History,
   LayoutDashboard,
   ListChecks,
   MapPinned,
@@ -100,6 +101,13 @@ export function AppShell({ user, area, children }: AppShellProps) {
             >
               <UserRoundPlus aria-hidden="true" size={16} />
               Пробники
+            </Link>
+            <Link
+              href="/admin/audit"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <History aria-hidden="true" size={16} />
+              Аудит
             </Link>
             {user.role === "SUPER_ADMIN" ? (
               <Link
