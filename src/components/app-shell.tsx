@@ -8,6 +8,7 @@ import {
   MapPinned,
   RefreshCcw,
   Rocket,
+  ShieldAlert,
   ShieldCheck,
   UserRoundPlus,
   Users,
@@ -102,6 +103,13 @@ export function AppShell({ user, area, children }: AppShellProps) {
             >
               <Rocket aria-hidden="true" size={16} />
               Readiness
+            </Link>
+            <Link
+              href="/admin/stabilization"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <ShieldAlert aria-hidden="true" size={16} />
+              Стабилизация
             </Link>
             <Link
               href="/admin/trials"
