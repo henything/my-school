@@ -7,6 +7,7 @@ import {
   ListChecks,
   MapPinned,
   RefreshCcw,
+  Rocket,
   ShieldCheck,
   UserRoundPlus,
   Users,
@@ -94,6 +95,13 @@ export function AppShell({ user, area, children }: AppShellProps) {
             >
               <ListChecks aria-hidden="true" size={16} />
               Операции
+            </Link>
+            <Link
+              href="/admin/readiness"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <Rocket aria-hidden="true" size={16} />
+              Readiness
             </Link>
             <Link
               href="/admin/trials"

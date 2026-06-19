@@ -1,0 +1,134 @@
+import { Activity, CheckCircle2, CircleAlert, CircleX, ClipboardCheck, ListChecks, Rocket } from "lucide-react";
+import { PilotIssueForm } from "@/app/admin/readiness/components/pilot-issue-form";
+import { requireRole } from "@/server/auth/current-user";
+import { getReadinessDashboard, type ReadinessGateStatus } from "@/server/readiness/readiness-service";
+import { ADMIN_ROLES } from "@/server/rbac/rbac";
+
+const statusConfig: Record<ReadinessGateStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
+  READY: { label: "Готово", className: "bg-[#dff1ea] text-[#075a3d]", icon: CheckCircle2 },
+  NEEDS_ATTENTION: { label: "Нужна проверка", className: "bg-[#f7e4d1] text-[#7a3f0d]", icon: CircleAlert },
+  BLOCKED: { label: "Блокер", className: "bg-[#f8d8d4] text-[#8f1d17]", icon: CircleX }
+};
+
+const metricToneClassName: Record<string, string> = {
+  success: "border-[#b9dfcd] bg-[#f3fbf7]",
+  warning: "border-[#efd29c] bg-[#fff9ec]",
+  danger: "border-[#efb5ae] bg-[#fff4f2]",
+  neutral: "border-[var(--line)] bg-white"
+};
+
+export default async function ReadinessPage() {
+  const currentUser = await requireRole(ADMIN_ROLES);
+  const dashboard = await getReadinessDashboard(currentUser);
+
+  return (
+    <div className="grid gap-6">
+      <section className="min-w-0">
+        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-10</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">Готовность к пилоту</h1>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+              Gate 1-5, метрики пилота и чеклисты стабилизации перед внутренним rollout.
+            </p>
+          </div>
+          <span className="badge bg-[#e6eff8] text-[#214f78]">Дата: {dashboard.today}</span>
+        </div>
+      </section>
+
+      <section className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {dashboard.metrics.map((metric) => (
+          <div key={metric.label} className={`panel min-w-0 border p-4 ${metricToneClassName[metric.tone]}`}>
+            <div className="text-sm font-semibold text-[var(--muted)]">{metric.label}</div>
+            <div className="mt-2 text-2xl font-bold">{metric.value}</div>
+          </div>
+        ))}
+      </section>
+
+      <section className="grid min-w-0 gap-4">
+        <div className="flex items-center gap-2">
+          <Rocket className="text-[var(--accent)]" aria-hidden="true" size={18} />
+          <h2 className="text-lg font-bold">Release gates</h2>
+        </div>
+        <div className="grid gap-4 lg:grid-cols-2">
+          {dashboard.gates.map((gate) => (
+            <article key={gate.id} className="panel min-w-0 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-lg font-bold">{gate.title}</h3>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{gate.description}</p>
+                </div>
+                <GateStatusBadge status={gate.status} />
+              </div>
+              <div className="mt-4 grid gap-2">
+                {gate.checks.map((check) => (
+                  <div key={check.id} className="flex items-start gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm">
+                    {check.passed ? (
+                      <CheckCircle2 className="mt-0.5 shrink-0 text-[#075a3d]" aria-hidden="true" size={16} />
+                    ) : check.required ? (
+                      <CircleX className="mt-0.5 shrink-0 text-[#8f1d17]" aria-hidden="true" size={16} />
+                    ) : (
+                      <CircleAlert className="mt-0.5 shrink-0 text-[#7a3f0d]" aria-hidden="true" size={16} />
+                    )}
+                    <div className="min-w-0">
+                      <div className="font-semibold">{check.detail}</div>
+                      <div className="text-xs text-[var(--muted)]">{check.required ? "обязательно" : "рекомендация"}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="grid min-w-0 gap-4">
+          <div className="flex items-center gap-2">
+            <ClipboardCheck className="text-[var(--accent)]" aria-hidden="true" size={18} />
+            <h2 className="text-lg font-bold">Чеклисты пилота</h2>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {dashboard.manualSections.map((section) => (
+              <article key={section.title} className="panel min-w-0 p-5">
+                <h3 className="font-bold">{section.title}</h3>
+                <ul className="mt-4 grid gap-2 text-sm leading-6 text-[var(--muted)]">
+                  {section.items.map((item) => (
+                    <li key={item} className="flex items-start gap-2">
+                      <ListChecks className="mt-1 shrink-0 text-[var(--accent)]" aria-hidden="true" size={14} />
+                      <span>{item}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid min-w-0 content-start gap-4">
+          <div className="panel p-5">
+            <h2 className="flex items-center gap-2 text-lg font-bold">
+              <Activity className="text-[var(--accent)]" aria-hidden="true" size={18} />
+              MVP target
+            </h2>
+            <div className="mt-4 text-4xl font-bold">{dashboard.attendanceCompletionRate === null ? "n/a" : `${dashboard.attendanceCompletionRate}%`}</div>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">95%+ занятий с заполненной посещаемостью в день проведения.</p>
+          </div>
+          <PilotIssueForm titlePrefix={dashboard.pilotIssueDefaults.titlePrefix} defaultPriority={dashboard.pilotIssueDefaults.priority} />
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function GateStatusBadge({ status }: { status: ReadinessGateStatus }) {
+  const config = statusConfig[status];
+  const Icon = config.icon;
+
+  return (
+    <span className={`badge ${config.className}`}>
+      <Icon aria-hidden="true" size={14} />
+      {config.label}
+    </span>
+  );
+}
