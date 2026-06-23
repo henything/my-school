@@ -65,6 +65,12 @@ export function containsCoachForbiddenFinancialField(value: unknown): boolean {
   });
 }
 
+export function assertNoCoachForbiddenFinancialFields(user: Pick<CurrentUser, "role">, value: unknown) {
+  if (user.role === "COACH" && containsCoachForbiddenFinancialField(value)) {
+    throw new Error("Ответ для тренера содержит запрещённые финансовые поля.");
+  }
+}
+
 export function assertRole(user: Pick<CurrentUser, "role">, roles: UserRole[]) {
   if (!hasRole(user, roles)) {
     throw new Error("You do not have access to this action.");

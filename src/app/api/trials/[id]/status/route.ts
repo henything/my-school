@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
 import { requireApiUser } from "@/server/auth/api-user";
+import { assertNoCoachForbiddenFinancialFields } from "@/server/rbac/rbac";
 import { updateTrialStatus } from "@/server/trials/trial-service";
 import { updateTrialStatusSchema } from "@/server/trials/schemas";
 
@@ -15,7 +16,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const input = updateTrialStatusSchema.parse(await request.json().catch(() => ({})));
     const trial = await updateTrialStatus(currentUser.user, id, input);
-    return NextResponse.json({ trial });
+    const payload = { trial };
+    assertNoCoachForbiddenFinancialFields(currentUser.user, payload);
+    return NextResponse.json(payload);
   } catch (error) {
     return jsonError(errorMessage(error), 400);
   }

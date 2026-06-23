@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
 import { requireApiUser } from "@/server/auth/api-user";
+import { assertNoCoachForbiddenFinancialFields } from "@/server/rbac/rbac";
 import { closeTask } from "@/server/tasks/task-service";
 import { closeTaskSchema } from "@/server/tasks/schemas";
 
@@ -15,7 +16,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const { id } = await params;
     const input = closeTaskSchema.parse(await request.json().catch(() => ({})));
     const task = await closeTask(currentUser.user, id, input);
-    return NextResponse.json({ task });
+    const payload = { task };
+    assertNoCoachForbiddenFinancialFields(currentUser.user, payload);
+    return NextResponse.json(payload);
   } catch (error) {
     return jsonError(errorMessage(error), 400);
   }

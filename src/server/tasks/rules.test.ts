@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
+import type { Prisma } from "@/generated/prisma/client";
 import { containsCoachForbiddenFinancialField } from "@/server/rbac/rbac";
-import { buildTaskDedupeWhere, requiresCloseComment, serializeTask } from "./task-service";
+import { buildTaskCloseAuditLogInput, buildTaskDedupeWhere, closeTasksByCondition, requiresCloseComment, serializeTask } from "./task-service";
 
 describe("task rules", () => {
   it("deduplicates by open task type, entity and assignee", () => {
@@ -75,5 +76,72 @@ describe("task rules", () => {
       admissionStatus: "NOT_ADMITTED"
     });
     expect(containsCoachForbiddenFinancialField(coachVisibleTask)).toBe(false);
+  });
+
+  it("builds audit logs for task closure", () => {
+    const closedAt = new Date("2026-06-23T10:00:00.000Z");
+
+    expect(
+      buildTaskCloseAuditLogInput(
+        { id: "admin-1", schoolId: "school-1" },
+        { id: "task-1", status: "OPEN", closedAt: null },
+        { status: "CLOSED", closedAt, comment: "Проверено" }
+      )
+    ).toEqual({
+      schoolId: "school-1",
+      actorUserId: "admin-1",
+      action: "TASK_CLOSED",
+      entityType: "Task",
+      entityId: "task-1",
+      oldValue: { status: "OPEN", closedAt: null },
+      newValue: {
+        status: "CLOSED",
+        closedAt: "2026-06-23T10:00:00.000Z",
+        closedByUserId: "admin-1",
+        closedComment: "Проверено"
+      },
+      comment: "Проверено"
+    });
+  });
+
+  it("audits condition-based task closure", async () => {
+    const auditLogs: unknown[] = [];
+    const tx = {
+      task: {
+        findMany: async () => [{ id: "task-1", status: "OPEN", closedAt: null }],
+        updateMany: async () => ({ count: 1 })
+      },
+      auditLog: {
+        create: async ({ data }: { data: unknown }) => {
+          auditLogs.push(data);
+          return data;
+        }
+      }
+    } as unknown as Prisma.TransactionClient;
+
+    const result = await closeTasksByCondition(tx, {
+      schoolId: "school-1",
+      actorUserId: "admin-1",
+      where: { type: "ATTENDANCE_NOT_FILLED" },
+      comment: "Автозакрытие: табель заполнен."
+    });
+
+    expect(result).toEqual({ count: 1 });
+    expect(auditLogs).toMatchObject([
+      {
+        schoolId: "school-1",
+        actorUserId: "admin-1",
+        action: "TASK_CLOSED",
+        entityType: "Task",
+        entityId: "task-1",
+        oldValue: { status: "OPEN", closedAt: null },
+        newValue: {
+          status: "CLOSED",
+          closedByUserId: "admin-1",
+          closedComment: "Автозакрытие: табель заполнен."
+        },
+        comment: "Автозакрытие: табель заполнен."
+      }
+    ]);
   });
 });

@@ -3,6 +3,7 @@ import { errorMessage, jsonError } from "@/lib/http";
 import { requireApiUser } from "@/server/auth/api-user";
 import { updateChild } from "@/server/children/child-service";
 import { updateChildSchema } from "@/server/children/schemas";
+import { assertNoCoachForbiddenFinancialFields } from "@/server/rbac/rbac";
 
 type RouteContext = {
   params: Promise<{ id: string }>;
@@ -19,7 +20,9 @@ export async function PATCH(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const input = updateChildSchema.parse(await request.json().catch(() => ({})));
     const child = await updateChild(currentUser.user, id, input);
-    return NextResponse.json({ child });
+    const payload = { child };
+    assertNoCoachForbiddenFinancialFields(currentUser.user, payload);
+    return NextResponse.json(payload);
   } catch (error) {
     const message = errorMessage(error);
     const status = message.includes("No Child found") ? 404 : message.includes("Недостаточно прав") ? 403 : 400;

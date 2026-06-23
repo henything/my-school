@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { canCreateUser, canSeeAdminShell, canSeeAuditLog, canSeeCoachShell, containsCoachForbiddenFinancialField, hasRole } from "./rbac";
+import {
+  assertNoCoachForbiddenFinancialFields,
+  canCreateUser,
+  canSeeAdminShell,
+  canSeeAuditLog,
+  canSeeCoachShell,
+  containsCoachForbiddenFinancialField,
+  hasRole
+} from "./rbac";
 
 describe("rbac", () => {
   it("allows only SUPER_ADMIN to create users", () => {
@@ -45,5 +53,27 @@ describe("rbac", () => {
         }
       })
     ).toBe(false);
+  });
+
+  it("fails closed when a coach response contains financial fields", () => {
+    expect(() =>
+      assertNoCoachForbiddenFinancialFields(
+        { role: "COACH" },
+        {
+          lesson: {
+            children: [{ id: "child-1", admissionStatus: "ADMITTED", cachedMakeupBalance: 1 }]
+          }
+        }
+      )
+    ).toThrow("Ответ для тренера содержит запрещённые финансовые поля.");
+
+    expect(() =>
+      assertNoCoachForbiddenFinancialFields(
+        { role: "ADMIN" },
+        {
+          child: { cachedLessonBalance: -1 }
+        }
+      )
+    ).not.toThrow();
   });
 });

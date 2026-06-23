@@ -1,5 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import type { TaskPriority, TaskStatus, TaskType } from "@/generated/prisma/enums";
+import type { AuditLogInput } from "@/server/audit/audit-service";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
@@ -57,6 +58,8 @@ type CloseTasksByConditionInput = {
   status?: Extract<TaskStatus, "CLOSED" | "CANCELLED">;
 };
 
+type TaskCloseAuditRecord = Pick<TaskRecord, "id" | "status" | "closedAt">;
+
 type SerializeTaskOptions = {
   includeFinancialFields?: boolean;
 };
@@ -111,6 +114,31 @@ export function requiresCloseComment(task: Pick<TaskRecord, "priority" | "type">
     task.type === "CHILD_TOOK_CREDIT_LESSON" ||
     task.type === "ATTENDANCE_NOT_FILLED"
   );
+}
+
+export function buildTaskCloseAuditLogInput(
+  currentUser: Pick<CurrentUser, "schoolId" | "id">,
+  task: TaskCloseAuditRecord,
+  input: { status: Extract<TaskStatus, "CLOSED" | "CANCELLED">; closedAt: Date; comment?: string | null }
+): AuditLogInput {
+  return {
+    schoolId: currentUser.schoolId,
+    actorUserId: currentUser.id,
+    action: input.status === "CANCELLED" ? "TASK_CANCELLED" : "TASK_CLOSED",
+    entityType: "Task",
+    entityId: task.id,
+    oldValue: {
+      status: task.status,
+      closedAt: task.closedAt?.toISOString() ?? null
+    },
+    newValue: {
+      status: input.status,
+      closedAt: input.closedAt.toISOString(),
+      closedByUserId: currentUser.id,
+      closedComment: input.comment ?? null
+    },
+    comment: input.comment ?? null
+  };
 }
 
 export async function listTasks(currentUser: CurrentUser) {
@@ -253,27 +281,11 @@ export async function closeTask(currentUser: CurrentUser, taskId: string, input:
       include: taskInclude
     });
 
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: input.status === "CANCELLED" ? "TASK_CANCELLED" : "TASK_CLOSED",
-        entityType: "Task",
-        entityId: existing.id,
-        oldValue: {
-          status: existing.status,
-          closedAt: existing.closedAt?.toISOString() ?? null
-        },
-        newValue: {
-          status: updated.status,
-          closedAt: updated.closedAt?.toISOString() ?? null,
-          closedByUserId: currentUser.id,
-          closedComment: input.comment
-        },
-        comment: input.comment
-      },
-      tx
-    );
+    await writeAuditLog(buildTaskCloseAuditLogInput(currentUser, existing, {
+      status: updated.status as Extract<TaskStatus, "CLOSED" | "CANCELLED">,
+      closedAt: updated.closedAt ?? new Date(),
+      comment: input.comment
+    }), tx);
 
     return serializeTask(updated, { includeFinancialFields: hasRole(currentUser, ADMIN_ROLES) });
   });
@@ -573,22 +585,51 @@ export async function closeTasksByCondition(tx: Prisma.TransactionClient, input:
       status: { in: OPEN_TASK_STATUSES },
       ...input.where
     },
-    select: { id: true }
+    select: { id: true, status: true, closedAt: true }
   });
 
   if (tasks.length === 0) {
     return { count: 0 };
   }
 
+  const status = input.status ?? "CLOSED";
+  const closedAt = new Date();
+
   await tx.task.updateMany({
     where: { id: { in: tasks.map((task) => task.id) } },
     data: {
-      status: input.status ?? "CLOSED",
-      closedAt: new Date(),
+      status,
+      closedAt,
       closedByUserId: input.actorUserId ?? null,
       closedComment: input.comment ?? null
     }
   });
+
+  await Promise.all(
+    tasks.map((task) =>
+      writeAuditLog(
+        {
+          schoolId: input.schoolId,
+          actorUserId: input.actorUserId ?? null,
+          action: status === "CANCELLED" ? "TASK_CANCELLED" : "TASK_CLOSED",
+          entityType: "Task",
+          entityId: task.id,
+          oldValue: {
+            status: task.status,
+            closedAt: task.closedAt?.toISOString() ?? null
+          },
+          newValue: {
+            status,
+            closedAt: closedAt.toISOString(),
+            closedByUserId: input.actorUserId ?? null,
+            closedComment: input.comment ?? null
+          },
+          comment: input.comment ?? null
+        },
+        tx
+      )
+    )
+  );
 
   return { count: tasks.length };
 }
