@@ -1244,6 +1244,14 @@ Coach compliance
 
 ## 23.2 Возможный scope v2
 
+Детальный MVP-2 scope для родительского кабинета и оплат зафиксирован в:
+
+```text
+14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md
+```
+
+Этот документ является источником правды для первого parent-facing релиза.
+
 ```text
 Родительский кабинет
 Просмотр расписания
@@ -1253,6 +1261,8 @@ Coach compliance
 Заявка на отпуск
 Информация о допуске
 Уведомления об оплате
+Счета к оплате
+История платежей
 ```
 
 ## 23.3 Возможные интерфейсы
@@ -1275,9 +1285,18 @@ Mobile web parent cabinet
 
 ## 24.1 Возможный scope
 
+Детальная MVP-2 модель оплат описана в:
+
+```text
+14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md
+```
+
 ```text
 Платёжный провайдер
 Онлайн-оплата
+Счета к оплате
+Платёжные попытки
+Webhook-сверка
 Статус оплаты из платежа
 Уведомления родителям
 Напоминания об оплате
@@ -1301,6 +1320,10 @@ Push
 
 ```text
 Subscription
+Invoice
+Payment
+PaymentAttempt
+PaymentWebhookEvent
 PaymentStatus
 AdmissionStatus
 Task
@@ -1663,8 +1686,19 @@ NOT_ADMITTED работает
 
 ## 33.3 v2 Backlog
 
+См. детальную спецификацию MVP-2:
+
+```text
+14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md
+```
+
 ```text
 Родительский кабинет
+Родительские аккаунты
+Счета к оплате
+Онлайн-оплата
+Webhook-сверка платежей
+Админская сверка оплат
 Telegram/VK bot
 Родительские уведомления
 Заявка на отпуск от родителя

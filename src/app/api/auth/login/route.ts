@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     }
 
     const { token, expiresAt } = await createSession(user);
-    const redirectTo = user.role === "COACH" ? "/coach" : "/admin";
+    const redirectTo = user.role === "COACH" ? "/coach" : user.role === "PARENT" ? "/parent" : "/admin";
     const response = NextResponse.json({
       user: {
         id: user.id,

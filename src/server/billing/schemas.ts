@@ -29,6 +29,16 @@ export const updatePaymentStatusSchema = z.object({
   comment: requiredCommentSchema
 });
 
+export const createInvoiceSchema = z.object({
+  subscriptionId: uuidSchema,
+  dueDate: dateOnlySchema
+});
+
+export const markInvoicePaidSchema = z.object({
+  amountKopeks: z.coerce.number().int().positive().optional(),
+  comment: requiredCommentSchema
+});
+
 export const manualBalanceAdjustmentSchema = z.object({
   balanceType: z.enum(["LESSON_BALANCE", "MAKEUP_BALANCE"]).default("LESSON_BALANCE"),
   amount: z.coerce.number().int().refine((value) => value !== 0, "Корректировка не может быть нулевой."),
@@ -40,6 +50,8 @@ export const admissionStatusJobSchema = z.object({
 });
 
 export type CreateSubscriptionInput = z.infer<typeof createSubscriptionSchema>;
+export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
+export type MarkInvoicePaidInput = z.infer<typeof markInvoicePaidSchema>;
 export type UpdatePaymentStatusInput = z.infer<typeof updatePaymentStatusSchema>;
 export type ManualBalanceAdjustmentInput = z.infer<typeof manualBalanceAdjustmentSchema>;
 export type AdmissionStatusJobInput = z.infer<typeof admissionStatusJobSchema>;

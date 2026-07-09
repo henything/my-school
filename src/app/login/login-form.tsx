@@ -46,7 +46,7 @@ export function LoginForm() {
   return (
     <form className="grid gap-5" onSubmit={onSubmit}>
       <label className="label">
-        Логин
+        Логин или телефон
         <input className="field" name="login" autoComplete="username" required />
       </label>
 

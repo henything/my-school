@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createParentSchema } from "./schemas";
+import { activateParentInviteSchema, confirmParentPasswordResetSchema, createParentSchema } from "./schemas";
 
 describe("parent schemas", () => {
   it("accepts parent contact data without auth fields", () => {
@@ -17,5 +17,14 @@ describe("parent schemas", () => {
 
   it("requires at least a name or phone", () => {
     expect(() => createParentSchema.parse({ fullName: "", phone: "" })).toThrow();
+  });
+
+  it("requires parents to set a strong enough password from token links", () => {
+    const token = "abcdefghijklmnopqrstuvwxyz123456";
+
+    expect(activateParentInviteSchema.safeParse({ token, password: "StrongPass123!" }).success).toBe(true);
+    expect(activateParentInviteSchema.safeParse({ token, password: "short" }).success).toBe(false);
+    expect(confirmParentPasswordResetSchema.safeParse({ token, password: "StrongPass123!" }).success).toBe(true);
+    expect(confirmParentPasswordResetSchema.safeParse({ token: "tiny", password: "StrongPass123!" }).success).toBe(false);
   });
 });

@@ -1,8 +1,11 @@
+import { randomBytes } from "node:crypto";
 import type {
   AdmissionStatus,
   BalanceTransactionType,
   BalanceType,
   CoachAttendanceStatus,
+  InvoiceStatus,
+  PaymentRecordStatus,
   PaymentStatus,
   TaskPriority,
   TaskStatus,
@@ -23,12 +26,44 @@ import {
 } from "./calculations";
 import type {
   AdmissionStatusJobInput,
+  CreateInvoiceInput,
   CreateSubscriptionInput,
+  MarkInvoicePaidInput,
   ManualBalanceAdjustmentInput,
   UpdatePaymentStatusInput
 } from "./schemas";
 
 const OPEN_TASK_STATUSES: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
+
+const invoiceInclude = {
+  parent: { select: { id: true, fullName: true, phone: true } },
+  child: { select: { id: true, fullName: true, admissionStatus: true, cachedLessonBalance: true } },
+  subscription: { select: { id: true, paymentStatus: true, periodStart: true, periodEnd: true } },
+  payments: { orderBy: { createdAt: "desc" } },
+  createdBy: { select: { id: true, displayName: true, login: true } }
+} as const;
+
+type InvoiceRecord = Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>;
+
+type PaymentRecord = {
+  id: string;
+  invoiceId: string;
+  parentId: string;
+  childId: string;
+  subscriptionId: string | null;
+  provider: string;
+  providerPaymentId: string | null;
+  status: PaymentRecordStatus;
+  amountKopeks: number;
+  currency: string;
+  paidAt: Date | null;
+  failedAt: Date | null;
+  failureReason: string | null;
+  createdAt: Date;
+  invoice: { number: string };
+  child: { fullName: string };
+  parent: { fullName: string | null; phone: string | null };
+};
 
 type SubscriptionListRecord = {
   id: string;
@@ -127,6 +162,71 @@ export function serializeBalanceTransaction(transaction: BalanceTransactionRecor
   };
 }
 
+export function serializeInvoice(invoice: InvoiceRecord) {
+  return {
+    id: invoice.id,
+    parentId: invoice.parentId,
+    childId: invoice.childId,
+    subscriptionId: invoice.subscriptionId,
+    number: invoice.number,
+    status: invoice.status,
+    amountKopeks: invoice.amountKopeks,
+    paidAmountKopeks: invoice.paidAmountKopeks,
+    remainingAmountKopeks: invoice.amountKopeks - invoice.paidAmountKopeks,
+    currency: invoice.currency,
+    periodStart: invoice.periodStart ? dateToKey(invoice.periodStart) : null,
+    periodEnd: invoice.periodEnd ? dateToKey(invoice.periodEnd) : null,
+    dueDate: dateToKey(invoice.dueDate),
+    issuedAt: invoice.issuedAt.toISOString(),
+    paidAt: invoice.paidAt?.toISOString() ?? null,
+    cancelledAt: invoice.cancelledAt?.toISOString() ?? null,
+    parent: invoice.parent,
+    child: invoice.child,
+    subscription: invoice.subscription
+      ? {
+          id: invoice.subscription.id,
+          paymentStatus: invoice.subscription.paymentStatus,
+          periodStart: dateToKey(invoice.subscription.periodStart),
+          periodEnd: dateToKey(invoice.subscription.periodEnd)
+        }
+      : null,
+    payments: invoice.payments.map((payment) => ({
+      id: payment.id,
+      provider: payment.provider,
+      providerPaymentId: payment.providerPaymentId,
+      status: payment.status,
+      amountKopeks: payment.amountKopeks,
+      paidAt: payment.paidAt?.toISOString() ?? null,
+      failureReason: payment.failureReason,
+      createdAt: payment.createdAt.toISOString()
+    })),
+    createdBy: invoice.createdBy,
+    createdAt: invoice.createdAt.toISOString()
+  };
+}
+
+export function serializePayment(payment: PaymentRecord) {
+  return {
+    id: payment.id,
+    invoiceId: payment.invoiceId,
+    invoiceNumber: payment.invoice.number,
+    parentId: payment.parentId,
+    parent: payment.parent,
+    childId: payment.childId,
+    child: payment.child,
+    subscriptionId: payment.subscriptionId,
+    provider: payment.provider,
+    providerPaymentId: payment.providerPaymentId,
+    status: payment.status,
+    amountKopeks: payment.amountKopeks,
+    currency: payment.currency,
+    paidAt: payment.paidAt?.toISOString() ?? null,
+    failedAt: payment.failedAt?.toISOString() ?? null,
+    failureReason: payment.failureReason,
+    createdAt: payment.createdAt.toISOString()
+  };
+}
+
 export async function listSubscriptions(currentUser: CurrentUser) {
   assertAdmin(currentUser);
 
@@ -152,6 +252,211 @@ export async function listBalanceTransactions(currentUser: CurrentUser, limit = 
   });
 
   return transactions.map(serializeBalanceTransaction);
+}
+
+export async function listInvoices(currentUser: CurrentUser) {
+  assertAdmin(currentUser);
+
+  const invoices = await getPrisma().invoice.findMany({
+    where: { schoolId: currentUser.schoolId },
+    include: invoiceInclude,
+    orderBy: [{ status: "asc" }, { dueDate: "desc" }, { createdAt: "desc" }]
+  });
+
+  return invoices.map(serializeInvoice);
+}
+
+export async function listPayments(currentUser: CurrentUser, limit = 100) {
+  assertAdmin(currentUser);
+
+  const payments = await getPrisma().payment.findMany({
+    where: { schoolId: currentUser.schoolId },
+    include: {
+      invoice: { select: { number: true } },
+      child: { select: { fullName: true } },
+      parent: { select: { fullName: true, phone: true } }
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit
+  });
+
+  return payments.map(serializePayment);
+}
+
+export async function createInvoiceFromSubscription(currentUser: CurrentUser, input: CreateInvoiceInput) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const subscription = await tx.subscription.findFirstOrThrow({
+      where: {
+        id: input.subscriptionId,
+        schoolId: currentUser.schoolId
+      },
+      include: {
+        child: {
+          include: {
+            parent: true
+          }
+        }
+      }
+    });
+
+    if (!subscription.child.parentId || !subscription.child.parent) {
+      throw new Error("Нельзя создать счёт: у ребёнка нет родителя.");
+    }
+
+    const existingOpenInvoice = await tx.invoice.findFirst({
+      where: {
+        schoolId: currentUser.schoolId,
+        subscriptionId: subscription.id,
+        status: { notIn: ["PAID", "CANCELLED"] }
+      }
+    });
+
+    if (existingOpenInvoice) {
+      throw new Error("По этому абонементу уже есть открытый счёт.");
+    }
+
+    const invoice = await tx.invoice.create({
+      data: {
+        schoolId: currentUser.schoolId,
+        parentId: subscription.child.parentId,
+        childId: subscription.childId,
+        subscriptionId: subscription.id,
+        number: createInvoiceNumber(),
+        amountKopeks: subscription.totalAmountKopeks,
+        paidAmountKopeks: 0,
+        periodStart: subscription.periodStart,
+        periodEnd: subscription.periodEnd,
+        dueDate: input.dueDate,
+        createdByUserId: currentUser.id
+      },
+      include: invoiceInclude
+    });
+
+    await tx.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        paymentStatus: "INVOICED",
+        paymentStatusChangedAt: new Date(),
+        paymentStatusComment: `Создан счёт ${invoice.number}`
+      }
+    });
+
+    await writeAuditLog(
+      {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        action: "INVOICE_CREATED",
+        entityType: "Invoice",
+        entityId: invoice.id,
+        newValue: serializeInvoice(invoice)
+      },
+      tx
+    );
+
+    return serializeInvoice(invoice);
+  });
+}
+
+export async function markInvoicePaidManually(currentUser: CurrentUser, invoiceId: string, input: MarkInvoicePaidInput) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const invoice = await tx.invoice.findFirstOrThrow({
+      where: {
+        id: invoiceId,
+        schoolId: currentUser.schoolId
+      },
+      include: invoiceInclude
+    });
+
+    if (invoice.status === "PAID") {
+      throw new Error("Счёт уже оплачен.");
+    }
+
+    if (invoice.status === "CANCELLED") {
+      throw new Error("Отменённый счёт нельзя оплатить.");
+    }
+
+    const remainingAmount = invoice.amountKopeks - invoice.paidAmountKopeks;
+    const amountKopeks = input.amountKopeks ?? remainingAmount;
+
+    if (amountKopeks <= 0 || amountKopeks > remainingAmount) {
+      throw new Error("Сумма оплаты должна быть больше 0 и не больше остатка по счёту.");
+    }
+
+    const paidAmountKopeks = invoice.paidAmountKopeks + amountKopeks;
+    const nextInvoiceStatus: InvoiceStatus = paidAmountKopeks >= invoice.amountKopeks ? "PAID" : "PARTIALLY_PAID";
+    const nextPaymentStatus: PaymentStatus = nextInvoiceStatus === "PAID" ? "PAID" : "PARTIALLY_PAID";
+
+    await tx.payment.create({
+      data: {
+        schoolId: currentUser.schoolId,
+        invoiceId: invoice.id,
+        parentId: invoice.parentId,
+        childId: invoice.childId,
+        subscriptionId: invoice.subscriptionId,
+        provider: "MANUAL",
+        status: "SUCCEEDED",
+        amountKopeks,
+        paidAt: new Date()
+      }
+    });
+
+    const updatedInvoice = await tx.invoice.update({
+      where: { id: invoice.id },
+      data: {
+        paidAmountKopeks,
+        status: nextInvoiceStatus,
+        paidAt: nextInvoiceStatus === "PAID" ? new Date() : null
+      },
+      include: invoiceInclude
+    });
+
+    if (invoice.subscriptionId) {
+      await tx.subscription.update({
+        where: { id: invoice.subscriptionId },
+        data: {
+          paymentStatus: nextPaymentStatus,
+          paymentStatusChangedAt: new Date(),
+          paymentStatusComment: input.comment
+        }
+      });
+    }
+
+    if (nextInvoiceStatus === "PAID") {
+      await tx.child.update({
+        where: { id: invoice.childId },
+        data: {
+          admissionStatus: admissionStatusAfterLessonBalance(invoice.child.cachedLessonBalance, invoice.child.admissionStatus)
+        }
+      });
+    }
+
+    await writeAuditLog(
+      {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        action: "INVOICE_MARKED_PAID_MANUALLY",
+        entityType: "Invoice",
+        entityId: invoice.id,
+        oldValue: {
+          status: invoice.status,
+          paidAmountKopeks: invoice.paidAmountKopeks
+        },
+        newValue: {
+          status: updatedInvoice.status,
+          paidAmountKopeks: updatedInvoice.paidAmountKopeks,
+          amountKopeks
+        },
+        comment: input.comment
+      },
+      tx
+    );
+
+    return serializeInvoice(updatedInvoice);
+  });
 }
 
 export async function getChildBalance(currentUser: CurrentUser, childId: string) {
@@ -805,4 +1110,10 @@ function assertAdmin(currentUser: CurrentUser) {
   if (!hasRole(currentUser, ADMIN_ROLES)) {
     throw new Error("Недостаточно прав.");
   }
+}
+
+function createInvoiceNumber() {
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  return `INV-${datePart}-${randomBytes(3).toString("hex").toUpperCase()}`;
 }

@@ -1,21 +1,24 @@
 import { ChildTransferForm, DirectoryForms } from "@/app/admin/directories/components/directory-forms";
+import { ParentAccountPanel } from "@/app/admin/directories/components/parent-account-panel";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { requireRole } from "@/server/auth/current-user";
 import { listBranches } from "@/server/branches/branch-service";
 import { listChildren } from "@/server/children/child-service";
 import { listCoaches } from "@/server/coaches/coach-service";
 import { listGroups } from "@/server/groups/group-service";
+import { listParentAccounts } from "@/server/parents/parent-auth-service";
 import { listParents } from "@/server/parents/parent-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listTasks } from "@/server/tasks/task-service";
 
 export default async function DirectoriesPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [branches, coaches, groups, parents, children, tasks] = await Promise.all([
+  const [branches, coaches, groups, parents, parentAccounts, children, tasks] = await Promise.all([
     listBranches(currentUser),
     listCoaches(currentUser),
     listGroups(currentUser),
     listParents(currentUser),
+    listParentAccounts(currentUser),
     listChildren(currentUser),
     listTasks(currentUser)
   ]);
@@ -53,6 +56,8 @@ export default async function DirectoriesPage() {
         groups={groups}
         parents={parents}
       />
+
+      <ParentAccountPanel parents={parents} accounts={parentAccounts} />
 
       <section className="grid gap-4">
         <div className="panel">

@@ -52,6 +52,7 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 | `11_ROADMAP_RU.md` | Roadmap and release gates |
 | `12_DEVELOPMENT_SPECS_RU.md` | Backlog-ready development specs |
 | `13_TECH_STACK_DECISIONS_RU.md` | Accepted tech stack decision |
+| `14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md` | MVP-2 spec for parent cabinet and payments |
 
 ## Accepted Stack
 
@@ -97,6 +98,12 @@ Group occupancy
 Child transfer audit
 GROUP_OVER_CAPACITY task
 ```
+
+## MVP-2 Planning
+
+Parent-facing functionality and online payments remain outside MVP v1. The first detailed MVP-2 scope is documented in `14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md`.
+
+Use that document when starting parent cabinet, invoices, payment provider integration, webhook reconciliation, and parent-specific RBAC work.
 
 ## Local Setup
 

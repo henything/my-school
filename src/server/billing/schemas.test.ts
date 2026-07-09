@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createSubscriptionSchema, manualBalanceAdjustmentSchema, updatePaymentStatusSchema } from "./schemas";
+import { createInvoiceSchema, createSubscriptionSchema, manualBalanceAdjustmentSchema, markInvoicePaidSchema, updatePaymentStatusSchema } from "./schemas";
 
 const childId = "11111111-1111-4111-8111-111111111111";
 
@@ -35,5 +35,13 @@ describe("billing schemas", () => {
     expect(manualBalanceAdjustmentSchema.safeParse({ amount: 2, comment: "Перенос остатка" }).success).toBe(true);
     expect(manualBalanceAdjustmentSchema.safeParse({ amount: 0, comment: "Перенос остатка" }).success).toBe(false);
     expect(manualBalanceAdjustmentSchema.safeParse({ amount: 1, comment: "" }).success).toBe(false);
+  });
+
+  it("validates invoice creation and manual payment comments", () => {
+    expect(createInvoiceSchema.safeParse({ subscriptionId: childId, dueDate: "2026-07-10" }).success).toBe(true);
+    expect(createInvoiceSchema.safeParse({ subscriptionId: childId, dueDate: "10.07.2026" }).success).toBe(false);
+    expect(markInvoicePaidSchema.safeParse({ comment: "Оплата по переводу" }).success).toBe(true);
+    expect(markInvoicePaidSchema.safeParse({ amountKopeks: 0, comment: "Оплата" }).success).toBe(false);
+    expect(markInvoicePaidSchema.safeParse({ amountKopeks: 1000, comment: "" }).success).toBe(false);
   });
 });

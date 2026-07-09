@@ -8,5 +8,5 @@ export default async function HomePage() {
     redirect("/login");
   }
 
-  redirect(user.role === "COACH" ? "/coach" : "/admin");
+  redirect(user.role === "COACH" ? "/coach" : user.role === "PARENT" ? "/parent" : "/admin");
 }

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import {
+  Baby,
   CalendarDays,
+  CreditCard,
   FileSpreadsheet,
   History,
   LayoutDashboard,
@@ -11,6 +13,7 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserRoundPlus,
+  UserCircle,
   Users,
   WalletCards
 } from "lucide-react";
@@ -19,26 +22,33 @@ import { LogoutButton } from "@/components/logout-button";
 
 type AppShellProps = {
   user: CurrentUser;
-  area: "admin" | "coach";
+  area: "admin" | "coach" | "parent";
   children: React.ReactNode;
 };
 
 export function AppShell({ user, area, children }: AppShellProps) {
   const isAdmin = area === "admin";
+  const isParent = area === "parent";
+  const homeHref = isAdmin ? "/admin" : isParent ? "/parent" : "/coach";
+  const areaLabel = isAdmin ? "Администрирование" : isParent ? "Кабинет родителя" : "Кабинет тренера";
 
   return (
     <main className="min-h-screen">
       <header className="border-b border-[var(--line)] bg-white/90 backdrop-blur">
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <Link href={isAdmin ? "/admin" : "/coach"} className="flex min-w-0 items-center gap-3">
+          <Link href={homeHref} className="flex min-w-0 items-center gap-3">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
-              {isAdmin ? <ShieldCheck aria-hidden="true" size={20} /> : <LayoutDashboard aria-hidden="true" size={20} />}
+              {isAdmin ? (
+                <ShieldCheck aria-hidden="true" size={20} />
+              ) : isParent ? (
+                <Baby aria-hidden="true" size={20} />
+              ) : (
+                <LayoutDashboard aria-hidden="true" size={20} />
+              )}
             </span>
             <span className="min-w-0">
               <span className="block truncate text-base font-bold">My School</span>
-              <span className="block truncate text-sm text-[var(--muted)]">
-                {isAdmin ? "Администрирование" : "Кабинет тренера"}
-              </span>
+              <span className="block truncate text-sm text-[var(--muted)]">{areaLabel}</span>
             </span>
           </Link>
 
@@ -51,6 +61,34 @@ export function AppShell({ user, area, children }: AppShellProps) {
           </div>
         </div>
       </header>
+
+      {isParent ? (
+        <nav className="border-b border-[var(--line)] bg-white">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
+            <Link
+              href="/parent"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <Baby aria-hidden="true" size={16} />
+              Дети
+            </Link>
+            <Link
+              href="/parent/payments"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <CreditCard aria-hidden="true" size={16} />
+              Оплаты
+            </Link>
+            <Link
+              href="/parent/profile"
+              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            >
+              <UserCircle aria-hidden="true" size={16} />
+              Профиль
+            </Link>
+          </div>
+        </nav>
+      ) : null}
 
       {isAdmin ? (
         <nav className="border-b border-[var(--line)] bg-white">

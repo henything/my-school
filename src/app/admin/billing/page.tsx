@@ -1,7 +1,8 @@
 import { BillingForms } from "@/app/admin/billing/components/billing-forms";
+import { InvoiceForms } from "@/app/admin/billing/components/invoice-forms";
 import { RoleBadge } from "@/components/badges";
 import { requireRole } from "@/server/auth/current-user";
-import { listBalanceTransactions, listSubscriptions } from "@/server/billing/billing-service";
+import { listBalanceTransactions, listInvoices, listPayments, listSubscriptions } from "@/server/billing/billing-service";
 import { listChildren } from "@/server/children/child-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listTasks } from "@/server/tasks/task-service";
@@ -14,9 +15,11 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
 
 export default async function BillingPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [children, subscriptions, transactions, tasks] = await Promise.all([
+  const [children, subscriptions, invoices, payments, transactions, tasks] = await Promise.all([
     listChildren(currentUser),
     listSubscriptions(currentUser),
+    listInvoices(currentUser),
+    listPayments(currentUser),
     listBalanceTransactions(currentUser),
     listTasks(currentUser)
   ]);
@@ -48,6 +51,7 @@ export default async function BillingPage() {
       ) : null}
 
       <BillingForms childOptions={children} />
+      <InvoiceForms subscriptions={subscriptions} invoices={invoices} />
 
       <section className="grid gap-4">
         <div className="panel">
@@ -120,6 +124,79 @@ export default async function BillingPage() {
                       ) : null}
                     </td>
                     <td>{subscription.paymentStatusComment ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="border-b border-[var(--line)] px-5 py-4">
+            <h2 className="text-lg font-bold">Счета</h2>
+          </div>
+          <div className="table-shell">
+            <table className="data-table min-w-[1080px]">
+              <thead>
+                <tr>
+                  <th>Номер</th>
+                  <th>Ребёнок</th>
+                  <th>Родитель</th>
+                  <th>Сумма</th>
+                  <th>Оплачено</th>
+                  <th>Срок</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((invoice) => (
+                  <tr key={invoice.id}>
+                    <td className="font-semibold">{invoice.number}</td>
+                    <td>{invoice.child.fullName}</td>
+                    <td>
+                      <div>{invoice.parent.fullName ?? "—"}</div>
+                      {invoice.parent.phone ? <div className="text-xs text-[var(--muted)]">{invoice.parent.phone}</div> : null}
+                    </td>
+                    <td className="font-semibold">{formatKopeks(invoice.amountKopeks)}</td>
+                    <td>{formatKopeks(invoice.paidAmountKopeks)}</td>
+                    <td>{invoice.dueDate}</td>
+                    <td>
+                      <PaymentBadge status={invoice.status} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="border-b border-[var(--line)] px-5 py-4">
+            <h2 className="text-lg font-bold">Платежи</h2>
+          </div>
+          <div className="table-shell">
+            <table className="data-table min-w-[980px]">
+              <thead>
+                <tr>
+                  <th>Дата</th>
+                  <th>Счёт</th>
+                  <th>Ребёнок</th>
+                  <th>Источник</th>
+                  <th>Сумма</th>
+                  <th>Статус</th>
+                </tr>
+              </thead>
+              <tbody>
+                {payments.map((payment) => (
+                  <tr key={payment.id}>
+                    <td>{new Date(payment.createdAt).toLocaleString("ru-RU")}</td>
+                    <td>{payment.invoiceNumber}</td>
+                    <td>{payment.child.fullName}</td>
+                    <td>{payment.provider}</td>
+                    <td className="font-semibold">{formatKopeks(payment.amountKopeks)}</td>
+                    <td>
+                      <PaymentBadge status={payment.status} />
+                    </td>
                   </tr>
                 ))}
               </tbody>
