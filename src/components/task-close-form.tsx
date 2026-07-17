@@ -59,7 +59,7 @@ export function TaskCloseForm({ taskId, requiresComment = false, allowCancel = f
       ) : null}
       <input className="field" name="comment" placeholder={requiresComment ? "Комментарий обязателен" : "Комментарий"} required={requiresComment} />
       <div className="flex flex-wrap items-center gap-2">
-        <Button type="submit" size="sm" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting}>
           {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : null}
           Сохранить
         </Button>
