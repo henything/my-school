@@ -132,10 +132,22 @@ a {
 }
 
 .table-shell {
+  position: relative;
   width: 100%;
   max-width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+.table-shell::after {
+  pointer-events: none;
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: 36px;
+  background: linear-gradient(90deg, transparent, rgba(31, 37, 35, 0.1));
 }
 
 .data-table {
