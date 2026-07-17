@@ -1,6 +1,6 @@
-import { ChildTransferForm, DirectoryForms } from "@/app/admin/directories/components/directory-forms";
+import { DirectoryForms } from "@/app/admin/directories/components/directory-forms";
+import { DirectoryTables } from "@/app/admin/directories/components/directory-tables";
 import { ParentAccountPanel } from "@/app/admin/directories/components/parent-account-panel";
-import { RoleBadge, StatusBadge } from "@/components/badges";
 import { requireRole } from "@/server/auth/current-user";
 import { listBranches } from "@/server/branches/branch-service";
 import { listChildren } from "@/server/children/child-service";
@@ -59,86 +59,7 @@ export default async function DirectoriesPage() {
 
       <ParentAccountPanel parents={parents} accounts={parentAccounts} />
 
-      <section className="grid gap-4">
-        <div className="panel">
-          <div className="border-b border-[var(--line)] px-5 py-4">
-            <h2 className="text-lg font-bold">Группы</h2>
-          </div>
-          <div className="table-shell">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Название</th>
-                  <th>Филиал</th>
-                  <th>Тренер</th>
-                  <th>Статус</th>
-                  <th>Заполненность</th>
-                </tr>
-              </thead>
-              <tbody>
-                {groups.map((group) => (
-                  <tr key={group.id}>
-                    <td className="font-semibold">{group.name}</td>
-                    <td>{group.branch.name}</td>
-                    <td>{group.mainCoach.displayName}</td>
-                    <td>
-                      <StatusBadge status={group.status} />
-                    </td>
-                    <td>
-                      <span className={group.isOverCapacity ? "font-bold text-[var(--warning)]" : "font-semibold"}>
-                        {group.activeChildrenCount}/{group.capacityLimit}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="panel">
-          <div className="border-b border-[var(--line)] px-5 py-4">
-            <h2 className="text-lg font-bold">Дети</h2>
-          </div>
-          <div className="table-shell">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Ребёнок</th>
-                  <th>Родитель</th>
-                  <th>Группа</th>
-                  <th>Статус</th>
-                  <th>Допуск</th>
-                  <th>Переносы</th>
-                  <th>Перевод</th>
-                </tr>
-              </thead>
-              <tbody>
-                {children.map((child) => (
-                  <tr key={child.id}>
-                    <td className="font-semibold">{child.fullName}</td>
-                    <td>
-                      <div>{child.parent?.fullName ?? "—"}</div>
-                      {child.parent?.phone ? <div className="text-xs text-[var(--muted)]">{child.parent.phone}</div> : null}
-                    </td>
-                    <td>{child.currentGroup?.name ?? "—"}</td>
-                    <td>
-                      <StatusBadge status={child.status} />
-                    </td>
-                    <td>
-                      <RoleBadge role={child.admissionStatus} />
-                    </td>
-                    <td className="font-semibold">{child.cachedMakeupBalance}</td>
-                    <td>
-                      <ChildTransferForm childId={child.id} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </section>
+      <DirectoryTables groups={groups} children={children} />
     </div>
   );
 }
