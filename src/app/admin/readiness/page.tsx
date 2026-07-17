@@ -1,4 +1,4 @@
-import { Activity, CheckCircle2, CircleAlert, CircleX, ClipboardCheck, ListChecks, Rocket } from "lucide-react";
+import { Activity, AlertTriangle, CheckCircle2, CircleAlert, CircleX, ClipboardCheck, Clock3, ListChecks, Rocket, UserRound } from "lucide-react";
 import { PilotIssueForm } from "@/app/admin/readiness/components/pilot-issue-form";
 import { requireRole } from "@/server/auth/current-user";
 import { getReadinessDashboard, type ReadinessGateStatus } from "@/server/readiness/readiness-service";
@@ -20,6 +20,16 @@ const metricToneClassName: Record<string, string> = {
 export default async function ReadinessPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
   const dashboard = await getReadinessDashboard(currentUser);
+  const blockers = dashboard.gates.flatMap((gate) =>
+    gate.checks
+      .filter((check) => !check.passed)
+      .map((check) => ({
+        id: `${gate.id}-${check.id}`,
+        gateTitle: gate.title,
+        detail: check.detail,
+        required: check.required
+      }))
+  );
 
   return (
     <div className="grid gap-6">
@@ -35,6 +45,48 @@ export default async function ReadinessPage() {
           <span className="badge bg-[#e6eff8] text-[#214f78]">Дата: {dashboard.today}</span>
         </div>
       </section>
+
+      {blockers.length > 0 ? (
+        <section className="panel overflow-hidden border-[#d98e86] bg-[#fff4f2]">
+          <div className="grid gap-4 border-b border-[#efb5ae] px-5 py-5 lg:grid-cols-[96px_minmax(0,1fr)_220px] lg:items-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-[#f8d8d4] text-4xl font-bold text-[#8f1d17]">{blockers.length}</div>
+            <div className="min-w-0">
+              <h2 className="flex items-center gap-2 text-xl font-bold text-[#8f1d17]">
+                <AlertTriangle aria-hidden="true" size={20} />
+                Очередь блокеров пилота
+              </h2>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Незакрытые gate checks, которые мешают rollout или требуют ручного подтверждения.</p>
+            </div>
+            <div className="rounded-lg border border-[#efb5ae] bg-white/80 px-4 py-3">
+              <div className="text-sm font-bold">Следующее действие</div>
+              <p className="mt-1 text-sm text-[var(--muted)]">Закрыть обязательные пункты, затем вернуться к Gate 5.</p>
+            </div>
+          </div>
+          <div className="grid gap-3 p-4 lg:grid-cols-2">
+            {blockers.map((blocker) => (
+              <article key={blocker.id} className="rounded-lg border border-white bg-white px-4 py-4 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={blocker.required ? "badge bg-[#f8d8d4] text-[#8f1d17]" : "badge bg-[#f7e4d1] text-[#7a3f0d]"}>
+                    {blocker.required ? "required" : "advisory"}
+                  </span>
+                  <span className="badge bg-[#e6eff8] text-[#214f78]">{blocker.gateTitle}</span>
+                </div>
+                <h3 className="mt-3 font-bold">{blocker.detail}</h3>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--muted)]">
+                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                    <UserRound aria-hidden="true" size={14} />
+                    Admin owner
+                  </span>
+                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                    <Clock3 aria-hidden="true" size={14} />
+                    До pilot rollout
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         {dashboard.metrics.map((metric) => (
@@ -52,7 +104,7 @@ export default async function ReadinessPage() {
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {dashboard.gates.map((gate) => (
-            <article key={gate.id} className="panel min-w-0 p-5">
+            <article key={gate.id} className={`panel min-w-0 p-5 ${gate.status === "BLOCKED" ? "border-[#efb5ae] bg-[#fff4f2]" : ""}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-bold">{gate.title}</h3>

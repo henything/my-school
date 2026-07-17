@@ -1,6 +1,7 @@
 import { DirectoryForms } from "@/app/admin/directories/components/directory-forms";
 import { DirectoryTables } from "@/app/admin/directories/components/directory-tables";
 import { ParentAccountPanel } from "@/app/admin/directories/components/parent-account-panel";
+import { WorkQueuePanel } from "@/components/work-queue-panel";
 import { requireRole } from "@/server/auth/current-user";
 import { listBranches } from "@/server/branches/branch-service";
 import { listChildren } from "@/server/children/child-service";
@@ -32,22 +33,12 @@ export default async function DirectoriesPage() {
         <h1 className="mt-2 text-2xl font-bold">Справочники школы</h1>
       </section>
 
-      {overCapacityTasks.length > 0 ? (
-        <section className="panel border-[#efc27a] bg-[#fff8ec] p-5">
-          <h2 className="text-lg font-bold text-[#7a3f0d]">Задачи по переполненным группам</h2>
-          <div className="mt-4 grid gap-3">
-            {overCapacityTasks.map((task) => (
-              <div key={task.id} className="rounded-lg border border-[#efc27a] bg-white px-4 py-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge bg-[#f7e4d1] text-[#7a3f0d]">{task.priority}</span>
-                  <span className="font-semibold">{task.title}</span>
-                </div>
-                {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
+      <WorkQueuePanel
+        title="Переполненные группы"
+        subtitle="Группы сверх лимита требуют решения до новых зачислений или переводов."
+        tasks={overCapacityTasks}
+        tone="warning"
+      />
 
       <DirectoryForms
         canCreateCoach={currentUser.role === "SUPER_ADMIN"}
