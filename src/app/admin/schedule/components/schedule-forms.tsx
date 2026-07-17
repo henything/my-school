@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, CalendarPlus, Loader2, Repeat2, UserCheck, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type Group = {
   id: string;
@@ -128,17 +129,20 @@ function CreateTemplateForm({ groups }: { groups: Group[] }) {
         <Repeat2 aria-hidden="true" size={18} />
         Шаблон
       </h2>
-      <label className="label">
-        Группа
-        <select className="field" name="groupId" required disabled={disabled}>
-          <option value="">Выбрать</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Группа</span>
+        <SearchableCombobox
+          name="groupId"
+          required
+          disabled={disabled}
+          placeholder="Найти группу"
+          options={groups.map((group) => ({
+            value: group.id,
+            label: group.name,
+            description: `${group.branch.name} · ${group.mainCoach.displayName}`
+          }))}
+        />
+      </div>
       <label className="label">
         День недели
         <select className="field" name="weekday" required disabled={disabled}>
@@ -200,17 +204,19 @@ function GenerateMonthForm({ groups }: { groups: Group[] }) {
         Месяц
         <input className="field" name="month" type="month" required />
       </label>
-      <label className="label">
-        Группа
-        <select className="field" name="groupId">
-          <option value="">Все активные шаблоны</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Группа</span>
+        <SearchableCombobox
+          name="groupId"
+          placeholder="Найти группу"
+          emptyValueLabel="Все активные шаблоны"
+          options={groups.map((group) => ({
+            value: group.id,
+            label: group.name,
+            description: `${group.branch.name} · ${group.mainCoach.displayName}`
+          }))}
+        />
+      </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Сгенерировать" />
     </form>
   );
@@ -253,28 +259,30 @@ function CreateLessonForm({ groups, coaches }: { groups: Group[]; coaches: Coach
         <CalendarPlus aria-hidden="true" size={18} />
         Разовое занятие
       </h2>
-      <label className="label">
-        Группа
-        <select className="field" name="groupId" required disabled={disabled}>
-          <option value="">Выбрать</option>
-          {groups.map((group) => (
-            <option key={group.id} value={group.id}>
-              {group.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="label">
-        Тренер
-        <select className="field" name="coachId" disabled={disabled}>
-          <option value="">Основной тренер группы</option>
-          {coaches.map((coach) => (
-            <option key={coach.id} value={coach.id}>
-              {coach.displayName}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Группа</span>
+        <SearchableCombobox
+          name="groupId"
+          required
+          disabled={disabled}
+          placeholder="Найти группу"
+          options={groups.map((group) => ({
+            value: group.id,
+            label: group.name,
+            description: `${group.branch.name} · ${group.mainCoach.displayName}`
+          }))}
+        />
+      </div>
+      <div className="label">
+        <span>Тренер</span>
+        <SearchableCombobox
+          name="coachId"
+          disabled={disabled}
+          placeholder="Найти тренера"
+          emptyValueLabel="Основной тренер группы"
+          options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+        />
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="label sm:col-span-2">
           Дата
@@ -427,14 +435,14 @@ function SubstituteLessonForm({ lessonId, coaches }: { lessonId: string; coaches
 
   return (
     <form className="flex min-w-[190px] items-center gap-2" onSubmit={onSubmit}>
-      <select className="field min-h-9" name="substituteCoachId" required>
-        <option value="">Выбрать</option>
-        {coaches.map((coach) => (
-          <option key={coach.id} value={coach.id}>
-            {coach.displayName}
-          </option>
-        ))}
-      </select>
+      <SearchableCombobox
+        name="substituteCoachId"
+        required
+        placeholder="Тренер"
+        compact
+        className="min-w-0 flex-1"
+        options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+      />
       <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Назначить замену">
         {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <UserCheck aria-hidden="true" size={15} />}
       </Button>

@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Baby, Building2, GraduationCap, Loader2, UserRoundPlus, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type Branch = {
   id: string;
@@ -241,28 +242,26 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
         <input className="field" name="name" minLength={2} required disabled={disabled} />
       </label>
       <div className="grid gap-4 sm:grid-cols-[1fr_1fr_120px]">
-        <label className="label">
-          Филиал
-          <select className="field" name="branchId" required disabled={disabled}>
-            <option value="">Выбрать</option>
-            {branches.map((branch) => (
-              <option key={branch.id} value={branch.id}>
-                {branch.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="label">
-          Тренер
-          <select className="field" name="mainCoachId" required disabled={disabled}>
-            <option value="">Выбрать</option>
-            {coaches.map((coach) => (
-              <option key={coach.id} value={coach.id}>
-                {coach.displayName}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="label">
+          <span>Филиал</span>
+          <SearchableCombobox
+            name="branchId"
+            required
+            disabled={disabled}
+            placeholder="Найти филиал"
+            options={branches.map((branch) => ({ value: branch.id, label: branch.name, description: branch.status }))}
+          />
+        </div>
+        <div className="label">
+          <span>Тренер</span>
+          <SearchableCombobox
+            name="mainCoachId"
+            required
+            disabled={disabled}
+            placeholder="Найти тренера"
+            options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+          />
+        </div>
         <label className="label">
           Лимит
           <input className="field" name="capacityLimit" type="number" min={1} max={50} defaultValue={15} required disabled={disabled} />
@@ -390,28 +389,32 @@ function CreateChildForm({ groups, parents }: { groups: Group[]; parents: Parent
           Дата рождения
           <input className="field" name="birthDate" type="date" />
         </label>
-        <label className="label">
-          Родитель
-          <select className="field" name="parentId">
-            <option value="">Без родителя</option>
-            {parents.map((parent) => (
-              <option key={parent.id} value={parent.id}>
-                {parent.fullName ?? parent.phone ?? "Контакт"}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="label">
-          Группа
-          <select className="field" name="currentGroupId">
-            <option value="">Без группы</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name} · {group.branch.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="label">
+          <span>Родитель</span>
+          <SearchableCombobox
+            name="parentId"
+            placeholder="Найти родителя"
+            emptyValueLabel="Без родителя"
+            options={parents.map((parent) => ({
+              value: parent.id,
+              label: parent.fullName ?? parent.phone ?? "Контакт",
+              description: parent.phone ?? "без телефона"
+            }))}
+          />
+        </div>
+        <div className="label">
+          <span>Группа</span>
+          <SearchableCombobox
+            name="currentGroupId"
+            placeholder="Найти группу"
+            emptyValueLabel="Без группы"
+            options={groups.map((group) => ({
+              value: group.id,
+              label: group.name,
+              description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
+            }))}
+          />
+        </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="label">
@@ -475,14 +478,19 @@ export function ChildTransferForm({ childId, currentGroupId, groups }: { childId
 
   return (
     <form className="flex min-w-[230px] items-center gap-2" onSubmit={onSubmit}>
-      <select className="field min-h-9" name="currentGroupId" defaultValue={currentGroupId}>
-        <option value="">Без группы</option>
-        {groups.map((group) => (
-          <option key={group.id} value={group.id}>
-            {group.name}
-          </option>
-        ))}
-      </select>
+      <SearchableCombobox
+        name="currentGroupId"
+        defaultValue={currentGroupId}
+        placeholder="Группа"
+        emptyValueLabel="Без группы"
+        compact
+        className="min-w-0 flex-1"
+        options={groups.map((group) => ({
+          value: group.id,
+          label: group.name,
+          description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
+        }))}
+      />
       <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Перевести">
         <ArrowRightLeft aria-hidden="true" size={15} />
       </Button>

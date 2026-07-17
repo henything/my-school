@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FilePlus2, Loader2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type SubscriptionOption = {
   id: string;
@@ -88,17 +89,20 @@ function CreateInvoiceForm({ subscriptions }: { subscriptions: SubscriptionOptio
         <FilePlus2 aria-hidden="true" size={18} />
         Счёт
       </h2>
-      <label className="label">
-        Абонемент
-        <select className="field" name="subscriptionId" required disabled={disabled}>
-          <option value="">Выбрать</option>
-          {subscriptions.map((subscription) => (
-            <option key={subscription.id} value={subscription.id}>
-              {subscription.child.fullName} · {subscription.periodStart}-{subscription.periodEnd} · {formatKopeks(subscription.totalAmountKopeks)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Абонемент</span>
+        <SearchableCombobox
+          name="subscriptionId"
+          required
+          disabled={disabled}
+          placeholder="Найти абонемент"
+          options={subscriptions.map((subscription) => ({
+            value: subscription.id,
+            label: subscription.child.fullName,
+            description: `${subscription.periodStart}-${subscription.periodEnd} · ${formatKopeks(subscription.totalAmountKopeks)} · ${subscription.paymentStatus}`
+          }))}
+        />
+      </div>
       <label className="label">
         Срок оплаты
         <input className="field" name="dueDate" type="date" required disabled={disabled} />
@@ -144,17 +148,20 @@ function ManualPaymentForm({ invoices }: { invoices: InvoiceOption[] }) {
         <Receipt aria-hidden="true" size={18} />
         Ручная оплата
       </h2>
-      <label className="label">
-        Счёт
-        <select className="field" name="invoiceId" required disabled={disabled}>
-          <option value="">Выбрать</option>
-          {invoices.map((invoice) => (
-            <option key={invoice.id} value={invoice.id}>
-              {invoice.number} · {invoice.child.fullName} · остаток {formatKopeks(invoice.remainingAmountKopeks)}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Счёт</span>
+        <SearchableCombobox
+          name="invoiceId"
+          required
+          disabled={disabled}
+          placeholder="Найти счёт"
+          options={invoices.map((invoice) => ({
+            value: invoice.id,
+            label: `${invoice.number} · ${invoice.child.fullName}`,
+            description: `остаток ${formatKopeks(invoice.remainingAmountKopeks)} · ${invoice.status}`
+          }))}
+        />
+      </div>
       <label className="label">
         Сумма, руб.
         <input className="field" name="amountRub" type="number" min={1} step={1} placeholder="Весь остаток" disabled={disabled} />

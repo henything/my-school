@@ -95,6 +95,25 @@ a {
   white-space: nowrap;
 }
 
+.combo-option {
+  display: flex;
+  min-height: 44px;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-radius: 6px;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--foreground);
+}
+
+.combo-option:hover,
+.combo-option[aria-selected="true"] {
+  background: #eef3ef;
+}
+
 .table-shell {
   width: 100%;
   max-width: 100%;

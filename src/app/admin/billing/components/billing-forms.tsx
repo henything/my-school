@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Loader2, ShieldAlert, SlidersHorizontal, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type Child = {
   id: string;
@@ -296,14 +297,17 @@ function AdmissionCheckForm() {
 
 function ChildSelect({ childOptions, disabled }: { childOptions: Child[]; disabled: boolean }) {
   return (
-    <select className="field" name="childId" required disabled={disabled}>
-      <option value="">Выбрать</option>
-      {childOptions.map((child) => (
-        <option key={child.id} value={child.id}>
-          {child.fullName} · {child.currentGroup?.name ?? "без группы"} · {child.cachedLessonBalance} · {child.admissionStatus}
-        </option>
-      ))}
-    </select>
+    <SearchableCombobox
+      name="childId"
+      required
+      disabled={disabled}
+      placeholder="Найти ребёнка"
+      options={childOptions.map((child) => ({
+        value: child.id,
+        label: child.fullName,
+        description: `${child.currentGroup?.name ?? "без группы"} · баланс ${child.cachedLessonBalance} · ${child.admissionStatus}`
+      }))}
+    />
   );
 }
 

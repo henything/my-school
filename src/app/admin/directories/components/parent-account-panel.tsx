@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 
 type ParentOption = {
   id: string;
@@ -81,17 +82,19 @@ function CreateParentInviteForm({ parents }: { parents: ParentOption[] }) {
         <UserCheck aria-hidden="true" size={18} />
         Родительский вход
       </h2>
-      <label className="label">
-        Родитель
-        <select className="field" name="parentId" required>
-          <option value="">Выбрать</option>
-          {parents.map((parent) => (
-            <option key={parent.id} value={parent.id}>
-              {parent.fullName ?? parent.phone ?? parent.id} · {parent.phone ?? "без телефона"}
-            </option>
-          ))}
-        </select>
-      </label>
+      <div className="label">
+        <span>Родитель</span>
+        <SearchableCombobox
+          name="parentId"
+          required
+          placeholder="Найти родителя"
+          options={parents.map((parent) => ({
+            value: parent.id,
+            label: parent.fullName ?? parent.phone ?? parent.id,
+            description: parent.phone ?? "без телефона"
+          }))}
+        />
+      </div>
       <Button type="submit" disabled={isSubmitting}>
         {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
         Создать ссылку
