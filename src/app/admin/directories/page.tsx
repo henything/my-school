@@ -40,17 +40,16 @@ export default async function DirectoriesPage() {
         tone="warning"
       />
 
-      <DirectoryForms
-        canCreateCoach={currentUser.role === "SUPER_ADMIN"}
-        branches={branches}
-        coaches={coaches}
-        groups={groups}
-        parents={parents}
-      />
-
-      <ParentAccountPanel parents={parents} accounts={parentAccounts} />
-
-      <DirectoryTables groups={groups} childRows={children} />
+      <DirectoryTables groups={groups} childRows={children}>
+        <DirectoryForms
+          canCreateCoach={currentUser.role === "SUPER_ADMIN"}
+          branches={branches}
+          coaches={coaches}
+          groups={groups}
+          parents={parents}
+        />
+        <ParentAccountPanel parents={parents} accounts={parentAccounts} />
+      </DirectoryTables>
     </div>
   );
 }

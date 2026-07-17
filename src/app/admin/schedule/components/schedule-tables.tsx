@@ -1,7 +1,7 @@
 "use client";
 
 import { CalendarClock, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/badges";
 
 type ScheduleTemplate = {
@@ -31,11 +31,12 @@ type Lesson = {
 type ScheduleTablesProps = {
   scheduleTemplates: ScheduleTemplate[];
   lessons: Lesson[];
+  children?: ReactNode;
 };
 
 const weekdayLabels = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 
-export function ScheduleTables({ scheduleTemplates, lessons }: ScheduleTablesProps) {
+export function ScheduleTables({ scheduleTemplates, lessons, children }: ScheduleTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
@@ -142,6 +143,8 @@ export function ScheduleTables({ scheduleTemplates, lessons }: ScheduleTablesPro
           {upcomingLessons.length === 0 ? <p className="text-sm font-semibold text-[var(--muted)]">Занятий пока нет.</p> : null}
         </div>
       </div>
+
+      {children ? <div className="grid gap-4">{children}</div> : null}
 
       <div className="panel">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">

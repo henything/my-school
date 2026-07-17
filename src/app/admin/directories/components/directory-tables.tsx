@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, SlidersHorizontal } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 
@@ -29,9 +29,10 @@ type Child = {
 type DirectoryTablesProps = {
   groups: Group[];
   childRows: Child[];
+  children?: ReactNode;
 };
 
-export function DirectoryTables({ groups, childRows }: DirectoryTablesProps) {
+export function DirectoryTables({ groups, childRows, children }: DirectoryTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
@@ -120,6 +121,8 @@ export function DirectoryTables({ groups, childRows }: DirectoryTablesProps) {
           </label>
         </div>
       </div>
+
+      {children ? <div className="grid gap-4">{children}</div> : null}
 
       <div className="grid gap-4">
         <div className="panel">

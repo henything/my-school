@@ -22,9 +22,9 @@ export default async function SchedulePage() {
         <h1 className="mt-2 text-2xl font-bold">Расписание и занятия</h1>
       </section>
 
-      <ScheduleForms groups={groups} coaches={coaches} lessons={lessons} />
-
-      <ScheduleTables scheduleTemplates={scheduleTemplates} lessons={lessons} />
+      <ScheduleTables scheduleTemplates={scheduleTemplates} lessons={lessons}>
+        <ScheduleForms groups={groups} coaches={coaches} lessons={lessons} />
+      </ScheduleTables>
     </div>
   );
 }

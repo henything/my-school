@@ -34,10 +34,10 @@ export default async function BillingPage() {
         tone="critical"
       />
 
-      <BillingForms childOptions={children} />
-      <InvoiceForms subscriptions={subscriptions} invoices={invoices} />
-
-      <BillingTables childRows={children} subscriptions={subscriptions} invoices={invoices} payments={payments} transactions={transactions} />
+      <BillingTables childRows={children} subscriptions={subscriptions} invoices={invoices} payments={payments} transactions={transactions}>
+        <BillingForms childOptions={children} />
+        <InvoiceForms subscriptions={subscriptions} invoices={invoices} />
+      </BillingTables>
     </div>
   );
 }

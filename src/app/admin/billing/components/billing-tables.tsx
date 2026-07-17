@@ -1,7 +1,7 @@
 "use client";
 
 import { Search, WalletCards } from "lucide-react";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { RoleBadge } from "@/components/badges";
 import { cn } from "@/lib/cn";
 
@@ -67,6 +67,7 @@ type BillingTablesProps = {
   invoices: Invoice[];
   payments: Payment[];
   transactions: BalanceTransaction[];
+  children?: ReactNode;
 };
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
@@ -75,7 +76,7 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
   maximumFractionDigits: 0
 });
 
-export function BillingTables({ childRows, subscriptions, invoices, payments, transactions }: BillingTablesProps) {
+export function BillingTables({ childRows, subscriptions, invoices, payments, transactions, children }: BillingTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const normalizedQuery = normalize(query);
@@ -214,6 +215,8 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
           </div>
         ) : null}
       </div>
+
+      {children ? <div className="grid gap-4">{children}</div> : null}
 
       <DataPanel title="Дети и текущие балансы" count={`${filteredChildren.length} из ${childRows.length}`}>
         <table className="data-table">
