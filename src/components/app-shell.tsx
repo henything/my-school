@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Baby,
   CalendarDays,
@@ -19,6 +22,7 @@ import {
 } from "lucide-react";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { LogoutButton } from "@/components/logout-button";
+import { cn } from "@/lib/cn";
 
 type AppShellProps = {
   user: CurrentUser;
@@ -27,10 +31,24 @@ type AppShellProps = {
 };
 
 export function AppShell({ user, area, children }: AppShellProps) {
+  const pathname = usePathname();
   const isAdmin = area === "admin";
   const isParent = area === "parent";
   const homeHref = isAdmin ? "/admin" : isParent ? "/parent" : "/coach";
   const areaLabel = isAdmin ? "Администрирование" : isParent ? "Кабинет родителя" : "Кабинет тренера";
+  const navLinkProps = (href: string, exact = false) => {
+    const isActive = exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
+
+    return {
+      "aria-current": isActive ? ("page" as const) : undefined,
+      className: cn(
+        "inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition",
+        isActive
+          ? "bg-[#e5f2ef] text-[var(--accent-strong)] ring-1 ring-inset ring-[#c7ded7]"
+          : "text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+      )
+    };
+  };
 
   return (
     <main className="min-h-screen">
@@ -65,24 +83,15 @@ export function AppShell({ user, area, children }: AppShellProps) {
       {isParent ? (
         <nav className="border-b border-[var(--line)] bg-white">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
-            <Link
-              href="/parent"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/parent" {...navLinkProps("/parent", true)}>
               <Baby aria-hidden="true" size={16} />
               Дети
             </Link>
-            <Link
-              href="/parent/payments"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/parent/payments" {...navLinkProps("/parent/payments")}>
               <CreditCard aria-hidden="true" size={16} />
               Оплаты
             </Link>
-            <Link
-              href="/parent/profile"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/parent/profile" {...navLinkProps("/parent/profile")}>
               <UserCircle aria-hidden="true" size={16} />
               Профиль
             </Link>
@@ -93,81 +102,48 @@ export function AppShell({ user, area, children }: AppShellProps) {
       {isAdmin ? (
         <nav className="border-b border-[var(--line)] bg-white">
           <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
-            <Link
-              href="/admin"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin" {...navLinkProps("/admin", true)}>
               <Users aria-hidden="true" size={16} />
               Пользователи
             </Link>
-            <Link
-              href="/admin/directories"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/directories" {...navLinkProps("/admin/directories")}>
               <MapPinned aria-hidden="true" size={16} />
               Справочники
             </Link>
-            <Link
-              href="/admin/schedule"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/schedule" {...navLinkProps("/admin/schedule")}>
               <CalendarDays aria-hidden="true" size={16} />
               Расписание
             </Link>
-            <Link
-              href="/admin/billing"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/billing" {...navLinkProps("/admin/billing")}>
               <WalletCards aria-hidden="true" size={16} />
               Балансы
             </Link>
-            <Link
-              href="/admin/makeups"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/makeups" {...navLinkProps("/admin/makeups")}>
               <RefreshCcw aria-hidden="true" size={16} />
               Переносы
             </Link>
-            <Link
-              href="/admin/operations"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/operations" {...navLinkProps("/admin/operations")}>
               <ListChecks aria-hidden="true" size={16} />
               Операции
             </Link>
-            <Link
-              href="/admin/readiness"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/readiness" {...navLinkProps("/admin/readiness")}>
               <Rocket aria-hidden="true" size={16} />
               Readiness
             </Link>
-            <Link
-              href="/admin/stabilization"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/stabilization" {...navLinkProps("/admin/stabilization")}>
               <ShieldAlert aria-hidden="true" size={16} />
               Стабилизация
             </Link>
-            <Link
-              href="/admin/trials"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/trials" {...navLinkProps("/admin/trials")}>
               <UserRoundPlus aria-hidden="true" size={16} />
               Пробники
             </Link>
-            <Link
-              href="/admin/audit"
-              className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-            >
+            <Link href="/admin/audit" {...navLinkProps("/admin/audit")}>
               <History aria-hidden="true" size={16} />
               Аудит
             </Link>
             {user.role === "SUPER_ADMIN" ? (
-              <Link
-                href="/admin/import"
-                className="inline-flex min-h-10 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
-              >
+              <Link href="/admin/import" {...navLinkProps("/admin/import")}>
                 <FileSpreadsheet aria-hidden="true" size={16} />
                 Excel import
               </Link>
@@ -176,7 +152,7 @@ export function AppShell({ user, area, children }: AppShellProps) {
         </nav>
       ) : null}
 
-      <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">{children}</div>
+      <div className="mx-auto w-full max-w-6xl min-w-0 px-4 py-8 sm:px-6">{children}</div>
     </main>
   );
 }
