@@ -28,10 +28,10 @@ type Child = {
 
 type DirectoryTablesProps = {
   groups: Group[];
-  children: Child[];
+  childRows: Child[];
 };
 
-export function DirectoryTables({ groups, children }: DirectoryTablesProps) {
+export function DirectoryTables({ groups, childRows }: DirectoryTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
@@ -52,7 +52,7 @@ export function DirectoryTables({ groups, children }: DirectoryTablesProps) {
 
   const filteredChildren = useMemo(
     () =>
-      children.filter((child) => {
+      childRows.filter((child) => {
         const matchesStatus = statusFilter === "ALL" || child.status === statusFilter || child.admissionStatus === statusFilter;
         const matchesGroup = groupFilter === "ALL" || child.currentGroup?.id === groupFilter;
         const matchesQuery =
@@ -63,12 +63,12 @@ export function DirectoryTables({ groups, children }: DirectoryTablesProps) {
 
         return matchesStatus && matchesGroup && matchesQuery;
       }),
-    [children, groupFilter, normalizedQuery, statusFilter]
+    [childRows, groupFilter, normalizedQuery, statusFilter]
   );
 
   const overCapacityCount = groups.filter((group) => group.isOverCapacity).length;
-  const childrenWithoutGroupCount = children.filter((child) => !child.currentGroup).length;
-  const attentionCount = children.filter((child) => child.admissionStatus !== "ADMITTED" || child.status !== "ACTIVE").length + overCapacityCount;
+  const childrenWithoutGroupCount = childRows.filter((child) => !child.currentGroup).length;
+  const attentionCount = childRows.filter((child) => child.admissionStatus !== "ADMITTED" || child.status !== "ACTIVE").length + overCapacityCount;
 
   return (
     <section className="grid gap-4">
@@ -83,7 +83,7 @@ export function DirectoryTables({ groups, children }: DirectoryTablesProps) {
           </div>
           <div className="flex flex-wrap gap-2">
             <MetricChip label="Группы" value={groups.length} />
-            <MetricChip label="Дети" value={children.length} />
+            <MetricChip label="Дети" value={childRows.length} />
             <MetricChip label="Внимание" value={attentionCount} tone={attentionCount > 0 ? "warning" : "neutral"} />
             <MetricChip label="Без группы" value={childrenWithoutGroupCount} tone={childrenWithoutGroupCount > 0 ? "warning" : "neutral"} />
           </div>
@@ -166,7 +166,7 @@ export function DirectoryTables({ groups, children }: DirectoryTablesProps) {
         <div className="panel">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
             <h2 className="text-lg font-bold">Дети</h2>
-            <span className="text-sm font-semibold text-[var(--muted)]">{filteredChildren.length} из {children.length}</span>
+            <span className="text-sm font-semibold text-[var(--muted)]">{filteredChildren.length} из {childRows.length}</span>
           </div>
           <div className="table-shell">
             <table className="data-table">

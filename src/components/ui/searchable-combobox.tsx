@@ -62,13 +62,6 @@ export function SearchableCombobox({
   const hiddenOptionCount = Math.max(0, options.length - filteredOptions.length);
 
   useEffect(() => {
-    const nextSelected = options.some((option) => option.value === defaultValue) ? defaultValue : "";
-    const nextSelectedOption = options.find((option) => option.value === nextSelected);
-    setSelectedValue(nextSelected);
-    setQuery(nextSelectedOption?.label ?? "");
-  }, [defaultValue, options]);
-
-  useEffect(() => {
     const root = rootRef.current;
     const form = root?.closest("form");
 

@@ -50,7 +50,7 @@ export default async function DirectoriesPage() {
 
       <ParentAccountPanel parents={parents} accounts={parentAccounts} />
 
-      <DirectoryTables groups={groups} children={children} />
+      <DirectoryTables groups={groups} childRows={children} />
     </div>
   );
 }

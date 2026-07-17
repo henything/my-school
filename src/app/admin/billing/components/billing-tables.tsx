@@ -62,7 +62,7 @@ type BalanceTransaction = {
 };
 
 type BillingTablesProps = {
-  children: Child[];
+  childRows: Child[];
   subscriptions: Subscription[];
   invoices: Invoice[];
   payments: Payment[];
@@ -75,15 +75,15 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
   maximumFractionDigits: 0
 });
 
-export function BillingTables({ children, subscriptions, invoices, payments, transactions }: BillingTablesProps) {
+export function BillingTables({ childRows, subscriptions, invoices, payments, transactions }: BillingTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const normalizedQuery = normalize(query);
-  const childById = useMemo(() => new Map(children.map((child) => [child.id, child])), [children]);
+  const childById = useMemo(() => new Map(childRows.map((child) => [child.id, child])), [childRows]);
 
   const filteredChildren = useMemo(
     () =>
-      children.filter((child) => {
+      childRows.filter((child) => {
         const matchesStatus = statusFilter === "ALL" || child.status === statusFilter || child.admissionStatus === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
@@ -91,7 +91,7 @@ export function BillingTables({ children, subscriptions, invoices, payments, tra
 
         return matchesStatus && matchesQuery;
       }),
-    [children, normalizedQuery, statusFilter]
+    [childRows, normalizedQuery, statusFilter]
   );
 
   const filteredSubscriptions = useMemo(
@@ -150,10 +150,10 @@ export function BillingTables({ children, subscriptions, invoices, payments, tra
     [childById, normalizedQuery, transactions]
   );
 
-  const debtChildren = children.filter((child) => child.cachedLessonBalance < 0);
-  const notAdmittedChildren = children.filter((child) => child.admissionStatus === "NOT_ADMITTED");
+  const debtChildren = childRows.filter((child) => child.cachedLessonBalance < 0);
+  const notAdmittedChildren = childRows.filter((child) => child.admissionStatus === "NOT_ADMITTED");
   const overdueInvoices = invoices.filter((invoice) => invoice.status === "OVERDUE" || invoice.status === "NOT_PAID");
-  const attentionChildren = children.filter((child) => child.cachedLessonBalance < 0 || child.admissionStatus !== "ADMITTED").slice(0, 6);
+  const attentionChildren = childRows.filter((child) => child.cachedLessonBalance < 0 || child.admissionStatus !== "ADMITTED").slice(0, 6);
 
   return (
     <section className="grid gap-4">
@@ -215,7 +215,7 @@ export function BillingTables({ children, subscriptions, invoices, payments, tra
         ) : null}
       </div>
 
-      <DataPanel title="Дети и текущие балансы" count={`${filteredChildren.length} из ${children.length}`}>
+      <DataPanel title="Дети и текущие балансы" count={`${filteredChildren.length} из ${childRows.length}`}>
         <table className="data-table">
           <thead>
             <tr>
