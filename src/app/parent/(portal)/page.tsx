@@ -17,7 +17,7 @@ export default async function ParentHomePage() {
   return (
     <div className="grid gap-6">
       <section>
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">My School</p>
+        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">Азбука движения</p>
         <h1 className="mt-2 text-2xl font-bold">Дети</h1>
       </section>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createChildSchema, updateChildSchema } from "./schemas";
+import { createChildEnrollmentSchema, createChildSchema, updateChildSchema } from "./schemas";
 
 describe("child schemas", () => {
   it("accepts a child with one current group", () => {
@@ -18,6 +18,31 @@ describe("child schemas", () => {
     expect(() =>
       updateChildSchema.parse({
         status: "DELETED"
+      })
+    ).toThrow();
+  });
+
+  it("accepts enrollment with a new parent", () => {
+    const enrollment = createChildEnrollmentSchema.parse({
+      fullName: "Анна Петрова",
+      parentFullName: "Мария Петрова",
+      parentPhone: "+7 999 111-22-33",
+      status: "ACTIVE",
+      admissionStatus: "ADMITTED"
+    });
+
+    expect(enrollment.parentFullName).toBe("Мария Петрова");
+    expect(enrollment.parentId).toBeUndefined();
+  });
+
+  it("rejects enrollment with existing and new parent data together", () => {
+    expect(() =>
+      createChildEnrollmentSchema.parse({
+        fullName: "Анна Петрова",
+        parentId: "11111111-1111-4111-8111-111111111111",
+        parentFullName: "Мария Петрова",
+        status: "ACTIVE",
+        admissionStatus: "ADMITTED"
       })
     ).toThrow();
   });

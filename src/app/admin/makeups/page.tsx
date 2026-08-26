@@ -1,4 +1,5 @@
 import { MakeupForms } from "@/app/admin/makeups/components/makeup-forms";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listChildren } from "@/server/children/child-service";
 import { listGroups } from "@/server/groups/group-service";
@@ -36,8 +37,8 @@ export default async function MakeupsPage() {
             {operationalTasks.map((task) => (
               <div key={task.id} className="rounded-lg border border-[#efc27a] bg-white px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge bg-[#f7e4d1] text-[#7a3f0d]">{task.priority}</span>
-                  <span className="badge bg-[#e6eff8] text-[#214f78]">{task.type}</span>
+                  <span className="badge bg-[#f7e4d1] text-[#7a3f0d]">{labelForEnum(task.priority)}</span>
+                  <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
                   <span className="font-semibold">{task.title}</span>
                 </div>
                 {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}

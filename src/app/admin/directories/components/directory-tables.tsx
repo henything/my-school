@@ -4,6 +4,7 @@ import { Search, SlidersHorizontal } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
+import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type Group = {
   id: string;
@@ -44,7 +45,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
         const matchesStatus = statusFilter === "ALL" || group.status === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${group.name} ${group.branch.name} ${group.mainCoach.displayName} ${group.status}`).includes(normalizedQuery);
+          normalize(`${group.name} ${group.branch.name} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
 
         return matchesStatus && matchesQuery;
       }),
@@ -58,9 +59,9 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
         const matchesGroup = groupFilter === "ALL" || child.currentGroup?.id === groupFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${child.fullName} ${child.parent?.fullName ?? ""} ${child.parent?.phone ?? ""} ${child.currentGroup?.name ?? ""} ${child.status} ${child.admissionStatus}`).includes(
-            normalizedQuery
-          );
+          normalize(
+            `${child.fullName} ${child.parent?.fullName ?? ""} ${child.parent?.phone ?? ""} ${child.currentGroup?.name ?? ""} ${labelsForSearch(child.status, child.admissionStatus)}`
+          ).includes(normalizedQuery);
 
         return matchesStatus && matchesGroup && matchesQuery;
       }),
@@ -99,13 +100,13 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
             Статус
             <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="TRIAL">TRIAL</option>
-              <option value="PAUSED">PAUSED</option>
-              <option value="LEFT">LEFT</option>
-              <option value="ADMITTED">ADMITTED</option>
-              <option value="NOT_ADMITTED">NOT_ADMITTED</option>
-              <option value="CREDIT_LESSON_USED">CREDIT_LESSON_USED</option>
+              <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
+              <option value="TRIAL">{labelForEnum("TRIAL")}</option>
+              <option value="PAUSED">{labelForEnum("PAUSED")}</option>
+              <option value="LEFT">{labelForEnum("LEFT")}</option>
+              <option value="ADMITTED">{labelForEnum("ADMITTED")}</option>
+              <option value="NOT_ADMITTED">{labelForEnum("NOT_ADMITTED")}</option>
+              <option value="CREDIT_LESSON_USED">{labelForEnum("CREDIT_LESSON_USED")}</option>
             </select>
           </label>
           <label className="label">

@@ -1,8 +1,8 @@
 # 12_DEVELOPMENT_SPECS.md
 
-# My School - спецификации разработки продукта
+# Азбука движения - спецификации разработки продукта
 
-**Проект:** My School  
+**Проект:** Азбука движения  
 **Бизнес:** Азбука движения  
 **Тип документа:** Development Specifications / Backlog-ready specs  
 **Версия:** draft v0.1  
@@ -14,7 +14,7 @@
 
 ## 1. Назначение
 
-Этот документ превращает продуктовые документы My School в спецификации разработки, которые можно выдавать Codex, разработчику или команде как backlog-ready задачи.
+Этот документ превращает продуктовые документы Азбука движения в спецификации разработки, которые можно выдавать Codex, разработчику или команде как backlog-ready задачи.
 
 Фокус v1: внутренняя операционная система для Азбуки движения, которая закрывает ежедневную цепочку:
 
@@ -126,7 +126,7 @@
 | Auth/RBAC | логин/пароль, роли `SUPER_ADMIN`, `ADMIN`, `COACH`, активность пользователя |
 | Core directories | филиалы, тренеры, родители, дети, группы |
 | Schedule | шаблоны, генерация занятий, ручные занятия, переносы, отмены, замены |
-| Attendance | экран занятия тренера, табель, статусы, audit, задача в 18:00 |
+| Attendance | экран занятия тренера, табель, статусы, audit, задача в 22:00 |
 | Subscriptions/balances | абонементы, транзакции баланса, payment status, admission status, долг |
 | Absences/makeups | болезнь, справка как статус, отпуск, карантин, события сада, переносы |
 | Tasks/ops center | внутренние задачи, дедупликация, приоритеты, операционный центр |
@@ -197,7 +197,7 @@
 5. Баланс занятий меняется только через `lesson_balance_transactions`.
 6. Баланс занятий и баланс переносов разделены.
 7. `Lesson.status` и `AttendanceRecord.status` не смешиваются.
-8. Незаполненный табель после 18:00 создаёт задачи, но не создаёт массовые списания.
+8. Незаполненный табель после 22:00 создаёт задачи, но не создаёт массовые списания.
 9. `ABSENT_SICK_PENDING` не списывает занятие до финализации админом.
 10. Подтверждённая болезнь, отпуск, карантин или событие сада создают `MakeupCredit`.
 11. Все уведомления v1 являются внутренними `Task`.
@@ -457,6 +457,7 @@ API/resource shape:
 /api/schedule-templates
 /api/lessons
 /api/lessons/generate-month
+/api/lessons/generate-academic-year
 /api/lessons/:id/move
 /api/lessons/:id/cancel
 /api/lessons/:id/substitute
@@ -500,7 +501,7 @@ Drag-and-drop calendar, complex holiday automation, parent-facing schedule.
 
 **Current state**
 
-Docs define coach statuses `NOT_MARKED`, `PRESENT`, `ABSENT_UNEXCUSED`, `ABSENT_SICK_PENDING`; incomplete sheet at 18:00 creates tasks and does not deduct balance.
+Docs define coach statuses `NOT_MARKED`, `PRESENT`, `ABSENT_UNEXCUSED`, `ABSENT_SICK_PENDING`; incomplete sheet at 22:00 creates tasks and does not deduct balance.
 
 **Scope**
 
@@ -514,7 +515,7 @@ Docs define coach statuses `NOT_MARKED`, `PRESENT`, `ABSENT_UNEXCUSED`, `ABSENT_
 - require all children marked before `ATTENDANCE_COMPLETED`;
 - save attendance and audit changes;
 - create `CERTIFICATE_PENDING` on sick pending;
-- scheduler/job at 18:00 creates `ATTENDANCE_NOT_FILLED` for coach and admin;
+- scheduler/job at 22:00 creates `ATTENDANCE_NOT_FILLED` for coach and admin;
 - incomplete attendance does not deduct balances.
 
 **Implementation details**
@@ -557,7 +558,7 @@ POST /api/jobs/attendance-not-filled-check
 | Layer | What | Count |
 |---|---|---:|
 | Unit | status transitions, full-sheet validation, financial field redaction | +8 |
-| Integration | attendance save, audit write, task creation at 18:00 | +8 |
+| Integration | attendance save, audit write, task creation at 22:00 | +8 |
 | E2E | coach fills attendance on mobile viewport | +2 |
 
 **Rollback plan**
@@ -1180,7 +1181,7 @@ Pilot must verify:
 
 **Rollback plan**
 
-Keep Excel/manual process as fallback through pilot. If critical bug appears, pause new data entry in My School, export relevant records, correct data through audit-backed admin flows, and resume after fix.
+Keep Excel/manual process as fallback through pilot. If critical bug appears, pause new data entry in Азбука движения, export relevant records, correct data through audit-backed admin flows, and resume after fix.
 
 **Effort**
 
@@ -1197,7 +1198,7 @@ Full school launch before Gate 5, external parent communication automation, SaaS
 | Gate | Ready when |
 |---|---|
 | Gate 1 - Internal demo | login, roles, branches, groups, children, schedule, lessons, coach can open lesson |
-| Gate 2 - Attendance pilot | coach sees lessons/children, saves attendance, admin sees result, 18:00 task exists |
+| Gate 2 - Attendance pilot | coach sees lessons/children, saves attendance, admin sees result, 22:00 task exists |
 | Gate 3 - Balance pilot | subscriptions, balance accrual, present/unexcused deductions, sick pending no deduction, audit |
 | Gate 4 - Operational pilot | sickness, makeups, debt, not admitted, tasks, ops center, trials |
 | Gate 5 - Full rollout | pilot passed, critical bugs fixed, admin trusts data, coach mobile flow works, RBAC checked |
@@ -1250,7 +1251,7 @@ Major stack decisions are now closed in `13_TECH_STACK_DECISIONS_RU.md`. These r
 Use this prompt to start development from a clean repository:
 
 ```text
-Ты работаешь над My School для Азбуки движения.
+Ты работаешь над Азбука движения для Азбуки движения.
 
 Изучи документы:
 00_PROJECT_BRIEF_RU.md
@@ -1308,7 +1309,7 @@ v1 готова к первому внутреннему использован�
 
 ## 14. Итог
 
-Разрабатывать My School нужно не как набор CRUD-экранов, а как операционную систему вокруг ребёнка, занятия, баланса, переноса, допуска и задач.
+Разрабатывать Азбука движения нужно не как набор CRUD-экранов, а как операционную систему вокруг ребёнка, занятия, баланса, переноса, допуска и задач.
 
 Самая важная последовательность:
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileUp, KeyRound, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 
 type PreviewSheet = {
   rows: number;
@@ -184,7 +185,7 @@ export function ExcelImportPanel({ initialBatches }: ExcelImportPanelProps) {
 
         <div className="panel min-w-0">
           <div className="border-b border-[var(--line)] px-5 py-4">
-            <h2 className="text-lg font-bold">Batches</h2>
+            <h2 className="text-lg font-bold">Пакеты импорта</h2>
           </div>
           <div className="grid max-h-[420px] gap-2 overflow-auto p-3">
             {batches.length === 0 ? <p className="px-2 py-3 text-sm text-[var(--muted)]">Импортов пока нет.</p> : null}
@@ -230,7 +231,7 @@ function BatchSummary({ batch }: { batch: ImportBatch }) {
         <div className="min-w-0">
           <h2 className="truncate text-lg font-bold">{batch.fileName}</h2>
           <p className="mt-1 text-sm text-[var(--muted)]">
-            {batch.uploadedBy?.displayName ?? "SUPER_ADMIN"} · {formatDateTime(batch.createdAt)}
+            {batch.uploadedBy?.displayName ?? labelForEnum("SUPER_ADMIN")} · {formatDateTime(batch.createdAt)}
           </p>
         </div>
         <StatusPill status={batch.status} />
@@ -238,7 +239,7 @@ function BatchSummary({ batch }: { batch: ImportBatch }) {
       <div className="grid gap-3 sm:grid-cols-3">
         <Metric label="Строк" value={batch.totalRows} />
         <Metric label="Ошибок" value={batch.preview?.errorCount ?? batch.failedRows} tone={(batch.preview?.errorCount ?? batch.failedRows) > 0 ? "danger" : "success"} />
-        <Metric label="Warnings" value={batch.preview?.warningCount ?? 0} tone={(batch.preview?.warningCount ?? 0) > 0 ? "warning" : "neutral"} />
+        <Metric label="Предупреждений" value={batch.preview?.warningCount ?? 0} tone={(batch.preview?.warningCount ?? 0) > 0 ? "warning" : "neutral"} />
       </div>
       {result ? (
         <div className="grid gap-2 rounded-lg border border-[var(--line)] bg-[#f8faf8] p-4 text-sm">
@@ -266,7 +267,7 @@ function PreviewTable({ batch }: { batch: ImportBatch }) {
   return (
     <div className="panel">
       <div className="border-b border-[var(--line)] px-5 py-4">
-        <h2 className="text-lg font-bold">Preview</h2>
+        <h2 className="text-lg font-bold">Предпросмотр</h2>
       </div>
       <div className="table-shell">
         <table className="data-table">
@@ -275,7 +276,7 @@ function PreviewTable({ batch }: { batch: ImportBatch }) {
               <th>Лист</th>
               <th>Строки</th>
               <th>Ошибки</th>
-              <th>Warnings</th>
+              <th>Предупреждения</th>
               <th>Импорт</th>
             </tr>
           </thead>
@@ -302,7 +303,7 @@ function IssueTable({ issues, errorsCount }: { issues: ImportIssue[]; errorsCoun
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
         <h2 className="flex items-center gap-2 text-lg font-bold">
           <AlertTriangle aria-hidden="true" size={18} />
-          Ошибки и warnings
+          Ошибки и предупреждения
         </h2>
         <span className="text-sm font-semibold text-[var(--muted)]">Всего: {errorsCount}</span>
       </div>
@@ -325,7 +326,7 @@ function IssueTable({ issues, errorsCount }: { issues: ImportIssue[]; errorsCoun
                 <tr key={issue.id}>
                   <td>
                     <span className={cn("badge", issue.severity === "ERROR" ? "bg-[#f8d8d4] text-[#8f1d17]" : "bg-[#f7e4d1] text-[#7a3f0d]")}>
-                      {issue.severity}
+                      {labelForEnum(issue.severity)}
                     </span>
                   </td>
                   <td className="font-semibold">{issue.sheetName}</td>
@@ -401,7 +402,7 @@ function StatusPill({ status }: { status: string }) {
         ? "bg-[#f8d8d4] text-[#8f1d17]"
         : "bg-[#e6eff8] text-[#214f78]";
 
-  return <span className={cn("badge", className)}>{status}</span>;
+  return <span className={cn("badge", className)}>{labelForEnum(status)}</span>;
 }
 
 function readResultCounts(result: unknown) {
@@ -421,7 +422,7 @@ function readResultCounts(result: unknown) {
 function resultLabel(key: string) {
   const labels: Record<string, string> = {
     branchesCreated: "Филиалы",
-    coachUsersCreated: "Users",
+    coachUsersCreated: "Пользователи",
     coachProfilesCreated: "Тренеры",
     groupsCreated: "Группы",
     parentsCreated: "Родители",

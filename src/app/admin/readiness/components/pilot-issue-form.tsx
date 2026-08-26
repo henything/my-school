@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Bug, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 type PilotIssueFormProps = {
   titlePrefix: string;
@@ -19,10 +20,10 @@ const categories = [
 ] as const;
 
 const priorities = [
-  ["CRITICAL", "Critical"],
-  ["HIGH", "High"],
-  ["MEDIUM", "Medium"],
-  ["LOW", "Low"]
+  ["CRITICAL", labelForEnum("CRITICAL")],
+  ["HIGH", labelForEnum("HIGH")],
+  ["MEDIUM", labelForEnum("MEDIUM")],
+  ["LOW", labelForEnum("LOW")]
 ] as const;
 
 function nullable(value: FormDataEntryValue | null) {

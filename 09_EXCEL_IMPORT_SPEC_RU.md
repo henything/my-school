@@ -1,8 +1,8 @@
 # 09_EXCEL_IMPORT_SPEC.md
 
-# My School — Excel Import Spec
+# Азбука движения — Excel Import Spec
 
-**Проект:** My School  
+**Проект:** Азбука движения  
 **Бизнес:** Азбука движения  
 **Тип документа:** Excel Import Specification / Спецификация импорта из Excel  
 **Версия:** v1.0  
@@ -14,7 +14,7 @@
 
 ## 1. Назначение документа
 
-Этот документ описывает спецификацию импорта данных из Excel для первой версии продукта **My School**.
+Этот документ описывает спецификацию импорта данных из Excel для первой версии продукта **Азбука движения**.
 
 Импорт нужен для стартового наполнения системы данными из текущих Excel-файлов **Азбуки движения**.
 
@@ -62,7 +62,7 @@ Excel-import в v1 — это не постоянная интеграция и 
 
 Импорт должен помочь быстро перенести данные в систему, но не должен становиться основным способом ежедневной работы.
 
-После запуска системы рабочим источником истины должна стать база My School.
+После запуска системы рабочим источником истины должна стать база Азбука движения.
 
 ---
 
@@ -156,7 +156,7 @@ Attendance source data
 Рекомендуемое имя:
 
 ```text
-my_school_initial_import.xlsx
+azbuka_dvizheniya_initial_import.xlsx
 ```
 
 Кодировка не должна быть проблемой для `.xlsx`, но текстовые поля должны быть в UTF-8 совместимом виде.
@@ -454,7 +454,6 @@ Groups
 | branch_code | Да | string | Код филиала | BR_001 |
 | main_coach_code | Да | string | Код основного тренера | COACH_001 |
 | capacity_limit | Нет | int | Рекомендуемый лимит | 15 |
-| inventory_notes | Нет | text | Инвентарь | мячи, конусы |
 | comment | Нет | text | Комментарий | вход через 2 подъезд |
 | status | Нет | enum | ACTIVE / INACTIVE / ARCHIVED | ACTIVE |
 
@@ -484,7 +483,6 @@ group_name → groups.name
 branch_code → groups.branch_id
 main_coach_code → groups.main_coach_id
 capacity_limit → groups.capacity_limit
-inventory_notes → groups.inventory_notes
 comment → groups.comment
 status → groups.status
 ```

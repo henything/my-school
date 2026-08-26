@@ -4,6 +4,7 @@ import { Search, WalletCards } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { RoleBadge } from "@/components/badges";
 import { cn } from "@/lib/cn";
+import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type Child = {
   id: string;
@@ -88,7 +89,9 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         const matchesStatus = statusFilter === "ALL" || child.status === statusFilter || child.admissionStatus === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${child.fullName} ${child.currentGroup?.name ?? ""} ${child.status} ${child.admissionStatus} ${child.cachedLessonBalance}`).includes(normalizedQuery);
+          normalize(`${child.fullName} ${child.currentGroup?.name ?? ""} ${labelsForSearch(child.status, child.admissionStatus)} ${child.cachedLessonBalance}`).includes(
+            normalizedQuery
+          );
 
         return matchesStatus && matchesQuery;
       }),
@@ -101,7 +104,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         const matchesStatus = statusFilter === "ALL" || subscription.paymentStatus === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${subscription.child.fullName} ${subscription.periodStart} ${subscription.periodEnd} ${subscription.paymentStatus} ${subscription.paymentStatusComment ?? ""}`).includes(
+          normalize(`${subscription.child.fullName} ${subscription.periodStart} ${subscription.periodEnd} ${labelsForSearch(subscription.paymentStatus)} ${subscription.paymentStatusComment ?? ""}`).includes(
             normalizedQuery
           );
 
@@ -116,7 +119,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         const matchesStatus = statusFilter === "ALL" || invoice.status === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${invoice.number} ${invoice.child.fullName} ${invoice.parent.fullName ?? ""} ${invoice.parent.phone ?? ""} ${invoice.status}`).includes(normalizedQuery);
+          normalize(`${invoice.number} ${invoice.child.fullName} ${invoice.parent.fullName ?? ""} ${invoice.parent.phone ?? ""} ${labelsForSearch(invoice.status)}`).includes(normalizedQuery);
 
         return matchesStatus && matchesQuery;
       }),
@@ -129,7 +132,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         const matchesStatus = statusFilter === "ALL" || payment.status === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${payment.invoiceNumber} ${payment.child.fullName} ${payment.provider} ${payment.status}`).includes(normalizedQuery);
+          normalize(`${payment.invoiceNumber} ${payment.child.fullName} ${payment.provider} ${labelsForSearch(payment.status)}`).includes(normalizedQuery);
 
         return matchesStatus && matchesQuery;
       }),
@@ -142,9 +145,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         const child = childById.get(transaction.childId);
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${child?.fullName ?? transaction.childId} ${transaction.type} ${transaction.balanceType} ${transaction.reason ?? ""} ${transaction.comment ?? ""}`).includes(
-            normalizedQuery
-          );
+          normalize(`${child?.fullName ?? transaction.childId} ${labelsForSearch(transaction.type, transaction.balanceType, transaction.reason)} ${transaction.comment ?? ""}`).includes(normalizedQuery);
 
         return matchesQuery;
       }),
@@ -184,17 +185,17 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
             Статус
             <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="ADMITTED">ADMITTED</option>
-              <option value="CREDIT_LESSON_USED">CREDIT_LESSON_USED</option>
-              <option value="NOT_ADMITTED">NOT_ADMITTED</option>
-              <option value="NOT_INVOICED">NOT_INVOICED</option>
-              <option value="INVOICED">INVOICED</option>
-              <option value="NOT_PAID">NOT_PAID</option>
-              <option value="PARTIALLY_PAID">PARTIALLY_PAID</option>
-              <option value="OVERDUE">OVERDUE</option>
-              <option value="PAID">PAID</option>
-              <option value="SUCCEEDED">SUCCEEDED</option>
-              <option value="FAILED">FAILED</option>
+              <option value="ADMITTED">{labelForEnum("ADMITTED")}</option>
+              <option value="CREDIT_LESSON_USED">{labelForEnum("CREDIT_LESSON_USED")}</option>
+              <option value="NOT_ADMITTED">{labelForEnum("NOT_ADMITTED")}</option>
+              <option value="NOT_INVOICED">{labelForEnum("NOT_INVOICED")}</option>
+              <option value="INVOICED">{labelForEnum("INVOICED")}</option>
+              <option value="NOT_PAID">{labelForEnum("NOT_PAID")}</option>
+              <option value="PARTIALLY_PAID">{labelForEnum("PARTIALLY_PAID")}</option>
+              <option value="OVERDUE">{labelForEnum("OVERDUE")}</option>
+              <option value="PAID">{labelForEnum("PAID")}</option>
+              <option value="SUCCEEDED">{labelForEnum("SUCCEEDED")}</option>
+              <option value="FAILED">{labelForEnum("FAILED")}</option>
             </select>
           </label>
         </div>
@@ -368,12 +369,12 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                 <tr key={transaction.id}>
                   <td>{new Date(transaction.createdAt).toLocaleString("ru-RU")}</td>
                   <td className="font-semibold">{child?.fullName ?? transaction.childId}</td>
-                  <td>{transaction.type}</td>
-                  <td>{transaction.balanceType}</td>
+                  <td>{labelForEnum(transaction.type)}</td>
+                  <td>{labelForEnum(transaction.balanceType)}</td>
                   <td className={transaction.amount < 0 ? "font-bold text-[var(--danger)]" : "font-bold text-[var(--success)]"}>
                     {transaction.amount > 0 ? `+${transaction.amount}` : transaction.amount}
                   </td>
-                  <td>{transaction.comment ?? transaction.reason ?? "-"}</td>
+                  <td>{transaction.comment ?? (transaction.reason ? labelForEnum(transaction.reason) : "-")}</td>
                 </tr>
               );
             })}
@@ -432,7 +433,7 @@ function PaymentBadge({ status }: { status: string }) {
           ? "bg-[#f7e4d1] text-[#7a3f0d]"
           : "bg-[#e6eff8] text-[#214f78]";
 
-  return <span className={`badge ${className}`}>{status}</span>;
+  return <span className={`badge ${className}`}>{labelForEnum(status)}</span>;
 }
 
 function normalize(value: string) {

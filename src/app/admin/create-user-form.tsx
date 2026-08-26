@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 export function CreateUserForm() {
   const router = useRouter();
@@ -60,8 +61,8 @@ export function CreateUserForm() {
       <label className="label">
         Роль
         <select className="field" name="role" defaultValue="COACH">
-          <option value="COACH">COACH</option>
-          <option value="ADMIN">ADMIN</option>
+          <option value="COACH">{labelForEnum("COACH")}</option>
+          <option value="ADMIN">{labelForEnum("ADMIN")}</option>
         </select>
       </label>
       <Button type="submit" disabled={isSubmitting}>

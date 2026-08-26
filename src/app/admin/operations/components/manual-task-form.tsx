@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ClipboardPlus, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 type UserOption = {
   id: string;
@@ -18,10 +19,10 @@ type ManualTaskFormProps = {
 };
 
 const priorities = [
-  ["CRITICAL", "Critical"],
-  ["HIGH", "High"],
-  ["MEDIUM", "Medium"],
-  ["LOW", "Low"]
+  ["CRITICAL", labelForEnum("CRITICAL")],
+  ["HIGH", labelForEnum("HIGH")],
+  ["MEDIUM", labelForEnum("MEDIUM")],
+  ["LOW", labelForEnum("LOW")]
 ] as const;
 
 function nullable(value: FormDataEntryValue | null) {
@@ -86,7 +87,7 @@ export function ManualTaskForm({ users }: ManualTaskFormProps) {
           <option value="">Общая задача админам</option>
           {activeUsers.map((user) => (
             <option key={user.id} value={user.id}>
-              {user.displayName} · {user.role}
+              {user.displayName} · {labelForEnum(user.role)}
             </option>
           ))}
         </select>

@@ -15,6 +15,7 @@ import { ManualTaskForm } from "@/app/admin/operations/components/manual-task-fo
 import { RunTaskChecksButton } from "@/app/admin/operations/components/run-task-checks-button";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
@@ -106,7 +107,7 @@ export default async function OperationsPage() {
                       <td>
                         <div className="flex flex-wrap items-center gap-2">
                           <PriorityBadge priority={task.priority} />
-                          <span className="badge bg-[#e6eff8] text-[#214f78]">{task.type}</span>
+                          <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
                         </div>
                         <div className="mt-2 font-semibold">{task.title}</div>
                         {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
@@ -134,13 +135,13 @@ export default async function OperationsPage() {
       <section className="grid min-w-0 gap-4 lg:grid-cols-2">
         <InfoPanel title="Сегодняшние занятия" empty="На сегодня занятий нет.">
           {center.widgets.todayLessons.map((lesson) => (
-            <ListRow key={lesson.id} title={lesson.group.name} meta={`${lesson.startTime}-${lesson.endTime} · ${lesson.coachName} · ${lesson.status}`} />
+            <ListRow key={lesson.id} title={lesson.group.name} meta={`${lesson.startTime}-${lesson.endTime} · ${lesson.coachName} · ${labelForEnum(lesson.status)}`} />
           ))}
         </InfoPanel>
 
         <InfoPanel title="Табели без отметок" empty="Незаполненных табелей нет.">
           {center.widgets.unfilledLessons.map((lesson) => (
-            <ListRow key={lesson.id} title={lesson.group.name} meta={`${formatDate(lesson.lessonDate)} · ${lesson.startTime}-${lesson.endTime} · ${lesson.status}`} />
+            <ListRow key={lesson.id} title={lesson.group.name} meta={`${formatDate(lesson.lessonDate)} · ${lesson.startTime}-${lesson.endTime} · ${labelForEnum(lesson.status)}`} />
           ))}
         </InfoPanel>
 
@@ -161,7 +162,7 @@ export default async function OperationsPage() {
             <ListRow key={`cert-${record.id}`} title={record.child.fullName} meta={`Справка · ${record.lesson.group.name} · ${formatDate(record.lesson.lessonDate)}`} />
           ))}
           {center.widgets.availableMakeups.map((makeup) => (
-            <ListRow key={`makeup-${makeup.id}`} title={makeup.child.fullName} meta={`Перенос ${makeup.reason} · ${makeup.group.name}`} />
+            <ListRow key={`makeup-${makeup.id}`} title={makeup.child.fullName} meta={`Перенос ${labelForEnum(makeup.reason)} · ${makeup.group.name}`} />
           ))}
         </InfoPanel>
 
@@ -173,7 +174,7 @@ export default async function OperationsPage() {
 
         <InfoPanel title="Пробные занятия" empty="Задач по пробным занятиям пока нет.">
           {center.widgets.trialsToProcess.map((task) => (
-            <ListRow key={task.id} title={task.title} meta={task.description ?? task.type} />
+            <ListRow key={task.id} title={task.title} meta={task.description ?? labelForEnum(task.type)} />
           ))}
         </InfoPanel>
       </section>
@@ -182,7 +183,7 @@ export default async function OperationsPage() {
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
-  return <span className={cn("badge", priorityClassName[priority] ?? "bg-[#ececec] text-[#555]")}>{priority}</span>;
+  return <span className={cn("badge", priorityClassName[priority] ?? "bg-[#ececec] text-[#555]")}>{labelForEnum(priority)}</span>;
 }
 
 function InfoPanel({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {

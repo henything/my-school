@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import type {
   AdmissionStatus,
   BalanceTransactionType,
@@ -20,6 +19,7 @@ import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import {
   admissionStatusAfterLessonBalance,
+  calculateBillableLessons,
   calculateSubscriptionTotal,
   canUseCreditLesson,
   DEFAULT_LESSON_PRICE_KOPEKS
@@ -45,6 +45,16 @@ const invoiceInclude = {
 
 type InvoiceRecord = Prisma.InvoiceGetPayload<{ include: typeof invoiceInclude }>;
 
+type InvoiceSubscriptionRecord = Prisma.SubscriptionGetPayload<{
+  include: {
+    child: {
+      include: {
+        parent: true;
+      };
+    };
+  };
+}>;
+
 type PaymentRecord = {
   id: string;
   invoiceId: string;
@@ -63,6 +73,11 @@ type PaymentRecord = {
   invoice: { number: string };
   child: { fullName: string };
   parent: { fullName: string | null; phone: string | null };
+};
+
+type ApplicableMakeupCredit = {
+  id: string;
+  comment: string | null;
 };
 
 type SubscriptionListRecord = {
@@ -287,76 +302,120 @@ export async function createInvoiceFromSubscription(currentUser: CurrentUser, in
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
-    const subscription = await tx.subscription.findFirstOrThrow({
-      where: {
-        id: input.subscriptionId,
-        schoolId: currentUser.schoolId
-      },
-      include: {
-        child: {
-          include: {
-            parent: true
-          }
+    return createInvoiceForSubscription(tx, currentUser, input.subscriptionId, input.dueDate);
+  });
+}
+
+async function createInvoiceForSubscription(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  subscriptionId: string,
+  dueDate: Date
+) {
+  const subscription = await tx.subscription.findFirstOrThrow({
+    where: {
+      id: subscriptionId,
+      schoolId: currentUser.schoolId
+    },
+    include: {
+      child: {
+        include: {
+          parent: true
         }
       }
-    });
-
-    if (!subscription.child.parentId || !subscription.child.parent) {
-      throw new Error("Нельзя создать счёт: у ребёнка нет родителя.");
     }
-
-    const existingOpenInvoice = await tx.invoice.findFirst({
-      where: {
-        schoolId: currentUser.schoolId,
-        subscriptionId: subscription.id,
-        status: { notIn: ["PAID", "CANCELLED"] }
-      }
-    });
-
-    if (existingOpenInvoice) {
-      throw new Error("По этому абонементу уже есть открытый счёт.");
-    }
-
-    const invoice = await tx.invoice.create({
-      data: {
-        schoolId: currentUser.schoolId,
-        parentId: subscription.child.parentId,
-        childId: subscription.childId,
-        subscriptionId: subscription.id,
-        number: createInvoiceNumber(),
-        amountKopeks: subscription.totalAmountKopeks,
-        paidAmountKopeks: 0,
-        periodStart: subscription.periodStart,
-        periodEnd: subscription.periodEnd,
-        dueDate: input.dueDate,
-        createdByUserId: currentUser.id
-      },
-      include: invoiceInclude
-    });
-
-    await tx.subscription.update({
-      where: { id: subscription.id },
-      data: {
-        paymentStatus: "INVOICED",
-        paymentStatusChangedAt: new Date(),
-        paymentStatusComment: `Создан счёт ${invoice.number}`
-      }
-    });
-
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: "INVOICE_CREATED",
-        entityType: "Invoice",
-        entityId: invoice.id,
-        newValue: serializeInvoice(invoice)
-      },
-      tx
-    );
-
-    return serializeInvoice(invoice);
   });
+
+  if (!subscription.child.parentId || !subscription.child.parent) {
+    throw new Error("Нельзя создать счёт: у ребёнка нет родителя.");
+  }
+
+  const existingOpenInvoice = await tx.invoice.findFirst({
+    where: {
+      schoolId: currentUser.schoolId,
+      subscriptionId: subscription.id,
+      status: { notIn: ["PAID", "CANCELLED"] }
+    }
+  });
+
+  if (existingOpenInvoice) {
+    throw new Error("По этому абонементу уже есть открытый счёт.");
+  }
+
+  const applicableMakeups = await findApplicableMakeupCredits(tx, currentUser.schoolId, subscription);
+  const appliedMakeupCredits = applicableMakeups.slice(0, subscription.plannedLessonsCount);
+  const billableLessonsCount = calculateBillableLessons(subscription.plannedLessonsCount, appliedMakeupCredits.length);
+  const amountKopeks = calculateSubscriptionTotal(
+    subscription.plannedLessonsCount,
+    subscription.lessonPriceKopeks,
+    appliedMakeupCredits.length
+  );
+  const issuedAt = new Date();
+  const invoiceNumber = await createInvoiceNumber(tx, currentUser.schoolId, subscription.child.parent.fullName, issuedAt);
+  const isFullyCoveredByMakeups = amountKopeks === 0;
+
+  const invoice = await tx.invoice.create({
+    data: {
+      schoolId: currentUser.schoolId,
+      parentId: subscription.child.parentId,
+      childId: subscription.childId,
+      subscriptionId: subscription.id,
+      number: invoiceNumber,
+      status: isFullyCoveredByMakeups ? "PAID" : "ISSUED",
+      amountKopeks,
+      paidAmountKopeks: 0,
+      periodStart: subscription.periodStart,
+      periodEnd: subscription.periodEnd,
+      dueDate,
+      issuedAt,
+      paidAt: isFullyCoveredByMakeups ? issuedAt : null,
+      createdByUserId: currentUser.id
+    }
+  });
+
+  await applyMakeupCreditsToInvoice(tx, currentUser, subscription.childId, subscription.id, invoice.id, invoice.number, appliedMakeupCredits);
+
+  const paymentStatusComment = [
+    `Создан счёт ${invoice.number}`,
+    appliedMakeupCredits.length > 0 ? `зачтено переносов: ${appliedMakeupCredits.length}` : null,
+    `к оплате занятий: ${billableLessonsCount}`
+  ]
+    .filter(Boolean)
+    .join("; ");
+
+  await tx.subscription.update({
+    where: { id: subscription.id },
+    data: {
+      totalAmountKopeks: amountKopeks,
+      paymentStatus: isFullyCoveredByMakeups ? "PAID" : "INVOICED",
+      paymentStatusChangedAt: issuedAt,
+      paymentStatusComment
+    }
+  });
+
+  const hydratedInvoice = await tx.invoice.findUniqueOrThrow({
+    where: { id: invoice.id },
+    include: invoiceInclude
+  });
+
+  await writeAuditLog(
+    {
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "INVOICE_CREATED",
+      entityType: "Invoice",
+      entityId: invoice.id,
+      newValue: {
+        ...serializeInvoice(hydratedInvoice),
+        plannedLessonsCount: subscription.plannedLessonsCount,
+        appliedMakeupCreditsCount: appliedMakeupCredits.length,
+        billableLessonsCount
+      }
+    },
+    tx
+  );
+
+  return serializeInvoice(hydratedInvoice);
 }
 
 export async function markInvoicePaidManually(currentUser: CurrentUser, invoiceId: string, input: MarkInvoicePaidInput) {
@@ -511,11 +570,18 @@ export async function createSubscription(currentUser: CurrentUser, input: Create
       select: {
         id: true,
         fullName: true,
+        parentId: true,
+        parent: { select: { id: true, fullName: true, phone: true } },
         currentGroupId: true,
         cachedLessonBalance: true,
+        cachedMakeupBalance: true,
         admissionStatus: true
       }
     });
+
+    if (!child.parentId || !child.parent) {
+      throw new Error("Нельзя создать абонемент и счёт: у ребёнка нет родителя.");
+    }
 
     const plannedLessonsCount =
       input.plannedLessonsCount ??
@@ -583,7 +649,14 @@ export async function createSubscription(currentUser: CurrentUser, input: Create
       type: "SUBSCRIPTION_CREATED"
     });
 
-    return serializeSubscription(subscription);
+    await createInvoiceForSubscription(tx, currentUser, subscription.id, defaultInvoiceDueDate(input.periodStart));
+
+    const updatedSubscription = await tx.subscription.findUniqueOrThrow({
+      where: { id: subscription.id },
+      include: subscriptionListInclude
+    });
+
+    return serializeSubscription(updatedSubscription);
   });
 }
 
@@ -1017,6 +1090,118 @@ async function countRemainingLessonsForChild(
   });
 }
 
+async function findApplicableMakeupCredits(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  subscription: InvoiceSubscriptionRecord
+): Promise<ApplicableMakeupCredit[]> {
+  return tx.makeupCredit.findMany({
+    where: {
+      schoolId,
+      childId: subscription.childId,
+      status: "AVAILABLE",
+      OR: [
+        {
+          sourceLesson: {
+            is: {
+              lessonDate: { lt: subscription.periodStart }
+            }
+          }
+        },
+        {
+          sourceLessonId: null,
+          createdAt: { lt: subscription.periodStart }
+        }
+      ]
+    },
+    select: {
+      id: true,
+      comment: true
+    },
+    orderBy: [{ createdAt: "asc" }],
+    take: subscription.plannedLessonsCount
+  });
+}
+
+async function applyMakeupCreditsToInvoice(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  childId: string,
+  subscriptionId: string,
+  invoiceId: string,
+  invoiceNumber: string,
+  makeupCredits: ApplicableMakeupCredit[]
+) {
+  if (makeupCredits.length === 0) {
+    return;
+  }
+
+  const appliedAt = new Date();
+
+  for (const makeupCredit of makeupCredits) {
+    await tx.makeupCredit.update({
+      where: { id: makeupCredit.id },
+      data: {
+        status: "REFUNDED",
+        refundedAt: appliedAt,
+        comment: appendComment(makeupCredit.comment, `Зачтён в счёт ${invoiceNumber}`)
+      }
+    });
+
+    const transaction = await tx.lessonBalanceTransaction.create({
+      data: {
+        schoolId: currentUser.schoolId,
+        childId,
+        subscriptionId,
+        makeupCreditId: makeupCredit.id,
+        type: "MAKEUP_USED",
+        balanceType: "MAKEUP_BALANCE",
+        amount: -1,
+        reason: "INVOICE_DISCOUNT",
+        createdByUserId: currentUser.id,
+        comment: `Перенос зачтён в счёт ${invoiceNumber}`
+      }
+    });
+
+    await auditBalanceTransaction(tx, currentUser, transaction.id, {
+      childId,
+      subscriptionId,
+      makeupCreditId: makeupCredit.id,
+      invoiceId,
+      invoiceNumber,
+      balanceType: "MAKEUP_BALANCE",
+      amount: -1,
+      type: "MAKEUP_USED",
+      reason: "INVOICE_DISCOUNT"
+    });
+  }
+
+  await tx.child.update({
+    where: { id: childId },
+    data: { cachedMakeupBalance: { decrement: makeupCredits.length } }
+  });
+
+  await tx.task.updateMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      type: "MAKEUP_NEEDS_ASSIGNMENT",
+      relatedEntityType: "MakeupCredit",
+      relatedEntityId: { in: makeupCredits.map((makeupCredit) => makeupCredit.id) },
+      status: { in: OPEN_TASK_STATUSES }
+    },
+    data: {
+      status: "CLOSED",
+      closedAt: appliedAt,
+      closedByUserId: currentUser.id,
+      closedComment: `Автозакрытие: перенос зачтён в счёт ${invoiceNumber}.`
+    }
+  });
+}
+
+function defaultInvoiceDueDate(periodStart: Date) {
+  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 10));
+}
+
 function attendanceTransactionType(status: CoachAttendanceStatus, delta: number, isCreditLesson: boolean): BalanceTransactionType {
   if (delta > 0) {
     return "ATTENDANCE_DEDUCTION_REVERSAL";
@@ -1112,8 +1297,37 @@ function assertAdmin(currentUser: CurrentUser) {
   }
 }
 
-function createInvoiceNumber() {
-  const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  return `INV-${datePart}-${randomBytes(3).toString("hex").toUpperCase()}`;
+async function createInvoiceNumber(tx: Prisma.TransactionClient, schoolId: string, parentName: string | null, issuedAt: Date) {
+  const baseNumber = `${formatInvoiceParentName(parentName)} ${formatRuDate(issuedAt)}`;
+  const existingNumbers = await tx.invoice.findMany({
+    where: {
+      schoolId,
+      number: { startsWith: baseNumber }
+    },
+    select: { number: true }
+  });
+  const usedNumbers = new Set(existingNumbers.map((invoice) => invoice.number));
+
+  if (!usedNumbers.has(baseNumber)) {
+    return baseNumber;
+  }
+
+  let suffix = 2;
+  while (usedNumbers.has(`${baseNumber}-${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `${baseNumber}-${suffix}`;
+}
+
+function formatInvoiceParentName(parentName: string | null) {
+  return parentName?.trim().replace(/\s+/g, " ") || "Родитель без ФИО";
+}
+
+function formatRuDate(date: Date) {
+  return `${String(date.getUTCDate()).padStart(2, "0")}/${String(date.getUTCMonth() + 1).padStart(2, "0")}/${date.getUTCFullYear()}`;
+}
+
+function appendComment(existingComment: string | null, addition: string) {
+  return [existingComment?.trim(), addition].filter(Boolean).join(" | ");
 }

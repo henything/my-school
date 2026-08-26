@@ -14,6 +14,7 @@ import type {
 } from "./schemas";
 
 const OPEN_TASK_STATUSES: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
+const ATTENDANCE_NOT_FILLED_CHECK_HOUR = 22;
 const trialParticipantOrderBy: Prisma.TrialParticipantOrderByWithRelationInput[] = [{ status: "asc" }, { createdAt: "asc" }];
 
 const lessonDetailInclude = {
@@ -272,7 +273,7 @@ export async function runAttendanceNotFilledCheck(currentUser: CurrentUser, inpu
   const now = input.now ?? new Date();
   const local = pacificDateParts(now);
 
-  if (local.hour < 18) {
+  if (local.hour < ATTENDANCE_NOT_FILLED_CHECK_HOUR) {
     return { checkedCount: 0, incompleteCount: 0, createdTaskCount: 0 };
   }
 

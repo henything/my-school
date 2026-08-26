@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck2, CalendarRange, FileCheck2, Loader2, RefreshCcw, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 type Child = {
   id: string;
@@ -469,15 +470,15 @@ function MakeupCard({ makeup, lessons }: { makeup: Makeup; lessons: Lesson[] }) 
   return (
     <article className="rounded-lg border border-[var(--line)] bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={badgeClass(makeup.status)}>{makeup.status}</span>
-        <span className="badge bg-[#e6eff8] text-[#214f78]">{makeup.reason}</span>
+        <span className={badgeClass(makeup.status)}>{labelForEnum(makeup.status)}</span>
+        <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(makeup.reason)}</span>
       </div>
       <h4 className="mt-3 font-bold">{makeup.child.fullName}</h4>
       <p className="mt-1 text-sm text-[var(--muted)]">{makeup.group.name}</p>
       <dl className="mt-3 grid gap-2 text-sm">
         <div>
           <dt className="text-[var(--muted)]">Источник</dt>
-          <dd className="font-semibold">{makeup.sourceLesson ? formatLesson(makeup.sourceLesson) : makeup.groupEvent?.reason ?? "—"}</dd>
+          <dd className="font-semibold">{makeup.sourceLesson ? formatLesson(makeup.sourceLesson) : makeup.groupEvent?.reason ? labelForEnum(makeup.groupEvent.reason) : "—"}</dd>
         </div>
         <div>
           <dt className="text-[var(--muted)]">Назначение</dt>
@@ -554,7 +555,7 @@ function CloseMakeupButtons({ makeup, compact = false }: { makeup: Makeup; compa
 
     try {
       await submitJson(`/api/makeups/${makeup.id}/use`, { status, comment });
-      setMessage(status);
+      setMessage(labelForEnum(status));
       setComment("");
       router.refresh();
     } catch (error) {
@@ -616,7 +617,7 @@ function GroupEventsTable({ groupEvents }: { groupEvents: GroupEvent[] }) {
               <tr key={event.id}>
                 <td>{new Date(event.createdAt).toLocaleString("ru-RU")}</td>
                 <td className="font-semibold">{event.group.name}</td>
-                <td>{event.reason}</td>
+                <td>{labelForEnum(event.reason)}</td>
                 <td>
                   {event.periodStart} - {event.periodEnd}
                 </td>

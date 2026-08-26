@@ -1,13 +1,22 @@
 import type { LessonChangeReason, LessonStatus } from "@/generated/prisma/enums";
+import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
-import { buildLessonCandidates, dateToKey } from "./generation";
+import {
+  buildAcademicYearLessonCandidates,
+  buildAcademicYearMonthKeys,
+  buildLessonCandidates,
+  dateToKey,
+  formatAcademicYear,
+  type LessonCandidate
+} from "./generation";
 import type {
   CancelLessonInput,
   CreateLessonInput,
   CreateScheduleTemplateInput,
+  GenerateAcademicYearInput,
   GenerateMonthInput,
   MoveLessonInput,
   SubstituteLessonInput
@@ -53,6 +62,11 @@ type LessonRecord = {
   coach: { id: string; userId: string; user: { displayName: string; login: string; status: string } };
   substituteCoach: { id: string; userId: string; user: { displayName: string; login: string; status: string } } | null;
   scheduleTemplate: { id: string; weekday: number } | null;
+};
+
+type LessonGenerationResult = {
+  createdIds: string[];
+  duplicateKeys: string[];
 };
 
 function serializeCoach(coach: LessonRecord["coach"] | NonNullable<LessonRecord["substituteCoach"]>) {
@@ -233,58 +247,9 @@ export async function generateLessonsForMonth(currentUser: CurrentUser, input: G
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
-    const templates = await tx.scheduleTemplate.findMany({
-      where: {
-        schoolId: currentUser.schoolId,
-        status: "ACTIVE",
-        ...(input.groupId ? { groupId: input.groupId } : {})
-      },
-      select: {
-        id: true,
-        groupId: true,
-        branchId: true,
-        coachId: true,
-        weekday: true,
-        startTime: true,
-        endTime: true
-      }
-    });
-
+    const templates = await findTemplatesForGeneration(tx, currentUser.schoolId, input.groupId);
     const candidates = buildLessonCandidates(templates, input.month);
-    const createdIds: string[] = [];
-    const duplicateKeys: string[] = [];
-
-    for (const candidate of candidates) {
-      const duplicate = await tx.lesson.findFirst({
-        where: {
-          groupId: candidate.groupId,
-          lessonDate: candidate.lessonDate,
-          startTime: candidate.startTime
-        },
-        select: { id: true }
-      });
-
-      if (duplicate) {
-        duplicateKeys.push(`${candidate.groupId}:${dateToKey(candidate.lessonDate)}:${candidate.startTime}`);
-        continue;
-      }
-
-      const lesson = await tx.lesson.create({
-        data: {
-          schoolId: currentUser.schoolId,
-          groupId: candidate.groupId,
-          branchId: candidate.branchId,
-          coachId: candidate.coachId,
-          scheduleTemplateId: candidate.scheduleTemplateId,
-          lessonDate: candidate.lessonDate,
-          startTime: candidate.startTime,
-          endTime: candidate.endTime
-        },
-        select: { id: true }
-      });
-
-      createdIds.push(lesson.id);
-    }
+    const { createdIds, duplicateKeys } = await createLessonsFromCandidates(tx, currentUser.schoolId, candidates);
 
     await writeAuditLog(
       {
@@ -313,6 +278,112 @@ export async function generateLessonsForMonth(currentUser: CurrentUser, input: G
       duplicateKeys
     };
   });
+}
+
+export async function generateLessonsForAcademicYear(currentUser: CurrentUser, input: GenerateAcademicYearInput) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const months = buildAcademicYearMonthKeys(input.academicYearStart);
+    const templates = await findTemplatesForGeneration(tx, currentUser.schoolId, input.groupId);
+    const candidates = buildAcademicYearLessonCandidates(templates, input.academicYearStart);
+    const { createdIds, duplicateKeys } = await createLessonsFromCandidates(tx, currentUser.schoolId, candidates);
+    const academicYear = formatAcademicYear(input.academicYearStart);
+
+    await writeAuditLog(
+      {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        action: "LESSONS_GENERATED_FOR_ACADEMIC_YEAR",
+        entityType: "Lesson",
+        newValue: {
+          academicYear,
+          academicYearStart: input.academicYearStart,
+          months,
+          groupId: input.groupId ?? null,
+          templateCount: templates.length,
+          candidatesCount: candidates.length,
+          createdCount: createdIds.length,
+          skippedDuplicateCount: duplicateKeys.length
+        }
+      },
+      tx
+    );
+
+    return {
+      academicYear,
+      academicYearStart: input.academicYearStart,
+      months,
+      monthCount: months.length,
+      templateCount: templates.length,
+      candidatesCount: candidates.length,
+      createdCount: createdIds.length,
+      skippedDuplicateCount: duplicateKeys.length,
+      duplicateKeys
+    };
+  });
+}
+
+async function findTemplatesForGeneration(tx: Prisma.TransactionClient, schoolId: string, groupId?: string | null) {
+  return tx.scheduleTemplate.findMany({
+    where: {
+      schoolId,
+      status: "ACTIVE",
+      ...(groupId ? { groupId } : {})
+    },
+    select: {
+      id: true,
+      groupId: true,
+      branchId: true,
+      coachId: true,
+      weekday: true,
+      startTime: true,
+      endTime: true
+    }
+  });
+}
+
+async function createLessonsFromCandidates(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  candidates: LessonCandidate[]
+): Promise<LessonGenerationResult> {
+  const createdIds: string[] = [];
+  const duplicateKeys: string[] = [];
+
+  for (const candidate of candidates) {
+    const duplicate = await tx.lesson.findFirst({
+      where: {
+        groupId: candidate.groupId,
+        lessonDate: candidate.lessonDate,
+        startTime: candidate.startTime
+      },
+      select: { id: true }
+    });
+
+    if (duplicate) {
+      duplicateKeys.push(`${candidate.groupId}:${dateToKey(candidate.lessonDate)}:${candidate.startTime}`);
+      continue;
+    }
+
+    const lesson = await tx.lesson.create({
+      data: {
+        schoolId,
+        groupId: candidate.groupId,
+        branchId: candidate.branchId,
+        coachId: candidate.coachId,
+        scheduleTemplateId: candidate.scheduleTemplateId,
+        lessonDate: candidate.lessonDate,
+        startTime: candidate.startTime,
+        endTime: candidate.endTime
+      },
+      select: { id: true }
+    });
+
+    createdIds.push(lesson.id);
+  }
+
+  return { createdIds, duplicateKeys };
 }
 
 export async function moveLesson(currentUser: CurrentUser, lessonId: string, input: MoveLessonInput) {

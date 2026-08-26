@@ -534,7 +534,6 @@ async function createImportedRecords(
         name: group.name,
         status: group.status,
         capacityLimit: group.capacityLimit,
-        inventoryNotes: group.inventoryNotes,
         comment: group.comment
       },
       select: { id: true }

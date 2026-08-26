@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { cancelLessonSchema, createScheduleTemplateSchema, moveLessonSchema } from "./schemas";
+import { cancelLessonSchema, createScheduleTemplateSchema, generateAcademicYearSchema, moveLessonSchema } from "./schemas";
 
 describe("schedule schemas", () => {
   it("requires weekday and start time for templates", () => {
@@ -30,6 +30,15 @@ describe("schedule schemas", () => {
         endTime: "11:00"
       })
     ).toThrow();
+  });
+
+  it("accepts an academic year generation request", () => {
+    const input = generateAcademicYearSchema.parse({
+      academicYearStart: "2026",
+      groupId: "11111111-1111-4111-8111-111111111111"
+    });
+
+    expect(input.academicYearStart).toBe(2026);
   });
 
   it("requires a reason when cancelling a lesson", () => {

@@ -461,7 +461,6 @@ model TrainingGroup {
   name           String
   status         EntityStatus @default(ACTIVE)
   capacityLimit  Int          @default(15) @map("capacity_limit")
-  inventoryNotes String?      @map("inventory_notes")
   comment        String?
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")

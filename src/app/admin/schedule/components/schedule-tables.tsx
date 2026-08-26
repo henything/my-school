@@ -3,6 +3,7 @@
 import { CalendarClock, Search } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/badges";
+import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type ScheduleTemplate = {
   id: string;
@@ -50,7 +51,9 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
         const matchesGroup = groupFilter === "ALL" || template.group.id === groupFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${template.group.name} ${template.branch.name} ${template.coach.displayName} ${weekdayLabels[template.weekday]} ${template.status}`).includes(normalizedQuery);
+          normalize(`${template.group.name} ${template.branch.name} ${template.coach.displayName} ${weekdayLabels[template.weekday]} ${labelsForSearch(template.status)}`).includes(
+            normalizedQuery
+          );
 
         return matchesStatus && matchesGroup && matchesQuery;
       }),
@@ -65,7 +68,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
         const matchesQuery =
           normalizedQuery.length === 0 ||
           normalize(
-            `${lesson.lessonDate} ${lesson.group.name} ${lesson.branch.name} ${lesson.coach.displayName} ${lesson.substituteCoach?.displayName ?? ""} ${lesson.status} ${lesson.changeReason ?? ""}`
+            `${lesson.lessonDate} ${lesson.group.name} ${lesson.branch.name} ${lesson.coach.displayName} ${lesson.substituteCoach?.displayName ?? ""} ${labelsForSearch(lesson.status, lesson.changeReason)}`
           ).includes(normalizedQuery);
 
         return matchesStatus && matchesGroup && matchesQuery;
@@ -79,7 +82,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
     return (future.length > 0 ? future : lessons).slice(0, 6);
   }, [lessons]);
 
-  const needsAttention = lessons.filter((lesson) => lesson.status === "SCHEDULED" || lesson.status === "ATTENDANCE_IN_PROGRESS").length;
+  const needsAttention = lessons.filter((lesson) => lesson.status === "SCHEDULED" || lesson.status === "ATTENDANCE_PENDING").length;
 
   return (
     <section className="grid gap-4">
@@ -108,11 +111,11 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
             Статус
             <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="ACTIVE">ACTIVE</option>
-              <option value="SCHEDULED">SCHEDULED</option>
-              <option value="ATTENDANCE_IN_PROGRESS">ATTENDANCE_IN_PROGRESS</option>
-              <option value="ATTENDANCE_COMPLETED">ATTENDANCE_COMPLETED</option>
-              <option value="CANCELLED">CANCELLED</option>
+              <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
+              <option value="SCHEDULED">{labelForEnum("SCHEDULED")}</option>
+              <option value="ATTENDANCE_PENDING">{labelForEnum("ATTENDANCE_PENDING")}</option>
+              <option value="ATTENDANCE_COMPLETED">{labelForEnum("ATTENDANCE_COMPLETED")}</option>
+              <option value="CANCELLED">{labelForEnum("CANCELLED")}</option>
             </select>
           </label>
           <label className="label">
@@ -217,7 +220,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                   <td>
                     <StatusBadge status={lesson.status} />
                   </td>
-                  <td>{lesson.changeReason ?? "-"}</td>
+                  <td>{lesson.changeReason ? labelForEnum(lesson.changeReason) : "-"}</td>
                 </tr>
               ))}
               {filteredLessons.length === 0 ? <EmptyTableRow colSpan={6} label="Занятия по фильтрам не найдены." /> : null}

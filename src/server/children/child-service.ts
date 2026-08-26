@@ -3,8 +3,9 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
+import { serializeParent } from "@/server/parents/parent-service";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
-import type { CreateChildInput, UpdateChildInput } from "./schemas";
+import type { CreateChildEnrollmentInput, CreateChildInput, UpdateChildInput } from "./schemas";
 
 const childInclude = {
   parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } },
@@ -157,6 +158,104 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
     }
 
     return serializeChild(child);
+  });
+}
+
+export async function createChildEnrollment(currentUser: CurrentUser, input: CreateChildEnrollmentInput) {
+  return getPrisma().$transaction(async (tx) => {
+    let parentId = input.parentId ?? null;
+    let createdParent: ReturnType<typeof serializeParent> | null = null;
+
+    if (parentId) {
+      await tx.parent.findFirstOrThrow({
+        where: {
+          id: parentId,
+          schoolId: currentUser.schoolId
+        }
+      });
+    } else if (input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment) {
+      const parent = await tx.parent.create({
+        data: {
+          schoolId: currentUser.schoolId,
+          fullName: input.parentFullName,
+          phone: input.parentPhone,
+          vkProfileUrl: input.parentVkProfileUrl,
+          comment: input.parentComment
+        },
+        include: { _count: { select: { children: true } } }
+      });
+
+      createdParent = serializeParent(parent);
+      parentId = parent.id;
+
+      await writeAuditLog(
+        {
+          schoolId: currentUser.schoolId,
+          actorUserId: currentUser.id,
+          action: "PARENT_CREATED",
+          entityType: "Parent",
+          entityId: parent.id,
+          newValue: createdParent
+        },
+        tx
+      );
+    }
+
+    if (input.currentGroupId) {
+      await tx.trainingGroup.findFirstOrThrow({
+        where: {
+          id: input.currentGroupId,
+          schoolId: currentUser.schoolId,
+          status: { not: "ARCHIVED" }
+        }
+      });
+    }
+
+    const child = await tx.child.create({
+      data: {
+        schoolId: currentUser.schoolId,
+        parentId,
+        currentGroupId: input.currentGroupId,
+        fullName: input.fullName,
+        birthDate: input.birthDate,
+        status: input.status,
+        medicalNotes: input.medicalNotes,
+        coachComment: input.coachComment,
+        adminComment: input.adminComment,
+        admissionStatus: input.admissionStatus
+      },
+      include: childInclude
+    });
+
+    const serializedChild = serializeChild(child);
+
+    await writeAuditLog(
+      {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        action: "CHILD_CREATED",
+        entityType: "Child",
+        entityId: child.id,
+        newValue: serializedChild
+      },
+      tx
+    );
+
+    if (child.currentGroup) {
+      await ensureGroupOverCapacityTask(tx, {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        groupId: child.currentGroup.id,
+        groupName: child.currentGroup.name,
+        activeChildrenCount: countActiveChildren(child.currentGroup.children),
+        capacityLimit: child.currentGroup.capacityLimit
+      });
+    }
+
+    return {
+      child: serializedChild,
+      parent: createdParent
+    };
   });
 }
 

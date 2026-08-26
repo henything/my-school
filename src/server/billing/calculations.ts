@@ -2,8 +2,16 @@ import type { AdmissionStatus } from "@/generated/prisma/enums";
 
 export const DEFAULT_LESSON_PRICE_KOPEKS = 45000;
 
-export function calculateSubscriptionTotal(plannedLessonsCount: number, lessonPriceKopeks = DEFAULT_LESSON_PRICE_KOPEKS) {
-  return plannedLessonsCount * lessonPriceKopeks;
+export function calculateBillableLessons(plannedLessonsCount: number, makeupCreditsToApply = 0) {
+  return Math.max(plannedLessonsCount - Math.max(makeupCreditsToApply, 0), 0);
+}
+
+export function calculateSubscriptionTotal(
+  plannedLessonsCount: number,
+  lessonPriceKopeks = DEFAULT_LESSON_PRICE_KOPEKS,
+  makeupCreditsToApply = 0
+) {
+  return calculateBillableLessons(plannedLessonsCount, makeupCreditsToApply) * lessonPriceKopeks;
 }
 
 export function canUseCreditLesson(cachedLessonBalance: number, admissionStatus: AdmissionStatus) {

@@ -18,6 +18,8 @@ export type LessonCandidate = {
   endTime: string;
 };
 
+const ACADEMIC_YEAR_MONTH_NUMBERS = [9, 10, 11, 12, 1, 2, 3, 4, 5] as const;
+
 export function parseMonthKey(month: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
 
@@ -36,6 +38,21 @@ export function parseMonthKey(month: string) {
     year,
     monthIndex: monthNumber - 1
   };
+}
+
+export function buildAcademicYearMonthKeys(startYear: number) {
+  if (!Number.isInteger(startYear) || startYear < 2000 || startYear > 2100) {
+    throw new Error("Год начала учебного года должен быть от 2000 до 2100.");
+  }
+
+  return ACADEMIC_YEAR_MONTH_NUMBERS.map((monthNumber) => {
+    const year = monthNumber >= 9 ? startYear : startYear + 1;
+    return `${year}-${String(monthNumber).padStart(2, "0")}`;
+  });
+}
+
+export function formatAcademicYear(startYear: number) {
+  return `${startYear}-${startYear + 1}`;
 }
 
 export function dateToKey(date: Date) {
@@ -75,4 +92,8 @@ export function buildLessonCandidates(templates: TemplateForGeneration[], month:
       endTime: template.endTime
     }))
   );
+}
+
+export function buildAcademicYearLessonCandidates(templates: TemplateForGeneration[], startYear: number): LessonCandidate[] {
+  return buildAcademicYearMonthKeys(startYear).flatMap((month) => buildLessonCandidates(templates, month));
 }

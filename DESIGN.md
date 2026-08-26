@@ -1,8 +1,8 @@
-# My School Design System
+# Азбука движения Design System
 
 ## Product Stance
 
-My School is an internal operations workspace for school administrators, coaches, and parents. The interface should feel calm, reliable, and work-focused. It should help users find the next operational action quickly, not sell the product or decorate the screen.
+Азбука движения is an internal operations workspace for school administrators, coaches, and parents. The interface should feel calm, reliable, and work-focused. It should help users find the next operational action quickly, not sell the product or decorate the screen.
 
 ## Visual Principles
 

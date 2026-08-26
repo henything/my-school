@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { getStabilizationDashboard, type StabilizationStatus } from "@/server/stabilization/stabilization-service";
@@ -125,8 +126,8 @@ export default async function StabilizationPage() {
                     <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[#fff4f2]" : undefined}>
                       <td>
                         <div className="flex flex-wrap items-center gap-2">
-                          <span className={cn("badge", priorityClassName[task.priority])}>{task.priority}</span>
-                          <span className="badge bg-[#e6eff8] text-[#214f78]">{task.status}</span>
+                          <span className={cn("badge", priorityClassName[task.priority])}>{labelForEnum(task.priority)}</span>
+                          <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.status)}</span>
                         </div>
                         <div className="mt-2 font-semibold">{task.title}</div>
                         {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}

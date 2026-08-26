@@ -1,5 +1,6 @@
 import { CalendarDays, History, RefreshCcw, WalletCards } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentChildDetail } from "@/server/parents/parent-portal-service";
 
@@ -133,7 +134,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
               <tbody>
                 {child.makeups.map((makeup) => (
                   <tr key={makeup.id}>
-                    <td>{makeup.reason}</td>
+                    <td>{labelForEnum(makeup.reason)}</td>
                     <td>
                       <StatusBadge status={makeup.status} />
                     </td>

@@ -2,9 +2,10 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, CalendarPlus, Loader2, Repeat2, UserCheck, WandSparkles } from "lucide-react";
+import { Ban, CalendarPlus, CalendarRange, Loader2, Repeat2, UserCheck, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { labelForEnum } from "@/lib/labels";
 
 type Group = {
   id: string;
@@ -62,6 +63,11 @@ function nullable(value: FormDataEntryValue | null) {
   return text.length > 0 ? text : null;
 }
 
+function defaultAcademicYearStart() {
+  const now = new Date();
+  return now.getMonth() >= 5 ? now.getFullYear() : now.getFullYear() - 1;
+}
+
 async function submitJson<T = unknown>(path: string, body: unknown) {
   const response = await fetch(path, {
     method: "POST",
@@ -83,9 +89,10 @@ export function ScheduleForms({ groups, coaches, lessons }: ScheduleFormsProps) 
 
   return (
     <div className="grid gap-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
         <CreateTemplateForm groups={activeGroups} />
         <GenerateMonthForm groups={activeGroups} />
+        <GenerateAcademicYearForm groups={activeGroups} />
         <CreateLessonForm groups={activeGroups} coaches={activeCoaches} />
       </div>
       <LessonActions lessons={lessons} coaches={activeCoaches} />
@@ -222,6 +229,62 @@ function GenerateMonthForm({ groups }: { groups: Group[] }) {
   );
 }
 
+function GenerateAcademicYearForm({ groups }: { groups: Group[] }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setIsSubmitting(true);
+    const formData = new FormData(event.currentTarget);
+
+    try {
+      const payload = await submitJson<{ result: { monthCount: number; createdCount: number; skippedDuplicateCount: number } }>(
+        "/api/lessons/generate-academic-year",
+        {
+          academicYearStart: formData.get("academicYearStart"),
+          groupId: nullable(formData.get("groupId"))
+        }
+      );
+      setMessage(`Месяцев: ${payload.result.monthCount}. Создано: ${payload.result.createdCount}. Дубли: ${payload.result.skippedDuplicateCount}.`);
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="panel grid content-start gap-4 p-5" onSubmit={onSubmit}>
+      <h2 className="flex items-center gap-2 text-lg font-bold">
+        <CalendarRange aria-hidden="true" size={18} />
+        Генерация года
+      </h2>
+      <label className="label">
+        Год начала
+        <input className="field" name="academicYearStart" type="number" min={2000} max={2100} defaultValue={defaultAcademicYearStart()} required />
+      </label>
+      <div className="label">
+        <span>Группа</span>
+        <SearchableCombobox
+          name="groupId"
+          placeholder="Найти группу"
+          emptyValueLabel="Все активные шаблоны"
+          options={groups.map((group) => ({
+            value: group.id,
+            label: group.name,
+            description: `${group.branch.name} · ${group.mainCoach.displayName}`
+          }))}
+        />
+      </div>
+      <FormFooter isSubmitting={isSubmitting} message={message} label="Сгенерировать" />
+    </form>
+  );
+}
+
 function CreateLessonForm({ groups, coaches }: { groups: Group[]; coaches: Coach[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -280,7 +343,7 @@ function CreateLessonForm({ groups, coaches }: { groups: Group[]; coaches: Coach
           disabled={disabled}
           placeholder="Найти тренера"
           emptyValueLabel="Основной тренер группы"
-          options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+          options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
         />
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
@@ -329,7 +392,7 @@ function LessonActions({ lessons, coaches }: { lessons: Lesson[]; coaches: Coach
                     {lesson.substituteCoach ? ` · замена: ${lesson.substituteCoach.displayName}` : ""}
                   </div>
                 </td>
-                <td className="font-semibold">{lesson.status}</td>
+                <td className="font-semibold">{labelForEnum(lesson.status)}</td>
                 <td>
                   <MoveLessonForm lesson={lesson} />
                 </td>
@@ -441,7 +504,7 @@ function SubstituteLessonForm({ lessonId, coaches }: { lessonId: string; coaches
         placeholder="Тренер"
         compact
         className="min-w-0 flex-1"
-        options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+        options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
       />
       <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Назначить замену">
         {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <UserCheck aria-hidden="true" size={15} />}

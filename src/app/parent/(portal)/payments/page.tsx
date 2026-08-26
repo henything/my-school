@@ -2,6 +2,8 @@ import { CreditCard } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { requireRole } from "@/server/auth/current-user";
 import { listParentInvoices } from "@/server/parents/parent-portal-service";
+import { hasYooKassaSecretKey, hasYooKassaShopId } from "@/server/payments/yookassa";
+import { PayButton } from "./pay-button";
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -12,6 +14,7 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
 export default async function ParentPaymentsPage() {
   const currentUser = await requireRole(["PARENT"]);
   const invoices = await listParentInvoices(currentUser);
+  const onlinePaymentsReady = hasYooKassaShopId() && hasYooKassaSecretKey();
 
   return (
     <div className="grid gap-6">
@@ -54,8 +57,10 @@ export default async function ParentPaymentsPage() {
                       <span className="font-semibold text-[var(--success)]">Оплачен</span>
                     ) : invoice.status === "CANCELLED" ? (
                       <span className="font-semibold text-[var(--muted)]">Отменён</span>
+                    ) : onlinePaymentsReady ? (
+                      <PayButton invoiceId={invoice.id} />
                     ) : (
-                      <span className="font-semibold text-[var(--muted)]">Онлайн-оплата настраивается</span>
+                      <span className="font-semibold text-[var(--muted)]">Ждём ключ ЮKassa</span>
                     )}
                   </td>
                 </tr>

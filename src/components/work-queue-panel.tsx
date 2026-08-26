@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRightCircle, Clock3, UserRound } from "lucide-react";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 
 type WorkQueueTask = {
   id: string;
@@ -69,8 +70,8 @@ export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: Wo
           <article key={task.id} className="grid gap-4 rounded-lg border border-white bg-white px-4 py-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_260px]">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className={cn("badge", priorityClassName[task.priority] ?? "bg-[#ececec] text-[#555]")}>{task.priority}</span>
-                <span className="badge bg-[#e6eff8] text-[#214f78]">{task.type}</span>
+                <span className={cn("badge", priorityClassName[task.priority] ?? "bg-[#ececec] text-[#555]")}>{labelForEnum(task.priority)}</span>
+                <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
               </div>
               <h3 className="mt-3 text-base font-bold">{task.title}</h3>
               {task.description ? <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{task.description}</p> : null}

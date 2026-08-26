@@ -6,7 +6,6 @@ export const createGroupSchema = z.object({
   branchId: uuidSchema,
   mainCoachId: uuidSchema,
   capacityLimit: z.coerce.number().int().min(1).max(50).default(15),
-  inventoryNotes: optionalTextSchema,
   comment: optionalTextSchema
 });
 

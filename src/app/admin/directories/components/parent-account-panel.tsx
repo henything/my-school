@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { labelForEnum } from "@/lib/labels";
 
 type ParentOption = {
   id: string;
@@ -142,12 +143,12 @@ function ParentResetPanel({ accounts }: { accounts: ParentAccount[] }) {
             <div>
               <div className="font-semibold">{account.parent.fullName ?? account.user.displayName}</div>
               <div className="text-sm text-[var(--muted)]">
-                {account.user.login} · {account.status}
+                {account.user.login} · {labelForEnum(account.status)}
               </div>
             </div>
             <Button type="button" variant="secondary" disabled={account.status !== "ACTIVE" || submittingId === account.id} onClick={() => createReset(account.id)}>
               {submittingId === account.id ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
-              Reset
+              Сбросить
             </Button>
           </div>
         ))}

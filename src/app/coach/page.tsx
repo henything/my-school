@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarDays, ListChecks } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { TaskCloseForm } from "@/components/task-close-form";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listCoachLessons } from "@/server/schedule/lesson-service";
 import { listMyTasks, requiresCloseComment } from "@/server/tasks/task-service";
@@ -97,7 +98,7 @@ function TaskPanel({ tasks }: { tasks: Awaited<ReturnType<typeof listMyTasks>> }
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="font-bold">{task.title}</h3>
-                    <span className="badge bg-[#e6eff8] text-[#214f78]">{task.type}</span>
+                    <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
                   </div>
                   {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
                 </div>

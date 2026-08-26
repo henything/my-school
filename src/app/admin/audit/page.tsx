@@ -1,4 +1,5 @@
 import { History } from "lucide-react";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listAuditLogs } from "@/server/audit/audit-log-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
@@ -51,7 +52,7 @@ export default async function AuditLogPage() {
                   </td>
                   <td>
                     <div className="font-semibold">{log.actor?.displayName ?? "Система"}</div>
-                    <div className="text-xs text-[var(--muted)]">{log.actor?.role ?? "—"}</div>
+                    <div className="text-xs text-[var(--muted)]">{labelForEnum(log.actor?.role) || "—"}</div>
                   </td>
                   <td>{log.comment ?? "—"}</td>
                   <td>
@@ -84,7 +85,7 @@ function JsonPreview({ value }: { value: unknown }) {
 
   return (
     <pre className="max-h-36 min-w-[220px] overflow-auto rounded-lg bg-[#f8faf8] p-3 text-xs leading-5 text-[var(--foreground)]">
-      {JSON.stringify(value, null, 2)}
+      {JSON.stringify(value, (_key, item) => (typeof item === "string" ? labelForEnum(item) : item), 2)}
     </pre>
   );
 }

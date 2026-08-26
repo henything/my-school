@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FilePlus2, Loader2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { labelForEnum } from "@/lib/labels";
 
 type SubscriptionOption = {
   id: string;
@@ -44,7 +45,7 @@ async function submitJson<T = unknown>(path: string, body: unknown) {
 }
 
 export function InvoiceForms({ subscriptions, invoices }: InvoiceFormsProps) {
-  const invoiceableSubscriptions = subscriptions.filter((subscription) => subscription.paymentStatus !== "PAID");
+  const invoiceableSubscriptions = subscriptions.filter((subscription) => subscription.paymentStatus === "NOT_INVOICED");
   const openInvoices = invoices.filter((invoice) => !["PAID", "CANCELLED"].includes(invoice.status));
 
   return (
@@ -99,7 +100,7 @@ function CreateInvoiceForm({ subscriptions }: { subscriptions: SubscriptionOptio
           options={subscriptions.map((subscription) => ({
             value: subscription.id,
             label: subscription.child.fullName,
-            description: `${subscription.periodStart}-${subscription.periodEnd} · ${formatKopeks(subscription.totalAmountKopeks)} · ${subscription.paymentStatus}`
+            description: `${subscription.periodStart}-${subscription.periodEnd} · ${formatKopeks(subscription.totalAmountKopeks)} · ${labelForEnum(subscription.paymentStatus)}`
           }))}
         />
       </div>
@@ -158,7 +159,7 @@ function ManualPaymentForm({ invoices }: { invoices: InvoiceOption[] }) {
           options={invoices.map((invoice) => ({
             value: invoice.id,
             label: `${invoice.number} · ${invoice.child.fullName}`,
-            description: `остаток ${formatKopeks(invoice.remainingAmountKopeks)} · ${invoice.status}`
+            description: `остаток ${formatKopeks(invoice.remainingAmountKopeks)} · ${labelForEnum(invoice.status)}`
           }))}
         />
       </div>

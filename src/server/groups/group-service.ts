@@ -10,7 +10,6 @@ type GroupRecord = {
   name: string;
   status: string;
   capacityLimit: number;
-  inventoryNotes: string | null;
   comment: string | null;
   createdAt: Date;
   branch: {
@@ -53,7 +52,6 @@ export function serializeGroup(group: GroupRecord) {
     capacityLimit: group.capacityLimit,
     activeChildrenCount,
     isOverCapacity: activeChildrenCount > group.capacityLimit,
-    inventoryNotes: group.inventoryNotes,
     comment: group.comment,
     branch: group.branch,
     mainCoach: {
@@ -105,7 +103,6 @@ export async function createGroup(currentUser: CurrentUser, input: CreateGroupIn
         mainCoachId: input.mainCoachId,
         name: input.name,
         capacityLimit: input.capacityLimit,
-        inventoryNotes: input.inventoryNotes,
         comment: input.comment
       },
       include: groupInclude

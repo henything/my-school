@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildLessonCandidates, dateToWeekday, datesForWeekdayInMonth, parseMonthKey } from "./generation";
+import {
+  buildAcademicYearLessonCandidates,
+  buildAcademicYearMonthKeys,
+  buildLessonCandidates,
+  dateToWeekday,
+  datesForWeekdayInMonth,
+  parseMonthKey
+} from "./generation";
 
 describe("schedule generation", () => {
   it("parses a YYYY-MM month key", () => {
@@ -49,5 +56,41 @@ describe("schedule generation", () => {
       startTime: "10:00",
       endTime: "11:00"
     });
+  });
+
+  it("builds academic year month keys from September through May", () => {
+    expect(buildAcademicYearMonthKeys(2026)).toEqual([
+      "2026-09",
+      "2026-10",
+      "2026-11",
+      "2026-12",
+      "2027-01",
+      "2027-02",
+      "2027-03",
+      "2027-04",
+      "2027-05"
+    ]);
+  });
+
+  it("builds academic year candidates without summer months", () => {
+    const candidates = buildAcademicYearLessonCandidates(
+      [
+        {
+          id: "template-1",
+          groupId: "group-1",
+          branchId: "branch-1",
+          coachId: "coach-1",
+          weekday: 1,
+          startTime: "10:00",
+          endTime: "11:00"
+        }
+      ],
+      2026
+    );
+    const dateKeys = candidates.map((candidate) => candidate.lessonDate.toISOString().slice(0, 10));
+
+    expect(dateKeys).toContain("2026-09-07");
+    expect(dateKeys).toContain("2027-05-31");
+    expect(dateKeys.some((dateKey) => ["06", "07", "08"].includes(dateKey.slice(5, 7)))).toBe(false);
   });
 });

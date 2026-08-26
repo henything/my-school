@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "My School",
-  description: "Internal operations system for Азбука движения"
+  title: "Азбука движения",
+  description: "Внутренняя операционная система для Азбуки движения"
 };
 
 export default function RootLayout({

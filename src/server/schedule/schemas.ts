@@ -58,6 +58,11 @@ export const generateMonthSchema = z.object({
   groupId: uuidSchema.optional().nullable()
 });
 
+export const generateAcademicYearSchema = z.object({
+  academicYearStart: z.coerce.number().int().min(2000).max(2100),
+  groupId: uuidSchema.optional().nullable()
+});
+
 export const moveLessonSchema = addTimeRangeValidation(
   z.object({
     lessonDate: requiredDateSchema,
@@ -79,6 +84,7 @@ export const substituteLessonSchema = z.object({
 
 export type CreateScheduleTemplateInput = z.infer<typeof createScheduleTemplateSchema>;
 export type CreateLessonInput = z.infer<typeof createLessonSchema>;
+export type GenerateAcademicYearInput = z.infer<typeof generateAcademicYearSchema>;
 export type GenerateMonthInput = z.infer<typeof generateMonthSchema>;
 export type MoveLessonInput = z.infer<typeof moveLessonSchema>;
 export type CancelLessonInput = z.infer<typeof cancelLessonSchema>;

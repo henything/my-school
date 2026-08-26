@@ -41,7 +41,6 @@ export type GroupImportRow = {
   branchCode: string;
   mainCoachCode: string;
   capacityLimit: number;
-  inventoryNotes: string | null;
   comment: string | null;
   status: "ACTIVE" | "INACTIVE" | "ARCHIVED";
 };
@@ -168,7 +167,7 @@ const SHEETS = {
   },
   Groups: {
     required: true,
-    columns: ["group_code", "group_name", "branch_code", "main_coach_code", "capacity_limit", "inventory_notes", "comment", "status"],
+    columns: ["group_code", "group_name", "branch_code", "main_coach_code", "capacity_limit", "comment", "status"],
     requiredColumns: ["group_code", "group_name", "branch_code", "main_coach_code"]
   },
   Parents: {
@@ -452,7 +451,6 @@ function parseGroups(sheet: ParsedSheet, issues: ExcelImportIssue[]): GroupImpor
     branchCode: requiredText(row, sheet, "branch_code", "Код филиала обязателен.", issues) ?? "",
     mainCoachCode: requiredText(row, sheet, "main_coach_code", "Код основного тренера обязателен.", issues) ?? "",
     capacityLimit: parseInteger(row, "capacity_limit", 15, issues),
-    inventoryNotes: optionalText(row, "inventory_notes"),
     comment: optionalText(row, "comment"),
     status: parseEnum(row, "status", ENTITY_STATUSES, "ACTIVE", issues, "Некорректный статус группы.")
   }));

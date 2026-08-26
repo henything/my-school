@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Baby, Building2, GraduationCap, Loader2, UserRoundPlus, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { labelForEnum } from "@/lib/labels";
 
 type Branch = {
   id: string;
@@ -62,17 +63,18 @@ async function submitJson(path: string, body: unknown) {
 }
 
 export function DirectoryForms({ canCreateCoach, branches, coaches, groups, parents }: DirectoryFormsProps) {
+  const activeBranches = branches.filter((branch) => branch.status !== "ARCHIVED");
+  const activeCoaches = coaches.filter((coach) => coach.status === "ACTIVE");
+  const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
+
   return (
     <section className="grid gap-4">
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={canCreateCoach ? "grid gap-4 lg:grid-cols-2 xl:grid-cols-3" : "grid gap-4 lg:grid-cols-2"}>
         <CreateBranchForm />
         {canCreateCoach ? <CreateCoachForm /> : null}
+        <CreateGroupForm branches={activeBranches} coaches={activeCoaches} />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CreateGroupForm branches={branches.filter((branch) => branch.status !== "ARCHIVED")} coaches={coaches.filter((coach) => coach.status === "ACTIVE")} />
-        <CreateParentForm />
-      </div>
-      <CreateChildForm groups={groups.filter((group) => group.status !== "ARCHIVED")} parents={parents} />
+      <CreateChildEnrollmentForm groups={activeGroups} parents={parents} />
     </section>
   );
 }
@@ -218,7 +220,6 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
         branchId: formData.get("branchId"),
         mainCoachId: formData.get("mainCoachId"),
         capacityLimit: formData.get("capacityLimit"),
-        inventoryNotes: nullable(formData.get("inventoryNotes")),
         comment: nullable(formData.get("comment"))
       });
       form.reset();
@@ -249,7 +250,7 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
             required
             disabled={disabled}
             placeholder="Найти филиал"
-            options={branches.map((branch) => ({ value: branch.id, label: branch.name, description: branch.status }))}
+            options={branches.map((branch) => ({ value: branch.id, label: branch.name, description: labelForEnum(branch.status) }))}
           />
         </div>
         <div className="label">
@@ -259,7 +260,7 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
             required
             disabled={disabled}
             placeholder="Найти тренера"
-            options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${coach.status}` }))}
+            options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
           />
         </div>
         <label className="label">
@@ -267,10 +268,6 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
           <input className="field" name="capacityLimit" type="number" min={1} max={50} defaultValue={15} required disabled={disabled} />
         </label>
       </div>
-      <label className="label">
-        Инвентарь
-        <input className="field" name="inventoryNotes" disabled={disabled} />
-      </label>
       <label className="label">
         Комментарий
         <input className="field" name="comment" disabled={disabled} />
@@ -280,7 +277,7 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
   );
 }
 
-function CreateParentForm() {
+function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; parents: Parent[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -294,14 +291,23 @@ function CreateParentForm() {
     const formData = new FormData(form);
 
     try {
-      await submitJson("/api/parents", {
-        fullName: nullable(formData.get("fullName")),
-        phone: nullable(formData.get("phone")),
-        vkProfileUrl: nullable(formData.get("vkProfileUrl")),
-        comment: nullable(formData.get("comment"))
+      await submitJson("/api/children/enroll", {
+        fullName: formData.get("fullName"),
+        parentId: nullable(formData.get("parentId")),
+        parentFullName: nullable(formData.get("parentFullName")),
+        parentPhone: nullable(formData.get("parentPhone")),
+        parentVkProfileUrl: nullable(formData.get("parentVkProfileUrl")),
+        parentComment: nullable(formData.get("parentComment")),
+        currentGroupId: nullable(formData.get("currentGroupId")),
+        birthDate: nullable(formData.get("birthDate")),
+        status: formData.get("status"),
+        medicalNotes: nullable(formData.get("medicalNotes")),
+        coachComment: nullable(formData.get("coachComment")),
+        adminComment: nullable(formData.get("adminComment")),
+        admissionStatus: formData.get("admissionStatus")
       });
       form.reset();
-      setMessage("Родитель создан.");
+      setMessage("Ребёнок заведён.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
@@ -314,127 +320,93 @@ function CreateParentForm() {
     <form className="panel grid gap-4 p-5" onSubmit={onSubmit}>
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <UserRoundPlus aria-hidden="true" size={18} />
-        Родитель
+        Заведение ребёнка в систему
       </h2>
-      <label className="label">
-        Имя
-        <input className="field" name="fullName" />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="label">
-          Телефон
-          <input className="field" name="phone" />
-        </label>
-        <label className="label">
-          VK
-          <input className="field" name="vkProfileUrl" />
-        </label>
-      </div>
-      <label className="label">
-        Комментарий
-        <input className="field" name="comment" />
-      </label>
-      <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" />
-    </form>
-  );
-}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <fieldset className="grid gap-4">
+          <legend className="mb-1 text-sm font-bold text-[var(--muted)]">Родитель</legend>
+          <div className="label">
+            <span>Родитель в базе</span>
+            <SearchableCombobox
+              name="parentId"
+              placeholder="Найти родителя"
+              emptyValueLabel="Новый или без родителя"
+              options={parents.map((parent) => ({
+                value: parent.id,
+                label: parent.fullName ?? parent.phone ?? "Контакт",
+                description: parent.phone ?? "без телефона"
+              }))}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="label">
+              Имя нового родителя
+              <input className="field" name="parentFullName" />
+            </label>
+            <label className="label">
+              Телефон
+              <input className="field" name="parentPhone" />
+            </label>
+          </div>
+          <label className="label">
+            VK
+            <input className="field" name="parentVkProfileUrl" />
+          </label>
+          <label className="label">
+            Комментарий родителя
+            <input className="field" name="parentComment" />
+          </label>
+        </fieldset>
 
-function CreateChildForm({ groups, parents }: { groups: Group[]; parents: Parent[] }) {
-  const router = useRouter();
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-
-    try {
-      await submitJson("/api/children", {
-        fullName: formData.get("fullName"),
-        parentId: nullable(formData.get("parentId")),
-        currentGroupId: nullable(formData.get("currentGroupId")),
-        birthDate: nullable(formData.get("birthDate")),
-        status: formData.get("status"),
-        medicalNotes: nullable(formData.get("medicalNotes")),
-        coachComment: nullable(formData.get("coachComment")),
-        adminComment: nullable(formData.get("adminComment")),
-        admissionStatus: formData.get("admissionStatus")
-      });
-      form.reset();
-      setMessage("Ребёнок создан.");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <form className="panel grid gap-4 p-5" onSubmit={onSubmit}>
-      <h2 className="flex items-center gap-2 text-lg font-bold">
-        <Baby aria-hidden="true" size={18} />
-        Ребёнок
-      </h2>
-      <div className="grid gap-4 lg:grid-cols-[1fr_180px_1fr_1fr]">
-        <label className="label">
-          ФИО
-          <input className="field" name="fullName" minLength={2} required />
-        </label>
-        <label className="label">
-          Дата рождения
-          <input className="field" name="birthDate" type="date" />
-        </label>
-        <div className="label">
-          <span>Родитель</span>
-          <SearchableCombobox
-            name="parentId"
-            placeholder="Найти родителя"
-            emptyValueLabel="Без родителя"
-            options={parents.map((parent) => ({
-              value: parent.id,
-              label: parent.fullName ?? parent.phone ?? "Контакт",
-              description: parent.phone ?? "без телефона"
-            }))}
-          />
-        </div>
-        <div className="label">
-          <span>Группа</span>
-          <SearchableCombobox
-            name="currentGroupId"
-            placeholder="Найти группу"
-            emptyValueLabel="Без группы"
-            options={groups.map((group) => ({
-              value: group.id,
-              label: group.name,
-              description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
-            }))}
-          />
-        </div>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="label">
-          Статус
-          <select className="field" name="status" defaultValue="ACTIVE">
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="PAUSED">PAUSED</option>
-            <option value="LEFT">LEFT</option>
-            <option value="TRIAL">TRIAL</option>
-            <option value="ARCHIVED">ARCHIVED</option>
-          </select>
-        </label>
-        <label className="label">
-          Допуск
-          <select className="field" name="admissionStatus" defaultValue="ADMITTED">
-            <option value="ADMITTED">ADMITTED</option>
-            <option value="CREDIT_LESSON_USED">CREDIT_LESSON_USED</option>
-            <option value="NOT_ADMITTED">NOT_ADMITTED</option>
-          </select>
-        </label>
+        <fieldset className="grid gap-4">
+          <legend className="mb-1 flex items-center gap-2 text-sm font-bold text-[var(--muted)]">
+            <Baby aria-hidden="true" size={15} />
+            Ребёнок
+          </legend>
+          <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+            <label className="label">
+              ФИО
+              <input className="field" name="fullName" minLength={2} required />
+            </label>
+            <label className="label">
+              Дата рождения
+              <input className="field" name="birthDate" type="date" />
+            </label>
+          </div>
+          <div className="label">
+            <span>Группа</span>
+            <SearchableCombobox
+              name="currentGroupId"
+              placeholder="Найти группу"
+              emptyValueLabel="Без группы"
+              options={groups.map((group) => ({
+                value: group.id,
+                label: group.name,
+                description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
+              }))}
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="label">
+              Статус
+              <select className="field" name="status" defaultValue="ACTIVE">
+                <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
+                <option value="PAUSED">{labelForEnum("PAUSED")}</option>
+                <option value="LEFT">{labelForEnum("LEFT")}</option>
+                <option value="TRIAL">{labelForEnum("TRIAL")}</option>
+                <option value="ARCHIVED">{labelForEnum("ARCHIVED")}</option>
+              </select>
+            </label>
+            <label className="label">
+              Допуск
+              <select className="field" name="admissionStatus" defaultValue="ADMITTED">
+                <option value="ADMITTED">{labelForEnum("ADMITTED")}</option>
+                <option value="CREDIT_LESSON_USED">{labelForEnum("CREDIT_LESSON_USED")}</option>
+                <option value="NOT_ADMITTED">{labelForEnum("NOT_ADMITTED")}</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
         <label className="label">

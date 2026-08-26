@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 
 export function RoleBadge({ role }: { role: string }) {
   const className =
@@ -8,7 +9,7 @@ export function RoleBadge({ role }: { role: string }) {
         ? "bg-[#dff1ea] text-[#075a3d]"
         : "bg-[#e6eff8] text-[#214f78]";
 
-  return <span className={cn("badge", className)}>{role}</span>;
+  return <span className={cn("badge", className)}>{labelForEnum(role)}</span>;
 }
 
 export function StatusBadge({ status }: { status: string }) {
@@ -45,5 +46,5 @@ export function StatusBadge({ status }: { status: string }) {
                       ? "bg-[#dff1ea] text-[#075a3d]"
                       : "bg-[#ececec] text-[#555]";
 
-  return <span className={cn("badge", className)}>{status}</span>;
+  return <span className={cn("badge", className)}>{labelForEnum(status)}</span>;
 }

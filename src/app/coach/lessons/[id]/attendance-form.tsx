@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, FileText, Loader2, MessageSquare, Phone, UserRoundCheck, UserRoundX } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT_UNEXCUSED" | "ABSENT_SICK_PENDING";
 
@@ -140,7 +141,7 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
                 <h2 className="text-lg font-bold">{child.fullName}</h2>
                 <div className="mt-1 flex flex-wrap gap-2 text-sm text-[var(--muted)]">
                   {child.age !== null ? <span>{child.age} лет</span> : null}
-                  <span>{child.admissionStatus}</span>
+                  <span>{labelForEnum(child.admissionStatus)}</span>
                 </div>
               </div>
               {isNotAdmitted ? (

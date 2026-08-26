@@ -29,6 +29,34 @@ export const createChildSchema = z.object({
   admissionStatus: admissionStatusSchema.default("ADMITTED")
 });
 
+export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: true }).extend({
+  parentId: uuidSchema.optional().nullable(),
+  parentFullName: optionalTextSchema,
+  parentPhone: optionalTextSchema,
+  parentVkProfileUrl: optionalTextSchema,
+  parentComment: optionalTextSchema
+}).superRefine((input, context) => {
+  const hasParentId = Boolean(input.parentId);
+  const hasNewParentIdentity = Boolean(input.parentFullName || input.parentPhone);
+  const hasNewParentFields = Boolean(input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment);
+
+  if (hasParentId && hasNewParentFields) {
+    context.addIssue({
+      code: "custom",
+      message: "Выберите существующего родителя или заполните нового, но не оба варианта.",
+      path: ["parentId"]
+    });
+  }
+
+  if (!hasParentId && hasNewParentFields && !hasNewParentIdentity) {
+    context.addIssue({
+      code: "custom",
+      message: "Для нового родителя нужно указать имя или телефон.",
+      path: ["parentFullName"]
+    });
+  }
+});
+
 export const updateChildSchema = z.object({
   fullName: z.string().trim().min(2, "ФИО ребёнка обязательно.").optional(),
   parentId: uuidSchema.optional().nullable(),
@@ -43,4 +71,5 @@ export const updateChildSchema = z.object({
 });
 
 export type CreateChildInput = z.infer<typeof createChildSchema>;
+export type CreateChildEnrollmentInput = z.infer<typeof createChildEnrollmentSchema>;
 export type UpdateChildInput = z.infer<typeof updateChildSchema>;

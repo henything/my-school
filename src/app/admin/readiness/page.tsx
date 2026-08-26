@@ -67,7 +67,7 @@ export default async function ReadinessPage() {
               <article key={blocker.id} className="rounded-lg border border-white bg-white px-4 py-4 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={blocker.required ? "badge bg-[#f8d8d4] text-[#8f1d17]" : "badge bg-[#f7e4d1] text-[#7a3f0d]"}>
-                    {blocker.required ? "required" : "advisory"}
+                    {blocker.required ? "обязательно" : "рекомендация"}
                   </span>
                   <span className="badge bg-[#e6eff8] text-[#214f78]">{blocker.gateTitle}</span>
                 </div>

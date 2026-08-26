@@ -1,21 +1,21 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: my-school-postgres
+    container_name: azbuka-dvizheniya-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: my_school
-      POSTGRES_PASSWORD: my_school_dev_password
-      POSTGRES_DB: my_school_dev
+      POSTGRES_USER: azbuka_dvizheniya
+      POSTGRES_PASSWORD: azbuka_dvizheniya_dev_password
+      POSTGRES_DB: azbuka_dvizheniya_dev
     ports:
       - "5432:5432"
     volumes:
-      - my_school_postgres_data:/var/lib/postgresql/data
+      - azbuka_dvizheniya_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U my_school -d my_school_dev"]
+      test: ["CMD-SHELL", "pg_isready -U azbuka_dvizheniya -d azbuka_dvizheniya_dev"]
       interval: 5s
       timeout: 5s
       retries: 10
 
 volumes:
-  my_school_postgres_data:
+  azbuka_dvizheniya_postgres_data:

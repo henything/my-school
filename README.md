@@ -1,4 +1,4 @@
-# My School
+# Азбука движения
 
 Internal operational web system for **Азбука движения**.
 

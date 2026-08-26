@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { CreditCard, Loader2, ShieldAlert, SlidersHorizontal, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { labelForEnum } from "@/lib/labels";
 
 type Child = {
   id: string;
@@ -84,12 +85,11 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
         childId: formData.get("childId"),
         periodStart: formData.get("periodStart"),
         periodEnd: formData.get("periodEnd"),
-        paymentStatus: formData.get("paymentStatus"),
         ...(plannedLessonsCount !== undefined ? { plannedLessonsCount } : {}),
         ...(lessonPriceKopeks !== undefined ? { lessonPriceKopeks } : {})
       });
       form.reset();
-      setMessage("Абонемент создан.");
+      setMessage("Абонемент и счёт созданы.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
@@ -128,10 +128,6 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
           <input className="field" name="lessonPriceKopeks" type="number" min={1} placeholder="45000" disabled={disabled} />
         </label>
       </div>
-      <label className="label">
-        Оплата
-        <PaymentStatusSelect name="paymentStatus" disabled={disabled} />
-      </label>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" disabled={disabled} />
     </form>
   );
@@ -305,7 +301,7 @@ function ChildSelect({ childOptions, disabled }: { childOptions: Child[]; disabl
       options={childOptions.map((child) => ({
         value: child.id,
         label: child.fullName,
-        description: `${child.currentGroup?.name ?? "без группы"} · баланс ${child.cachedLessonBalance} · ${child.admissionStatus}`
+        description: `${child.currentGroup?.name ?? "без группы"} · баланс ${child.cachedLessonBalance} · ${labelForEnum(child.admissionStatus)}`
       }))}
     />
   );

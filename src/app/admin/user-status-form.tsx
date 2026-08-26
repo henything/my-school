@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { labelForEnum } from "@/lib/labels";
 
 type UserStatusFormProps = {
   userId: string;
@@ -37,9 +38,9 @@ export function UserStatusForm({ userId, status, disabled = false }: UserStatusF
   return (
     <form className="flex min-w-[210px] items-center gap-2" onSubmit={onSubmit}>
       <select className="field min-h-9" name="status" defaultValue={status} disabled={disabled}>
-        <option value="ACTIVE">ACTIVE</option>
-        <option value="INACTIVE">INACTIVE</option>
-        <option value="ARCHIVED">ARCHIVED</option>
+        <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
+        <option value="INACTIVE">{labelForEnum("INACTIVE")}</option>
+        <option value="ARCHIVED">{labelForEnum("ARCHIVED")}</option>
       </select>
       <Button type="submit" size="icon" variant="secondary" disabled={disabled || isSaving} title="Сохранить статус">
         <Save aria-hidden="true" size={15} />

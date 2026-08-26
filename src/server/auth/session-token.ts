@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from "node:crypto";
 
-export const SESSION_COOKIE_NAME = "my_school_session";
+export const SESSION_COOKIE_NAME = "azbuka_dvizheniya_session";
 export const SESSION_DURATION_DAYS = 14;
 
 export function createSessionToken() {

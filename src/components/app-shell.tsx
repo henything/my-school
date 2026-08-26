@@ -23,6 +23,7 @@ import {
 import type { CurrentUser } from "@/server/auth/current-user";
 import { LogoutButton } from "@/components/logout-button";
 import { cn } from "@/lib/cn";
+import { labelForEnum } from "@/lib/labels";
 
 type AppShellProps = {
   user: CurrentUser;
@@ -65,7 +66,7 @@ export function AppShell({ user, area, children }: AppShellProps) {
               )}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-base font-bold">My School</span>
+              <span className="block truncate text-base font-bold">Азбука движения</span>
               <span className="block truncate text-sm text-[var(--muted)]">{areaLabel}</span>
             </span>
           </Link>
@@ -73,7 +74,7 @@ export function AppShell({ user, area, children }: AppShellProps) {
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
               <div className="text-sm font-semibold">{user.displayName}</div>
-              <div className="text-xs text-[var(--muted)]">{user.role}</div>
+              <div className="text-xs text-[var(--muted)]">{labelForEnum(user.role)}</div>
             </div>
             <LogoutButton />
           </div>
