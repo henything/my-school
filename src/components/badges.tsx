@@ -4,10 +4,12 @@ import { labelForEnum } from "@/lib/labels";
 export function RoleBadge({ role }: { role: string }) {
   const className =
     role === "SUPER_ADMIN"
-      ? "bg-[#f4e8c1] text-[#684b05]"
+      ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]"
       : role === "ADMIN"
-        ? "bg-[#dff1ea] text-[#075a3d]"
-        : "bg-[#e6eff8] text-[#214f78]";
+        ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
+        : role === "PARENT"
+          ? "bg-[#fff0e5] text-[#a34300]"
+          : "bg-[var(--blue-soft)] text-[var(--accent-strong)]";
 
   return <span className={cn("badge", className)}>{labelForEnum(role)}</span>;
 }
@@ -15,35 +17,35 @@ export function RoleBadge({ role }: { role: string }) {
 export function StatusBadge({ status }: { status: string }) {
   const className =
     status === "ACTIVE"
-      ? "bg-[#dff1ea] text-[#075a3d]"
+      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
       : status === "INACTIVE"
-        ? "bg-[#f7e4d1] text-[#7a3f0d]"
+        ? "bg-[#eef1eb] text-[#52625b]"
         : status === "CRITICAL"
-          ? "bg-[#f8d8d4] text-[#8f1d17]"
+          ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
           : status === "HIGH"
-            ? "bg-[#f7e4d1] text-[#7a3f0d]"
+            ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]"
             : status === "MEDIUM"
-              ? "bg-[#e6eff8] text-[#214f78]"
+              ? "bg-[var(--blue-soft)] text-[var(--accent-strong)]"
               : status === "LOW"
-                ? "bg-[#dff1ea] text-[#075a3d]"
+                ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
                 : status === "OPEN" || status === "IN_PROGRESS"
-                  ? "bg-[#e6eff8] text-[#214f78]"
+                  ? "bg-[var(--blue-soft)] text-[var(--accent-strong)]"
                   : status === "CLOSED"
-                    ? "bg-[#dff1ea] text-[#075a3d]"
+                    ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
         : status === "CANCELLED"
-          ? "bg-[#f8d8d4] text-[#8f1d17]"
+          ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
           : status === "TRIAL_BOOKED"
-            ? "bg-[#e6eff8] text-[#214f78]"
+            ? "bg-[var(--blue-soft)] text-[var(--accent-strong)]"
             : status === "CONTACT_COLLECTED"
-              ? "bg-[#dff1ea] text-[#075a3d]"
-              : status === "TRIAL_ATTENDED"
-                ? "bg-[#f7e4d1] text-[#7a3f0d]"
+              ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
+            : status === "TRIAL_ATTENDED"
+                ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]"
                 : status === "TRIAL_NO_SHOW"
-                  ? "bg-[#f8d8d4] text-[#8f1d17]"
+                  ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
                   : status === "TRANSFERRED_TO_ADMIN"
                     ? "bg-[#ececec] text-[#555]"
                     : status === "CONVERTED_TO_ACTIVE"
-                      ? "bg-[#dff1ea] text-[#075a3d]"
+                      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
                       : "bg-[#ececec] text-[#555]";
 
   return <span className={cn("badge", className)}>{labelForEnum(status)}</span>;

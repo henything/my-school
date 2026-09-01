@@ -91,7 +91,7 @@ export function TrialPanel({ lessonId, trials }: TrialPanelProps) {
             <UserRoundPlus aria-hidden="true" size={18} />
             Пробники
           </h2>
-          <span className="badge bg-[#e6eff8] text-[#214f78]">{trials.length}</span>
+          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{trials.length}</span>
         </div>
         <form className="grid gap-4 p-4" onSubmit={createTrial}>
           <div className="grid gap-4 md:grid-cols-3">

@@ -31,14 +31,14 @@ export default async function MakeupsPage() {
       </section>
 
       {operationalTasks.length > 0 ? (
-        <section className="panel border-[#efc27a] bg-[#fff8ec] p-5">
-          <h2 className="text-lg font-bold text-[#7a3f0d]">Операционные задачи</h2>
+        <section className="panel border-[#ffe08a] bg-[var(--yellow-soft)] p-5">
+          <h2 className="text-lg font-bold text-[var(--warning-strong)]">Операционные задачи</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             {operationalTasks.map((task) => (
-              <div key={task.id} className="rounded-lg border border-[#efc27a] bg-white px-4 py-3">
+              <div key={task.id} className="rounded-lg border border-[#ffe08a] bg-white px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="badge bg-[#f7e4d1] text-[#7a3f0d]">{labelForEnum(task.priority)}</span>
-                  <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
+                  <span className="badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]">{labelForEnum(task.priority)}</span>
+                  <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.type)}</span>
                   <span className="font-semibold">{task.title}</span>
                 </div>
                 {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}

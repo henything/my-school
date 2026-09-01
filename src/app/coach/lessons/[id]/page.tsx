@@ -14,15 +14,15 @@ export default async function CoachLessonPage({ params }: { params: Promise<{ id
   return (
     <div className="grid gap-6">
       <section className="grid gap-4">
-        <Link href="/coach" className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-[var(--muted)] hover:text-[var(--foreground)]">
+        <Link href="/coach" className="inline-flex w-fit items-center gap-2 text-sm font-extrabold text-[var(--muted)] hover:text-[var(--foreground)]">
           <ArrowLeft aria-hidden="true" size={16} />
           Назад
         </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="brand-hero flex flex-wrap items-start justify-between gap-4 px-5 pb-16 pt-6 sm:px-7">
           <div>
-            <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-03</p>
-            <h1 className="mt-2 text-2xl font-bold">{lesson.group.name}</h1>
-            <div className="mt-2 flex flex-wrap gap-3 text-sm text-[var(--muted)]">
+            <p className="text-sm font-extrabold uppercase text-white/75">Занятие</p>
+            <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.03] sm:text-5xl">{lesson.group.name}</h1>
+            <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-white/80">
               <span className="inline-flex items-center gap-1">
                 <CalendarDays aria-hidden="true" size={15} />
                 {lesson.lessonDate} · {lesson.startTime}-{lesson.endTime}

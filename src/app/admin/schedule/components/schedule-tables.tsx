@@ -248,7 +248,7 @@ function uniqueGroups(templates: ScheduleTemplate[], lessons: Lesson[]) {
 
 function MetricChip({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "warning" }) {
   return (
-    <span className={tone === "warning" ? "badge bg-[#f7e4d1] text-[#7a3f0d]" : "badge bg-[#e6eff8] text-[#214f78]"}>
+    <span className={tone === "warning" ? "badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]" : "badge bg-[var(--blue-soft)] text-[var(--accent-strong)]"}>
       {label}: {value}
     </span>
   );

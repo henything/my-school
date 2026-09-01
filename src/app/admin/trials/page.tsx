@@ -21,7 +21,7 @@ export default async function TrialsPage() {
           <div>
             <h1 className="text-2xl font-bold">Пробные занятия</h1>
           </div>
-          <span className="badge bg-[#f7e4d1] text-[#7a3f0d]">К обработке: {pendingCount}</span>
+          <span className="badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]">К обработке: {pendingCount}</span>
         </div>
       </section>
 
@@ -43,7 +43,7 @@ export default async function TrialsPage() {
               const isClosed = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE";
 
               return (
-                <article key={trial.id} className={trial.status === "TRIAL_ATTENDED" || trial.status === "TRIAL_NO_SHOW" ? "rounded-lg border border-[#efc27a] bg-[#fff8ec] p-4" : "rounded-lg border border-[var(--line)] bg-white p-4"}>
+                <article key={trial.id} className={trial.status === "TRIAL_ATTENDED" || trial.status === "TRIAL_NO_SHOW" ? "rounded-lg border border-[#ffe08a] bg-[var(--yellow-soft)] p-4" : "rounded-lg border border-[var(--line)] bg-white p-4"}>
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <h3 className="text-lg font-bold">{trial.childName ?? "Пробник без имени"}</h3>

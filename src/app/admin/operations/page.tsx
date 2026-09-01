@@ -1,4 +1,5 @@
 import { Children, type ReactNode } from "react";
+import Image from "next/image";
 import {
   AlertTriangle,
   CalendarDays,
@@ -26,59 +27,71 @@ type OperationalCenter = Awaited<ReturnType<typeof getOperationalCenter>>;
 type OperationalTask = OperationalCenter["tasks"][number];
 
 const priorityClassName: Record<string, string> = {
-  CRITICAL: "bg-[#f8d8d4] text-[#8f1d17]",
-  HIGH: "bg-[#f7e4d1] text-[#7a3f0d]",
-  MEDIUM: "bg-[#e6eff8] text-[#214f78]",
-  LOW: "bg-[#dff1ea] text-[#075a3d]"
+  CRITICAL: "bg-[var(--red-soft)] text-[var(--danger-strong)]",
+  HIGH: "bg-[var(--yellow-soft)] text-[var(--warning-strong)]",
+  MEDIUM: "bg-[var(--blue-soft)] text-[var(--accent-strong)]",
+  LOW: "bg-[var(--green-soft)] text-[var(--success-strong)]"
 };
 
 export default async function OperationsPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
   const [center, users] = await Promise.all([getOperationalCenter(currentUser), listUsers(currentUser)]);
   const metrics = [
-    { label: "Критичные", value: center.counts.criticalTasks, icon: ShieldAlert, tone: "critical" },
+    { label: "Критичные", value: center.counts.criticalTasks, icon: ShieldAlert, tone: "danger" },
     { label: "Высокие", value: center.counts.highTasks, icon: AlertTriangle, tone: "warning" },
-    { label: "Занятия сегодня", value: center.counts.todayLessons, icon: CalendarDays, tone: "neutral" },
-    { label: "Табели не закрыты", value: center.counts.unfilledLessons, icon: ClipboardList, tone: "critical" },
-    { label: "Без абонемента", value: center.counts.childrenWithoutActiveSubscription, icon: WalletCards, tone: "critical" },
+    { label: "Занятия сегодня", value: center.counts.todayLessons, icon: CalendarDays, tone: "info" },
+    { label: "Табели не закрыты", value: center.counts.unfilledLessons, icon: ClipboardList, tone: "danger" },
+    { label: "Без абонемента", value: center.counts.childrenWithoutActiveSubscription, icon: WalletCards, tone: "danger" },
     { label: "Долг", value: center.counts.childrenWithDebt, icon: UserMinus, tone: "warning" },
-    { label: "Недопуск", value: center.counts.notAdmittedChildren, icon: ShieldAlert, tone: "critical" },
+    { label: "Недопуск", value: center.counts.notAdmittedChildren, icon: ShieldAlert, tone: "danger" },
     { label: "Справки", value: center.counts.pendingCertificates, icon: FileCheck2, tone: "warning" },
-    { label: "Переносы", value: center.counts.availableMakeups, icon: TicketCheck, tone: "neutral" },
+    { label: "Переносы", value: center.counts.availableMakeups, icon: TicketCheck, tone: "success" },
     { label: "Переполнены", value: center.counts.groupsOverCapacity, icon: Users, tone: "warning" }
   ];
 
   return (
     <div className="grid gap-6">
-      <section className="min-w-0">
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-06</p>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+      <section className="brand-hero px-5 pb-20 pt-6 sm:px-7">
+        <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">Операционный центр</h1>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-[var(--muted)]">
+            <p className="text-sm font-extrabold uppercase text-white/75">Сегодня нужно закрыть главное</p>
+            <h1 className="mt-3 max-w-2xl text-4xl font-extrabold leading-[1.03] sm:text-5xl">Операционный центр</h1>
+            <p className="mt-4 max-w-2xl text-base font-medium leading-7 text-white/80">
               Задачи, риски и ручные проверки на сегодня: {formatDate(center.today)}.
             </p>
           </div>
-          <span className="badge bg-[#e6eff8] text-[#214f78]">Открыто задач: {center.tasks.length}</span>
+          <span className="brand-pill">Открыто задач: {center.tasks.length}</span>
         </div>
       </section>
 
-      <section className="grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+      <section className="relative z-10 -mt-14 grid min-w-0 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
         {metrics.map((metric) => {
           const Icon = metric.icon;
           return (
-            <div key={metric.label} className={cn("panel grid min-w-0 gap-2 p-4", metric.tone === "critical" && metric.value > 0 ? "border-[#efb5ae] bg-[#fff4f2]" : null)}>
+            <div key={metric.label} className="metric-card grid min-w-0 gap-2 p-4" data-tone={metric.tone}>
               <div className="flex items-center justify-between gap-3">
                 <span className="text-sm font-semibold text-[var(--muted)]">{metric.label}</span>
-                <Icon className={cn(metric.tone === "critical" && metric.value > 0 ? "text-[var(--danger)]" : "text-[var(--accent)]")} aria-hidden="true" size={18} />
+                <Icon
+                  className={cn(
+                    metric.tone === "danger"
+                      ? "text-[var(--danger)]"
+                      : metric.tone === "warning"
+                        ? "text-[var(--warning-strong)]"
+                        : metric.tone === "success"
+                          ? "text-[var(--success-strong)]"
+                          : "text-[var(--accent)]"
+                  )}
+                  aria-hidden="true"
+                  size={18}
+                />
               </div>
-              <span className="text-3xl font-bold">{metric.value}</span>
+              <span className="text-3xl font-extrabold">{metric.value}</span>
             </div>
           );
         })}
       </section>
 
-      <section className="grid min-w-0 gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+      <section className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="panel min-w-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
             <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -103,11 +116,11 @@ export default async function OperationsPage() {
                 </thead>
                 <tbody>
                   {center.tasks.map((task) => (
-                    <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[#fff4f2]" : undefined}>
+                    <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[var(--red-soft)]" : undefined}>
                       <td>
                         <div className="flex flex-wrap items-center gap-2">
                           <PriorityBadge priority={task.priority} />
-                          <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
+                          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.type)}</span>
                         </div>
                         <div className="mt-2 font-semibold">{task.title}</div>
                         {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
@@ -127,6 +140,15 @@ export default async function OperationsPage() {
         </div>
 
         <div className="grid min-w-0 content-start gap-6">
+          <div className="panel overflow-hidden">
+            <div className="brand-image-panel h-64">
+              <Image src="/brand/schedule-reference.png" alt="" width={956} height={1424} className="h-full w-full object-cover object-top" priority />
+            </div>
+            <div className="p-4">
+              <div className="text-lg font-extrabold">Расписание занятий</div>
+              <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Быстрый вход в сегодняшнюю операционку: кто занимается, где риски и что нужно закрыть.</p>
+            </div>
+          </div>
           <ManualTaskForm users={users} />
           <RunTaskChecksButton />
         </div>

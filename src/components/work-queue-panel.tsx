@@ -25,10 +25,10 @@ type WorkQueuePanelProps = {
 };
 
 const priorityClassName: Record<string, string> = {
-  CRITICAL: "bg-[#f8d8d4] text-[#8f1d17]",
-  HIGH: "bg-[#f7e4d1] text-[#7a3f0d]",
-  MEDIUM: "bg-[#e6eff8] text-[#214f78]",
-  LOW: "bg-[#dff1ea] text-[#075a3d]"
+  CRITICAL: "bg-[var(--red-soft)] text-[var(--danger-strong)]",
+  HIGH: "bg-[var(--yellow-soft)] text-[var(--warning-strong)]",
+  MEDIUM: "bg-[var(--blue-soft)] text-[var(--accent-strong)]",
+  LOW: "bg-[var(--green-soft)] text-[var(--success-strong)]"
 };
 
 export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: WorkQueuePanelProps) {
@@ -42,15 +42,15 @@ export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: Wo
     <section
       className={cn(
         "panel overflow-hidden",
-        isCritical ? "border-[#d98e86] bg-[#fff4f2]" : "border-[#efc27a] bg-[#fff8ec]"
+        isCritical ? "border-[#ffb3bd] bg-[var(--red-soft)]" : "border-[#ffe08a] bg-[var(--yellow-soft)]"
       )}
     >
       <div className="grid gap-4 border-b border-current/10 px-5 py-5 lg:grid-cols-[96px_minmax(0,1fr)_220px] lg:items-center">
-        <div className={cn("flex h-20 w-20 items-center justify-center rounded-lg text-4xl font-bold", isCritical ? "bg-[#f8d8d4] text-[#8f1d17]" : "bg-[#f7e4d1] text-[#7a3f0d]")}>
+        <div className={cn("flex h-20 w-20 items-center justify-center rounded-lg text-4xl font-extrabold", isCritical ? "bg-white text-[var(--danger-strong)]" : "bg-white text-[var(--warning-strong)]")}>
           {tasks.length}
         </div>
         <div className="min-w-0">
-          <h2 className={cn("flex items-center gap-2 text-xl font-bold", isCritical ? "text-[#8f1d17]" : "text-[#7a3f0d]")}>
+          <h2 className={cn("flex items-center gap-2 text-xl font-extrabold", isCritical ? "text-[var(--danger-strong)]" : "text-[var(--warning-strong)]")}>
             <AlertTriangle aria-hidden="true" size={20} />
             {title}
           </h2>
@@ -71,20 +71,20 @@ export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: Wo
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className={cn("badge", priorityClassName[task.priority] ?? "bg-[#ececec] text-[#555]")}>{labelForEnum(task.priority)}</span>
-                <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.type)}</span>
+                <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.type)}</span>
               </div>
               <h3 className="mt-3 text-base font-bold">{task.title}</h3>
               {task.description ? <p className="mt-1 text-sm leading-6 text-[var(--muted)]">{task.description}</p> : null}
               <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--muted)]">
-                <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[var(--panel-soft)] px-2">
                   <UserRound aria-hidden="true" size={14} />
                   {task.assigneeUser?.displayName ?? "Не назначено"}
                 </span>
-                <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[var(--panel-soft)] px-2">
                   <Clock3 aria-hidden="true" size={14} />
                   {task.dueAt ? new Date(task.dueAt).toLocaleString("ru-RU") : "Без срока"}
                 </span>
-                <span className="inline-flex min-h-8 items-center rounded-md bg-[#f7f7f2] px-2">{relatedLabel(task)}</span>
+                <span className="inline-flex min-h-8 items-center rounded-md bg-[var(--panel-soft)] px-2">{relatedLabel(task)}</span>
               </div>
             </div>
             <TaskCloseForm taskId={task.id} requiresComment={requiresWorkQueueComment(task)} allowCancel />

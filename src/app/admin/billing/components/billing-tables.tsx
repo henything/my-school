@@ -203,7 +203,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
         {attentionChildren.length > 0 ? (
           <div className="mt-4 grid gap-3 lg:grid-cols-3">
             {attentionChildren.map((child) => (
-              <div key={child.id} className="rounded-lg border border-[#efb5ae] bg-[#fff4f2] px-4 py-3">
+              <div key={child.id} className="rounded-lg border border-[#ffb3bd] bg-[var(--red-soft)] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-bold">{child.fullName}</span>
                   <RoleBadge role={child.admissionStatus} />
@@ -232,7 +232,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
           </thead>
           <tbody>
             {filteredChildren.map((child) => (
-              <tr key={child.id} className={child.cachedLessonBalance < 0 || child.admissionStatus !== "ADMITTED" ? "bg-[#fff4f2]" : undefined}>
+              <tr key={child.id} className={child.cachedLessonBalance < 0 || child.admissionStatus !== "ADMITTED" ? "bg-[var(--red-soft)]" : undefined}>
                 <td className="font-semibold">{child.fullName}</td>
                 <td>{child.currentGroup?.name ?? "-"}</td>
                 <td className={child.cachedLessonBalance < 0 ? "font-bold text-[var(--danger)]" : "font-semibold"}>{child.cachedLessonBalance}</td>
@@ -299,7 +299,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
           </thead>
           <tbody>
             {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id} className={invoice.status === "OVERDUE" || invoice.status === "NOT_PAID" ? "bg-[#fff4f2]" : undefined}>
+              <tr key={invoice.id} className={invoice.status === "OVERDUE" || invoice.status === "NOT_PAID" ? "bg-[var(--red-soft)]" : undefined}>
                 <td className="font-semibold">{invoice.number}</td>
                 <td>{invoice.child.fullName}</td>
                 <td>
@@ -403,7 +403,7 @@ function DataPanel({ title, count, children }: { title: string; count: string; c
 
 function MetricChip({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "danger" }) {
   return (
-    <span className={cn("badge", tone === "danger" ? "bg-[#f8d8d4] text-[#8f1d17]" : "bg-[#e6eff8] text-[#214f78]")}>
+    <span className={cn("badge", tone === "danger" ? "bg-[var(--red-soft)] text-[var(--danger-strong)]" : "bg-[var(--blue-soft)] text-[var(--accent-strong)]")}>
       {label}: {value}
     </span>
   );
@@ -426,12 +426,12 @@ function formatKopeks(value: number) {
 function PaymentBadge({ status }: { status: string }) {
   const className =
     status === "PAID" || status === "SUCCEEDED"
-      ? "bg-[#dff1ea] text-[#075a3d]"
+      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
       : status === "OVERDUE" || status === "NOT_PAID" || status === "FAILED"
-        ? "bg-[#f8d8d4] text-[#8f1d17]"
+        ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
         : status === "PARTIALLY_PAID"
-          ? "bg-[#f7e4d1] text-[#7a3f0d]"
-          : "bg-[#e6eff8] text-[#214f78]";
+          ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]"
+          : "bg-[var(--blue-soft)] text-[var(--accent-strong)]";
 
   return <span className={`badge ${className}`}>{labelForEnum(status)}</span>;
 }

@@ -138,7 +138,7 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
             <h2 className="text-lg font-bold">Ожидают финализации болезни</h2>
             <p className="mt-1 text-sm text-[var(--muted)]">Файлы справок и заявлений не хранятся в системе.</p>
           </div>
-          <span className="badge bg-[#e6eff8] text-[#214f78]">{pendingSickness.length}</span>
+          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingSickness.length}</span>
         </div>
         <div className="mt-4 table-shell">
           <table className="data-table min-w-[760px]">
@@ -440,7 +440,7 @@ function MakeupBoard({ makeups, lessons }: { makeups: Makeup[]; lessons: Lesson[
     <section className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-bold">Борд переносов</h2>
-        <span className="badge bg-[#e6eff8] text-[#214f78]">{makeups.length}</span>
+        <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{makeups.length}</span>
       </div>
       <div className="grid gap-4 xl:grid-cols-5">
         {makeupColumns.map(([status, label]) => {
@@ -450,7 +450,7 @@ function MakeupBoard({ makeups, lessons }: { makeups: Makeup[]; lessons: Lesson[
             <div key={status} className="panel min-w-0 p-4">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="font-bold">{label}</h3>
-                <span className="badge bg-[#eef3ef] text-[var(--muted)]">{items.length}</span>
+                <span className="badge bg-[var(--blue-soft)] text-[var(--muted)]">{items.length}</span>
               </div>
               <div className="mt-4 grid gap-3">
                 {items.map((makeup) => (
@@ -471,7 +471,7 @@ function MakeupCard({ makeup, lessons }: { makeup: Makeup; lessons: Lesson[] }) 
     <article className="rounded-lg border border-[var(--line)] bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
         <span className={badgeClass(makeup.status)}>{labelForEnum(makeup.status)}</span>
-        <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(makeup.reason)}</span>
+        <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(makeup.reason)}</span>
       </div>
       <h4 className="mt-3 font-bold">{makeup.child.fullName}</h4>
       <p className="mt-1 text-sm text-[var(--muted)]">{makeup.group.name}</p>
@@ -658,14 +658,14 @@ function formatLesson(lesson: { lessonDate: string; startTime: string; endTime: 
 function badgeClass(status: string) {
   const className =
     status === "AVAILABLE"
-      ? "bg-[#dff1ea] text-[#075a3d]"
+      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
       : status === "ASSIGNED"
-        ? "bg-[#e6eff8] text-[#214f78]"
+        ? "bg-[var(--blue-soft)] text-[var(--accent-strong)]"
         : status === "USED"
           ? "bg-[#ececec] text-[#555]"
           : status === "REFUNDED"
-            ? "bg-[#f7e4d1] text-[#7a3f0d]"
-            : "bg-[#f8d8d4] text-[#8f1d17]";
+            ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]"
+            : "bg-[var(--red-soft)] text-[var(--danger-strong)]";
 
   return `badge ${className}`;
 }

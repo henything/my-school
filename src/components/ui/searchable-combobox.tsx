@@ -147,7 +147,7 @@ export function SearchableCombobox({
         {!required && selectedValue ? (
           <button
             type="button"
-            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+            className="absolute right-2 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-[var(--muted)] hover:bg-[var(--blue-soft)] hover:text-[var(--foreground)]"
             onClick={clearSelection}
             disabled={disabled}
             aria-label="Очистить выбор"

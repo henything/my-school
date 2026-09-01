@@ -19,7 +19,7 @@ export default async function AuditLogPage() {
               Последние критичные действия по школе. Записи доступны только для чтения.
             </p>
           </div>
-          <span className="badge bg-[#e6eff8] text-[#214f78]">Записей: {auditLogs.length}</span>
+          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">Записей: {auditLogs.length}</span>
         </div>
       </section>
 
@@ -84,7 +84,7 @@ function JsonPreview({ value }: { value: unknown }) {
   }
 
   return (
-    <pre className="max-h-36 min-w-[220px] overflow-auto rounded-lg bg-[#f8faf8] p-3 text-xs leading-5 text-[var(--foreground)]">
+    <pre className="max-h-36 min-w-[220px] overflow-auto rounded-lg bg-[var(--panel-soft)] p-3 text-xs leading-5 text-[var(--foreground)]">
       {JSON.stringify(value, (_key, item) => (typeof item === "string" ? labelForEnum(item) : item), 2)}
     </pre>
   );

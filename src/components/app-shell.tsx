@@ -43,20 +43,20 @@ export function AppShell({ user, area, children }: AppShellProps) {
     return {
       "aria-current": isActive ? ("page" as const) : undefined,
       className: cn(
-        "inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-semibold transition",
+        "inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-3 text-sm font-extrabold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent)]",
         isActive
-          ? "bg-[#e5f2ef] text-[var(--accent-strong)] ring-1 ring-inset ring-[#c7ded7]"
-          : "text-[var(--muted)] hover:bg-[#eef3ef] hover:text-[var(--foreground)]"
+          ? "bg-[var(--brand-yellow)] text-[var(--foreground)] shadow-sm"
+          : "bg-white text-[var(--muted)] hover:bg-[var(--blue-soft)] hover:text-[var(--foreground)]"
       )
     };
   };
 
   return (
-    <main className="min-h-screen">
-      <header className="border-b border-[var(--line)] bg-white/90 backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6">
+    <main className="brand-shell min-h-screen">
+      <header className="brand-hero rounded-none">
+        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 px-4 pb-20 pt-5 sm:px-6">
           <Link href={homeHref} className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--accent)] text-white">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white text-[var(--accent)] shadow-sm">
               {isAdmin ? (
                 <ShieldCheck aria-hidden="true" size={20} />
               ) : isParent ? (
@@ -66,15 +66,15 @@ export function AppShell({ user, area, children }: AppShellProps) {
               )}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-base font-bold">Азбука движения</span>
-              <span className="block truncate text-sm text-[var(--muted)]">{areaLabel}</span>
+              <span className="block truncate text-lg font-extrabold">Азбука движения</span>
+              <span className="brand-pill mt-1">{areaLabel}</span>
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
             <div className="hidden text-right sm:block">
-              <div className="text-sm font-semibold">{user.displayName}</div>
-              <div className="text-xs text-[var(--muted)]">{labelForEnum(user.role)}</div>
+              <div className="text-sm font-extrabold">{user.displayName}</div>
+              <div className="text-xs font-semibold text-white/75">{labelForEnum(user.role)}</div>
             </div>
             <LogoutButton />
           </div>
@@ -82,8 +82,8 @@ export function AppShell({ user, area, children }: AppShellProps) {
       </header>
 
       {isParent ? (
-        <nav className="border-b border-[var(--line)] bg-white">
-          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
+        <nav className="relative z-10 -mt-10 px-4 sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 rounded-lg border border-[var(--line)] bg-white/95 p-2 shadow-lg shadow-[rgba(23,34,31,0.08)] backdrop-blur">
             <Link href="/parent" {...navLinkProps("/parent", true)}>
               <Baby aria-hidden="true" size={16} />
               Дети
@@ -101,8 +101,8 @@ export function AppShell({ user, area, children }: AppShellProps) {
       ) : null}
 
       {isAdmin ? (
-        <nav className="border-b border-[var(--line)] bg-white">
-          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 px-4 py-2 sm:px-6">
+        <nav className="relative z-10 -mt-10 px-4 sm:px-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-wrap gap-2 rounded-lg border border-[var(--line)] bg-white/95 p-2 shadow-lg shadow-[rgba(23,34,31,0.08)] backdrop-blur">
             <Link href="/admin" {...navLinkProps("/admin", true)}>
               <Users aria-hidden="true" size={16} />
               Пользователи

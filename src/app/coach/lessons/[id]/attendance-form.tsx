@@ -34,9 +34,9 @@ type AttendanceFormProps = {
 };
 
 const statusOptions: Array<{ value: AttendanceStatus; label: string; icon: typeof UserRoundCheck; tone: string }> = [
-  { value: "PRESENT", label: "Был", icon: UserRoundCheck, tone: "border-[#2f7d32] bg-[#eef7ef] text-[#235d27]" },
-  { value: "ABSENT_UNEXCUSED", label: "Пропуск", icon: UserRoundX, tone: "border-[#b3261e] bg-[#fff1ef] text-[#8f1f18]" },
-  { value: "ABSENT_SICK_PENDING", label: "Болеет", icon: FileText, tone: "border-[#b7791f] bg-[#fff8e8] text-[#7a5114]" },
+  { value: "PRESENT", label: "Был", icon: UserRoundCheck, tone: "border-[var(--brand-green)] bg-[var(--green-soft)] text-[var(--success-strong)]" },
+  { value: "ABSENT_UNEXCUSED", label: "Пропуск", icon: UserRoundX, tone: "border-[var(--danger)] bg-[var(--red-soft)] text-[var(--danger-strong)]" },
+  { value: "ABSENT_SICK_PENDING", label: "Болеет", icon: FileText, tone: "border-[var(--brand-yellow)] bg-[var(--yellow-soft)] text-[var(--warning-strong)]" },
   { value: "NOT_MARKED", label: "Не отмечен", icon: MessageSquare, tone: "border-[var(--line)] bg-white text-[var(--muted)]" }
 ];
 
@@ -113,7 +113,7 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
       <div className="panel flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <div className="text-sm font-semibold text-[var(--muted)]">Отмечено</div>
-          <div className="text-xl font-bold">
+          <div className="text-xl font-extrabold">
             {markedCount}/{lessonChildren.length}
           </div>
         </div>
@@ -133,19 +133,19 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
             key={child.id}
             className={cn(
               "panel grid gap-4 p-4",
-              isNotAdmitted ? "border-[#b3261e] bg-[#fff8f7]" : "bg-white"
+              isNotAdmitted ? "border-[var(--danger)] bg-[var(--red-soft)]" : "bg-white"
             )}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <h2 className="text-lg font-bold">{child.fullName}</h2>
+                <h2 className="text-lg font-extrabold">{child.fullName}</h2>
                 <div className="mt-1 flex flex-wrap gap-2 text-sm text-[var(--muted)]">
                   {child.age !== null ? <span>{child.age} лет</span> : null}
                   <span>{labelForEnum(child.admissionStatus)}</span>
                 </div>
               </div>
               {isNotAdmitted ? (
-                <div className="inline-flex items-center gap-1 rounded-full bg-[#b3261e] px-3 py-1 text-xs font-bold text-white">
+                <div className="inline-flex items-center gap-1 rounded-full bg-[var(--danger)] px-3 py-1 text-xs font-extrabold text-white">
                   <AlertTriangle aria-hidden="true" size={14} />
                   Не допускать
                 </div>
@@ -183,8 +183,8 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
                     key={option.value}
                     type="button"
                     className={cn(
-                      "flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-bold",
-                      selected ? option.tone : "border-[var(--line)] bg-white text-[var(--muted)]"
+                      "flex min-h-11 items-center justify-center gap-2 rounded-lg border px-3 text-sm font-extrabold transition",
+                      selected ? option.tone : "border-[var(--line)] bg-white text-[var(--muted)] hover:bg-[var(--blue-soft)]"
                     )}
                     onClick={() => setStatus(child.id, option.value)}
                   >
@@ -213,7 +213,7 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
 
 function InfoLine({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className={cn("rounded-lg border border-[var(--line)] px-3 py-2", strong ? "bg-[#fff8e8] text-[#7a5114]" : "bg-[#f8faf8]")}>
+    <div className={cn("rounded-lg border border-[var(--line)] px-3 py-2", strong ? "bg-[var(--yellow-soft)] text-[var(--warning-strong)]" : "bg-[var(--panel-soft)]")}>
       <span className="font-bold">{label}: </span>
       {value}
     </div>

@@ -3,16 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --background: #f7f7f2;
-  --foreground: #1f2523;
+  --background: #f4f6f1;
+  --foreground: #17221f;
   --muted: #5f6b66;
-  --line: #d9ded6;
+  --line: #dfe6dc;
   --panel: #ffffff;
-  --accent: #0f8b8d;
-  --accent-strong: #0b5f60;
-  --danger: #b3261e;
-  --warning: #b7791f;
-  --success: #2f7d32;
+  --panel-soft: #fbfcf8;
+  --accent: #0788dc;
+  --accent-strong: #006eb8;
+  --brand-green: #7ac700;
+  --brand-yellow: #ffc400;
+  --brand-orange: #ff6a00;
+  --danger: #ff2639;
+  --danger-strong: #b91424;
+  --warning: #ffc400;
+  --warning-strong: #8a5b00;
+  --success: #6fc600;
+  --success-strong: #345f00;
+  --blue-soft: #e7f5ff;
+  --green-soft: #eff9e7;
+  --yellow-soft: #fff8dc;
+  --red-soft: #fff0f2;
   --font-body: var(--font-geist-sans), Arial, sans-serif;
   --font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
 }
@@ -32,7 +43,8 @@ body {
   min-height: 100vh;
   margin: 0;
   background:
-    linear-gradient(180deg, rgba(15, 139, 141, 0.08), transparent 260px),
+    radial-gradient(circle at 10% 0%, rgba(122, 199, 0, 0.12), transparent 280px),
+    linear-gradient(180deg, rgba(7, 136, 220, 0.1), transparent 340px),
     var(--background);
   color: var(--foreground);
   font-family: var(--font-body);
@@ -71,7 +83,7 @@ a {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
-  box-shadow: 0 12px 32px rgba(31, 37, 35, 0.06);
+  box-shadow: 0 16px 36px rgba(23, 34, 31, 0.07);
 }
 
 .field {
@@ -88,7 +100,7 @@ a {
 
 .field:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(15, 139, 141, 0.16);
+  box-shadow: 0 0 0 3px rgba(7, 136, 220, 0.16);
 }
 
 .label {
@@ -128,7 +140,7 @@ a {
 
 .combo-option:hover,
 .combo-option[aria-selected="true"] {
-  background: #eef3ef;
+  background: var(--blue-soft);
 }
 
 .table-shell {
@@ -165,10 +177,21 @@ a {
 }
 
 .data-table th {
+  background: #f7faf6;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.data-table tbody tr {
+  transition:
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.data-table tbody tr:hover {
+  background: #fbfdff;
 }
 
 .data-table tr:last-child td {
@@ -180,4 +203,108 @@ main article,
 main form,
 main .grid > * {
   min-width: 0;
+}
+
+.brand-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.brand-shell::before {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(255, 196, 0, 0.1), transparent 34%),
+    radial-gradient(circle at 88% 12%, rgba(255, 106, 0, 0.1), transparent 260px);
+  content: "";
+}
+
+.brand-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--accent);
+  color: white;
+  box-shadow: 0 18px 42px rgba(0, 110, 184, 0.22);
+}
+
+.brand-hero::after {
+  position: absolute;
+  right: -12%;
+  bottom: -72px;
+  left: -12%;
+  height: 132px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: var(--background);
+  content: "";
+}
+
+.brand-hero > * {
+  position: relative;
+  z-index: 1;
+}
+
+.brand-pill {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: white;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 0 12px;
+}
+
+.metric-card {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 12px 28px rgba(23, 34, 31, 0.08);
+}
+
+.metric-card[data-tone="success"] {
+  border-top: 5px solid var(--brand-green);
+}
+
+.metric-card[data-tone="warning"] {
+  border-top: 5px solid var(--brand-yellow);
+}
+
+.metric-card[data-tone="danger"] {
+  border-top: 5px solid var(--danger);
+}
+
+.metric-card[data-tone="info"] {
+  border-top: 5px solid var(--accent);
+}
+
+.brand-image-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--accent);
+}
+
+.brand-image-panel img {
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.brand-image-panel::after {
+  position: absolute;
+  right: -16%;
+  bottom: -52px;
+  left: -16%;
+  height: 92px;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+  background: white;
+  content: "";
 }

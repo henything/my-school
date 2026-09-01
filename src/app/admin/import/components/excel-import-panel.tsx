@@ -179,7 +179,7 @@ export function ExcelImportPanel({ initialBatches }: ExcelImportPanelProps) {
             </Button>
           </div>
           {message ? (
-            <div className="rounded-lg border border-[var(--line)] bg-[#f8faf8] px-4 py-3 text-sm font-semibold text-[var(--muted)]">{message}</div>
+            <div className="rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] px-4 py-3 text-sm font-semibold text-[var(--muted)]">{message}</div>
           ) : null}
         </form>
 
@@ -242,7 +242,7 @@ function BatchSummary({ batch }: { batch: ImportBatch }) {
         <Metric label="Предупреждений" value={batch.preview?.warningCount ?? 0} tone={(batch.preview?.warningCount ?? 0) > 0 ? "warning" : "neutral"} />
       </div>
       {result ? (
-        <div className="grid gap-2 rounded-lg border border-[var(--line)] bg-[#f8faf8] p-4 text-sm">
+        <div className="grid gap-2 rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-sm">
           <div className="font-bold">Создано</div>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {Object.entries(result).map(([key, value]) => (
@@ -325,7 +325,7 @@ function IssueTable({ issues, errorsCount }: { issues: ImportIssue[]; errorsCoun
               {issues.map((issue) => (
                 <tr key={issue.id}>
                   <td>
-                    <span className={cn("badge", issue.severity === "ERROR" ? "bg-[#f8d8d4] text-[#8f1d17]" : "bg-[#f7e4d1] text-[#7a3f0d]")}>
+                    <span className={cn("badge", issue.severity === "ERROR" ? "bg-[var(--red-soft)] text-[var(--danger-strong)]" : "bg-[var(--yellow-soft)] text-[var(--warning-strong)]")}>
                       {labelForEnum(issue.severity)}
                     </span>
                   </td>
@@ -345,9 +345,9 @@ function IssueTable({ issues, errorsCount }: { issues: ImportIssue[]; errorsCoun
 
 function OneTimePasswordsTable({ passwords }: { passwords: OneTimePassword[] }) {
   return (
-    <div className="panel border-[#efc27a] bg-[#fff8ec]">
-      <div className="border-b border-[#efc27a] px-5 py-4">
-        <h2 className="flex items-center gap-2 text-lg font-bold text-[#7a3f0d]">
+    <div className="panel border-[#ffe08a] bg-[var(--yellow-soft)]">
+      <div className="border-b border-[#ffe08a] px-5 py-4">
+        <h2 className="flex items-center gap-2 text-lg font-bold text-[var(--warning-strong)]">
           <KeyRound aria-hidden="true" size={18} />
           Сгенерированные пароли
         </h2>
@@ -397,10 +397,10 @@ function Metric({ label, value, tone = "neutral" }: { label: string; value: numb
 function StatusPill({ status }: { status: string }) {
   const className =
     status === "READY_TO_IMPORT" || status === "IMPORTED"
-      ? "bg-[#dff1ea] text-[#075a3d]"
+      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
       : status === "VALIDATION_FAILED" || status === "FAILED"
-        ? "bg-[#f8d8d4] text-[#8f1d17]"
-        : "bg-[#e6eff8] text-[#214f78]";
+        ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
+        : "bg-[var(--blue-soft)] text-[var(--accent-strong)]";
 
   return <span className={cn("badge", className)}>{labelForEnum(status)}</span>;
 }

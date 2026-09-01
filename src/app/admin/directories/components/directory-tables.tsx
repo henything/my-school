@@ -187,7 +187,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
               </thead>
               <tbody>
                 {filteredChildren.map((child) => (
-                  <tr key={child.id} className={child.admissionStatus !== "ADMITTED" ? "bg-[#fff4f2]" : undefined}>
+                  <tr key={child.id} className={child.admissionStatus !== "ADMITTED" ? "bg-[var(--red-soft)]" : undefined}>
                     <td className="font-semibold">{child.fullName}</td>
                     <td>
                       <div>{child.parent?.fullName ?? "-"}</div>
@@ -218,7 +218,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
 
 function MetricChip({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "warning" }) {
   return (
-    <span className={tone === "warning" ? "badge bg-[#f7e4d1] text-[#7a3f0d]" : "badge bg-[#e6eff8] text-[#214f78]"}>
+    <span className={tone === "warning" ? "badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]" : "badge bg-[var(--blue-soft)] text-[var(--accent-strong)]"}>
       {label}: {value}
     </span>
   );

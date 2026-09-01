@@ -76,7 +76,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
             )}
 
             {child.openInvoices.map((invoice) => (
-              <div key={invoice.id} className="rounded-lg border border-[#efc27a] bg-[#fff8ec] px-4 py-3">
+              <div key={invoice.id} className="rounded-lg border border-[#ffe08a] bg-[var(--yellow-soft)] px-4 py-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="font-bold">Счёт {invoice.number}</div>
                   <StatusBadge status={invoice.status} />

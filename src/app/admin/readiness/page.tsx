@@ -5,15 +5,15 @@ import { getReadinessDashboard, type ReadinessGateStatus } from "@/server/readin
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 
 const statusConfig: Record<ReadinessGateStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
-  READY: { label: "Готово", className: "bg-[#dff1ea] text-[#075a3d]", icon: CheckCircle2 },
-  NEEDS_ATTENTION: { label: "Нужна проверка", className: "bg-[#f7e4d1] text-[#7a3f0d]", icon: CircleAlert },
-  BLOCKED: { label: "Блокер", className: "bg-[#f8d8d4] text-[#8f1d17]", icon: CircleX }
+  READY: { label: "Готово", className: "bg-[var(--green-soft)] text-[var(--success-strong)]", icon: CheckCircle2 },
+  NEEDS_ATTENTION: { label: "Нужна проверка", className: "bg-[var(--yellow-soft)] text-[var(--warning-strong)]", icon: CircleAlert },
+  BLOCKED: { label: "Блокер", className: "bg-[var(--red-soft)] text-[var(--danger-strong)]", icon: CircleX }
 };
 
 const metricToneClassName: Record<string, string> = {
-  success: "border-[#b9dfcd] bg-[#f3fbf7]",
-  warning: "border-[#efd29c] bg-[#fff9ec]",
-  danger: "border-[#efb5ae] bg-[#fff4f2]",
+  success: "border-[var(--brand-green)] bg-[var(--green-soft)]",
+  warning: "border-[var(--brand-yellow)] bg-[var(--yellow-soft)]",
+  danger: "border-[#ffb3bd] bg-[var(--red-soft)]",
   neutral: "border-[var(--line)] bg-white"
 };
 
@@ -42,22 +42,22 @@ export default async function ReadinessPage() {
               Gate 1-5, метрики пилота и чеклисты стабилизации перед внутренним rollout.
             </p>
           </div>
-          <span className="badge bg-[#e6eff8] text-[#214f78]">Дата: {dashboard.today}</span>
+          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">Дата: {dashboard.today}</span>
         </div>
       </section>
 
       {blockers.length > 0 ? (
-        <section className="panel overflow-hidden border-[#d98e86] bg-[#fff4f2]">
-          <div className="grid gap-4 border-b border-[#efb5ae] px-5 py-5 lg:grid-cols-[96px_minmax(0,1fr)_220px] lg:items-center">
-            <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-[#f8d8d4] text-4xl font-bold text-[#8f1d17]">{blockers.length}</div>
+        <section className="panel overflow-hidden border-[#d98e86] bg-[var(--red-soft)]">
+          <div className="grid gap-4 border-b border-[#ffb3bd] px-5 py-5 lg:grid-cols-[96px_minmax(0,1fr)_220px] lg:items-center">
+            <div className="flex h-20 w-20 items-center justify-center rounded-lg bg-white text-4xl font-extrabold text-[var(--danger-strong)]">{blockers.length}</div>
             <div className="min-w-0">
-              <h2 className="flex items-center gap-2 text-xl font-bold text-[#8f1d17]">
+              <h2 className="flex items-center gap-2 text-xl font-bold text-[var(--danger-strong)]">
                 <AlertTriangle aria-hidden="true" size={20} />
                 Очередь блокеров пилота
               </h2>
               <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Незакрытые gate checks, которые мешают rollout или требуют ручного подтверждения.</p>
             </div>
-            <div className="rounded-lg border border-[#efb5ae] bg-white/80 px-4 py-3">
+            <div className="rounded-lg border border-[#ffb3bd] bg-white/80 px-4 py-3">
               <div className="text-sm font-bold">Следующее действие</div>
               <p className="mt-1 text-sm text-[var(--muted)]">Закрыть обязательные пункты, затем вернуться к Gate 5.</p>
             </div>
@@ -66,18 +66,18 @@ export default async function ReadinessPage() {
             {blockers.map((blocker) => (
               <article key={blocker.id} className="rounded-lg border border-white bg-white px-4 py-4 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={blocker.required ? "badge bg-[#f8d8d4] text-[#8f1d17]" : "badge bg-[#f7e4d1] text-[#7a3f0d]"}>
+                  <span className={blocker.required ? "badge bg-[var(--red-soft)] text-[var(--danger-strong)]" : "badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]"}>
                     {blocker.required ? "обязательно" : "рекомендация"}
                   </span>
-                  <span className="badge bg-[#e6eff8] text-[#214f78]">{blocker.gateTitle}</span>
+                  <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{blocker.gateTitle}</span>
                 </div>
                 <h3 className="mt-3 font-bold">{blocker.detail}</h3>
                 <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[var(--muted)]">
-                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[var(--panel-soft)] px-2">
                     <UserRound aria-hidden="true" size={14} />
                     Admin owner
                   </span>
-                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[#f7f7f2] px-2">
+                  <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[var(--panel-soft)] px-2">
                     <Clock3 aria-hidden="true" size={14} />
                     До pilot rollout
                   </span>
@@ -104,7 +104,7 @@ export default async function ReadinessPage() {
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
           {dashboard.gates.map((gate) => (
-            <article key={gate.id} className={`panel min-w-0 p-5 ${gate.status === "BLOCKED" ? "border-[#efb5ae] bg-[#fff4f2]" : ""}`}>
+            <article key={gate.id} className={`panel min-w-0 p-5 ${gate.status === "BLOCKED" ? "border-[#ffb3bd] bg-[var(--red-soft)]" : ""}`}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-bold">{gate.title}</h3>
@@ -116,11 +116,11 @@ export default async function ReadinessPage() {
                 {gate.checks.map((check) => (
                   <div key={check.id} className="flex items-start gap-2 rounded-lg border border-[var(--line)] bg-white px-3 py-2 text-sm">
                     {check.passed ? (
-                      <CheckCircle2 className="mt-0.5 shrink-0 text-[#075a3d]" aria-hidden="true" size={16} />
+                      <CheckCircle2 className="mt-0.5 shrink-0 text-[var(--success-strong)]" aria-hidden="true" size={16} />
                     ) : check.required ? (
-                      <CircleX className="mt-0.5 shrink-0 text-[#8f1d17]" aria-hidden="true" size={16} />
+                      <CircleX className="mt-0.5 shrink-0 text-[var(--danger-strong)]" aria-hidden="true" size={16} />
                     ) : (
-                      <CircleAlert className="mt-0.5 shrink-0 text-[#7a3f0d]" aria-hidden="true" size={16} />
+                      <CircleAlert className="mt-0.5 shrink-0 text-[var(--warning-strong)]" aria-hidden="true" size={16} />
                     )}
                     <div className="min-w-0">
                       <div className="font-semibold">{check.detail}</div>

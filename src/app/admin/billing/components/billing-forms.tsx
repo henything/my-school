@@ -275,7 +275,7 @@ function AdmissionCheckForm() {
   return (
     <form className="panel flex flex-wrap items-center justify-between gap-4 p-5" onSubmit={onSubmit}>
       <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f8d8d4] text-[#8f1d17]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[var(--red-soft)] text-[var(--danger-strong)]">
           <ShieldAlert aria-hidden="true" size={18} />
         </span>
         <div className="min-w-0">

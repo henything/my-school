@@ -17,23 +17,23 @@ import { getStabilizationDashboard, type StabilizationStatus } from "@/server/st
 import { requiresCloseComment } from "@/server/tasks/task-service";
 
 const statusConfig: Record<StabilizationStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
-  STABLE: { label: "Стабильно", className: "bg-[#dff1ea] text-[#075a3d]", icon: CheckCircle2 },
-  WATCH: { label: "Нужна ручная проверка", className: "bg-[#f7e4d1] text-[#7a3f0d]", icon: CircleAlert },
-  BLOCKED: { label: "Блокер", className: "bg-[#f8d8d4] text-[#8f1d17]", icon: CircleX }
+  STABLE: { label: "Стабильно", className: "bg-[var(--green-soft)] text-[var(--success-strong)]", icon: CheckCircle2 },
+  WATCH: { label: "Нужна ручная проверка", className: "bg-[var(--yellow-soft)] text-[var(--warning-strong)]", icon: CircleAlert },
+  BLOCKED: { label: "Блокер", className: "bg-[var(--red-soft)] text-[var(--danger-strong)]", icon: CircleX }
 };
 
 const metricToneClassName: Record<string, string> = {
-  success: "border-[#b9dfcd] bg-[#f3fbf7]",
-  warning: "border-[#efd29c] bg-[#fff9ec]",
-  danger: "border-[#efb5ae] bg-[#fff4f2]",
+  success: "border-[var(--brand-green)] bg-[var(--green-soft)]",
+  warning: "border-[var(--brand-yellow)] bg-[var(--yellow-soft)]",
+  danger: "border-[#ffb3bd] bg-[var(--red-soft)]",
   neutral: "border-[var(--line)] bg-white"
 };
 
 const priorityClassName: Record<string, string> = {
-  CRITICAL: "bg-[#f8d8d4] text-[#8f1d17]",
-  HIGH: "bg-[#f7e4d1] text-[#7a3f0d]",
-  MEDIUM: "bg-[#e6eff8] text-[#214f78]",
-  LOW: "bg-[#dff1ea] text-[#075a3d]"
+  CRITICAL: "bg-[var(--red-soft)] text-[var(--danger-strong)]",
+  HIGH: "bg-[var(--yellow-soft)] text-[var(--warning-strong)]",
+  MEDIUM: "bg-[var(--blue-soft)] text-[var(--accent-strong)]",
+  LOW: "bg-[var(--green-soft)] text-[var(--success-strong)]"
 };
 
 export default async function StabilizationPage() {
@@ -52,7 +52,7 @@ export default async function StabilizationPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="badge bg-[#e6eff8] text-[#214f78]">Дата: {dashboard.today}</span>
+            <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">Дата: {dashboard.today}</span>
             <StatusBadge status={dashboard.overallStatus} />
           </div>
         </div>
@@ -123,11 +123,11 @@ export default async function StabilizationPage() {
                 </thead>
                 <tbody>
                   {dashboard.openPilotIssues.map((task) => (
-                    <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[#fff4f2]" : undefined}>
+                    <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[var(--red-soft)]" : undefined}>
                       <td>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className={cn("badge", priorityClassName[task.priority])}>{labelForEnum(task.priority)}</span>
-                          <span className="badge bg-[#e6eff8] text-[#214f78]">{labelForEnum(task.status)}</span>
+                          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.status)}</span>
                         </div>
                         <div className="mt-2 font-semibold">{task.title}</div>
                         {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
@@ -190,14 +190,14 @@ function StatusBadge({ status }: { status: StabilizationStatus }) {
 
 function CheckIcon({ status, required }: { status: StabilizationStatus; required: boolean }) {
   if (status === "STABLE") {
-    return <CheckCircle2 className="mt-0.5 shrink-0 text-[#075a3d]" aria-hidden="true" size={16} />;
+    return <CheckCircle2 className="mt-0.5 shrink-0 text-[var(--success-strong)]" aria-hidden="true" size={16} />;
   }
 
   if (status === "BLOCKED" || required) {
-    return <CircleX className="mt-0.5 shrink-0 text-[#8f1d17]" aria-hidden="true" size={16} />;
+    return <CircleX className="mt-0.5 shrink-0 text-[var(--danger-strong)]" aria-hidden="true" size={16} />;
   }
 
-  return <CircleAlert className="mt-0.5 shrink-0 text-[#7a3f0d]" aria-hidden="true" size={16} />;
+  return <CircleAlert className="mt-0.5 shrink-0 text-[var(--warning-strong)]" aria-hidden="true" size={16} />;
 }
 
 function relatedLabel(childName: string | null, groupName: string | null) {
