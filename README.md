@@ -165,4 +165,19 @@ pnpm test
 pnpm build
 ```
 
+## Production Deploy
+
+After local acceptance and a clean push to `origin/main`, deploy production with:
+
+```bash
+pnpm deploy:prod
+```
+
+For a quick check without deploying:
+
+```bash
+pnpm prod:status
+pnpm prod:health
+```
+
 `pnpm db:push` and the login flow require a reachable PostgreSQL database.

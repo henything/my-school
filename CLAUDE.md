@@ -44,17 +44,17 @@ Key routing rules:
 
 - Platform: Custom VDS, nginx reverse proxy, systemd service, Next.js app
 - Production URL: https://azbukadvizheniya.ru
-- Deploy workflow: Manual SSH deploy to `azbuka-prod`
-- Deploy status command: `ssh azbuka-prod 'azbuka-dvizheniya-status'`
+- Deploy workflow: `pnpm deploy:prod`
+- Deploy status command: `pnpm prod:status`
 - Merge method: squash
 - Project type: web app
 - Post-deploy health check: `curl -sf https://azbukadvizheniya.ru/login -o /dev/null -w "%{http_code}"`
 
 ### Custom deploy hooks
 
-- Pre-merge: `pnpm lint && pnpm typecheck && pnpm test && pnpm build`
-- Deploy trigger: manual SSH sync/build/migrate/restart on `azbuka-prod`
-- Deploy status: `ssh azbuka-prod 'azbuka-dvizheniya-status'`
+- Pre-merge: handled by `pnpm deploy:prod` (`pnpm lint && pnpm typecheck && pnpm test && pnpm build`)
+- Deploy trigger: `pnpm deploy:prod` syncs, builds, backs up the DB, migrates, restarts, and health-checks production
+- Deploy status: `pnpm prod:status`
 - Health check: `https://azbukadvizheniya.ru/login`
 
 Production runtime facts:
@@ -65,7 +65,27 @@ Production runtime facts:
 - Nginx proxies `azbukadvizheniya.ru` to `127.0.0.1:3000`
 - Production environment variables live only on the server. Never commit or print secrets.
 
-Manual deploy runbook:
+Fast deploy:
+
+```bash
+pnpm deploy:prod
+```
+
+This is the preferred production path. It keeps one SSH control connection open,
+retries flaky SSH handshakes, requires local `main` to match `origin/main`,
+runs pre-deploy checks, syncs source, builds on the server, backs up the
+production database, runs Prisma migrations, restarts the service, and checks
+the public `/login` URL.
+
+Useful variants:
+
+```bash
+pnpm deploy:prod:fast  # skip local precheck when it already passed in this turn
+pnpm prod:status       # SSH service status only
+pnpm prod:health       # public HTTP health check only
+```
+
+Manual deploy fallback:
 
 1. From repo root, sync source to production:
 
