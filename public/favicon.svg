@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Азбука движения</title>
+  <desc id="desc">Синяя иконка приложения с белым щитом, зеленой галочкой и желтым солнцем.</desc>
+  <rect width="512" height="512" rx="112" fill="#0788dc"/>
+  <circle cx="386" cy="116" r="48" fill="#ffc400"/>
+  <path d="M0 362c64-34 132-52 204-52 119 0 193 49 308 35v167H0Z" fill="#ffffff" opacity=".96"/>
+  <path d="M256 108 366 148v88c0 86-45 142-110 172-65-30-110-86-110-172v-88Z" fill="#ffffff"/>
+  <path d="M212 258 245 291 312 214" fill="none" stroke="#7ac700" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M256 108 366 148v88c0 86-45 142-110 172-65-30-110-86-110-172v-88Z" fill="none" stroke="#006eb8" stroke-width="16" opacity=".14"/>
+  <circle cx="152" cy="344" r="18" fill="#ff6a00"/>
+</svg>

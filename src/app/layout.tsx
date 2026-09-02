@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -14,7 +14,20 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Азбука движения",
-  description: "Внутренняя операционная система для Азбуки движения"
+  description: "Внутренняя операционная система для Азбуки движения",
+  applicationName: "Азбука движения",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/icon-32.png", sizes: "32x32", type: "image/png" }
+    ],
+    apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }]
+  }
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0788dc"
 };
 
 export default function RootLayout({
