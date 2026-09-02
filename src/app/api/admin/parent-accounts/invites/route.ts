@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
+import { buildTokenUrl } from "@/lib/url";
 import { requireApiUser } from "@/server/auth/api-user";
 import { createParentInvite } from "@/server/parents/parent-auth-service";
 import { createParentInviteSchema } from "@/server/parents/schemas";
@@ -24,10 +25,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return jsonError(errorMessage(error), 400);
   }
-}
-
-function buildTokenUrl(request: Request, pathname: string, token: string) {
-  const url = new URL(pathname, request.url);
-  url.searchParams.set("token", token);
-  return url.toString();
 }

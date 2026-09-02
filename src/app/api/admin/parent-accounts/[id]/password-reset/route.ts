@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
+import { buildTokenUrl } from "@/lib/url";
 import { requireApiUser } from "@/server/auth/api-user";
 import { createParentPasswordReset } from "@/server/parents/parent-auth-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
@@ -27,10 +28,4 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     return jsonError(errorMessage(error), 400);
   }
-}
-
-function buildTokenUrl(request: Request, pathname: string, token: string) {
-  const url = new URL(pathname, request.url);
-  url.searchParams.set("token", token);
-  return url.toString();
 }
