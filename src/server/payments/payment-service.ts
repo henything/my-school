@@ -5,7 +5,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { admissionStatusAfterLessonBalance } from "@/server/billing/calculations";
 import { getActiveParentAccount } from "@/server/parents/parent-auth-service";
-import { normalizeParentPhone } from "@/server/parents/phone";
+import { phoneDigitsForProvider } from "@/server/parents/phone";
 import {
   createYooKassaPayment,
   getPublicAppOrigin,
@@ -71,7 +71,7 @@ export async function createParentInvoicePayment(currentUser: CurrentUser, invoi
     throw new Error("У счёта нет суммы к оплате.");
   }
 
-  const customerPhone = normalizeParentPhone(invoice.parent.phone);
+  const customerPhone = phoneDigitsForProvider(invoice.parent.phone);
   const attempt = await prisma.paymentAttempt.create({
     data: {
       schoolId: invoice.schoolId,

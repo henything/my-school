@@ -1,5 +1,6 @@
 import ExcelJS from "exceljs";
 import { hashPassword } from "@/server/auth/password";
+import { normalizeOptionalPhone } from "@/server/parents/phone";
 
 export type ImportIssueSeverity = "ERROR" | "WARNING";
 
@@ -931,22 +932,12 @@ function parsePhone(row: ParsedRow, fieldName: string, issues: ExcelImportIssue[
     return null;
   }
 
-  const digits = value.replace(/\D/g, "");
-
-  if (digits.length === 11 && digits.startsWith("8")) {
-    return `+7${digits.slice(1)}`;
+  try {
+    return normalizeOptionalPhone(value);
+  } catch (error) {
+    addRowIssue(row, fieldName, error instanceof Error ? error.message : "Телефон должен быть в формате +7XXXXXXXXXX.", issues);
+    return value;
   }
-
-  if (digits.length === 11 && digits.startsWith("7")) {
-    return `+${digits}`;
-  }
-
-  if (digits.length === 10) {
-    return `+7${digits}`;
-  }
-
-  addRowIssue(row, fieldName, `Телефон ${value} не удалось нормализовать, он будет сохранён как есть.`, issues, "WARNING");
-  return value;
 }
 
 function normalizeVk(row: ParsedRow, fieldName: string, issues: ExcelImportIssue[]) {

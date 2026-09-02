@@ -100,7 +100,7 @@ test("v1 core flow: roles, schedule, coach attendance, deductions, debt, NOT_ADM
     login: coachLogin,
     password: E2E_PASSWORD,
     displayName: `E2E Coach ${run}`,
-    phone: `+1000${run.slice(-6)}`,
+    phone: testPhone("+7900"),
     notes: "v1 acceptance"
   });
 
@@ -121,9 +121,9 @@ test("v1 core flow: roles, schedule, coach attendance, deductions, debt, NOT_ADM
       capacityLimit: 12,
       comment: "v1 acceptance"
     });
-    const parent = await postJson<ParentPayload>(adminApi, "/api/parents", {
-      fullName: `E2E Parent ${run}`,
-      phone: `+1999${run.slice(-6)}`,
+  const parent = await postJson<ParentPayload>(adminApi, "/api/parents", {
+    fullName: `E2E Parent ${run}`,
+    phone: testPhone("+7911"),
       comment: "v1 acceptance"
     });
     const child = await postJson<ChildPayload>(adminApi, "/api/children", {
@@ -260,7 +260,7 @@ test("v1 makeups flow: sick pending safety, confirmed sickness, vacation, quaran
     login: coachLogin,
     password: E2E_PASSWORD,
     displayName: `E2E Makeup Coach ${run}`,
-    phone: `+1777${run.slice(-6)}`,
+    phone: testPhone("+7922"),
     notes: "v1 makeups acceptance"
   });
 
@@ -357,7 +357,7 @@ test("v1 makeups flow: sick pending safety, confirmed sickness, vacation, quaran
         childName: `E2E Trial ${run}`,
         childAge: 6,
         parentName: `E2E Trial Parent ${run}`,
-        parentPhone: `+1666${run.slice(-6)}`,
+        parentPhone: testPhone("+7933"),
         source: "VK",
         comment: "trial from coach"
       },
@@ -457,6 +457,10 @@ function collectForbiddenFieldPaths(value: unknown, path: string[] = []): string
 
 function runSuffix() {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function testPhone(prefix: `+7${string}`) {
+  return `${prefix}${Date.now().toString().slice(-6)}`;
 }
 
 function dateKey(offsetDays: number) {

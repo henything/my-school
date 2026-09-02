@@ -1,12 +1,12 @@
 import { getPrisma } from "@/server/db/prisma";
-import { tryNormalizeParentPhone } from "@/server/parents/phone";
+import { legacyPhoneLogin, tryNormalizeParentPhone } from "@/server/parents/phone";
 import { verifyPassword } from "./password";
 
 export async function authenticateWithPassword(login: string, password: string) {
   const prisma = getPrisma();
   const trimmedLogin = login.trim();
   const normalizedPhone = tryNormalizeParentPhone(trimmedLogin);
-  const loginCandidates = normalizedPhone && normalizedPhone !== trimmedLogin ? [trimmedLogin, normalizedPhone] : [trimmedLogin];
+  const loginCandidates = normalizedPhone ? Array.from(new Set([trimmedLogin, normalizedPhone, legacyPhoneLogin(normalizedPhone)])) : [trimmedLogin];
 
   const user = await prisma.user.findFirst({
     where: {

@@ -143,7 +143,7 @@ export function CreateTrialForm({ lessons }: CreateTrialFormProps) {
         </label>
         <label className="label">
           Телефон
-          <input className="field" name="parentPhone" disabled={disabled} />
+          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" disabled={disabled} />
         </label>
         <label className="label">
           VK
@@ -224,7 +224,7 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
         </label>
         <label className="label">
           Телефон
-          <input className="field" name="parentPhone" defaultValue={trial.parentPhone ?? ""} disabled={disabled} />
+          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" defaultValue={trial.parentPhone ?? ""} disabled={disabled} />
         </label>
         <label className="label">
           VK

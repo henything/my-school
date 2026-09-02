@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
+import { optionalPhoneSchema } from "@/server/shared/phone-schema";
 
 const parentBaseSchema = z.object({
   fullName: optionalTextSchema,
-  phone: optionalTextSchema,
+  phone: optionalPhoneSchema,
   vkProfileUrl: optionalTextSchema,
   comment: optionalTextSchema
 });

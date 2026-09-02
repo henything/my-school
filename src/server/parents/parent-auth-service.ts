@@ -5,7 +5,7 @@ import { hashPassword } from "@/server/auth/password";
 import { createSessionToken, hashSessionToken } from "@/server/auth/session-token";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
-import { normalizeParentPhone } from "./phone";
+import { legacyPhoneLogin, normalizeParentPhone } from "./phone";
 import type { ActivateParentInviteInput, ConfirmParentPasswordResetInput, CreateParentInviteInput } from "./schemas";
 
 const PARENT_INVITE_TTL_DAYS = 7;
@@ -374,7 +374,7 @@ async function ensurePhoneLoginAvailable(tx: Prisma.TransactionClient, schoolId:
   const existing = await tx.user.findFirst({
     where: {
       schoolId,
-      login: normalizedPhone
+      login: { in: [normalizedPhone, legacyPhoneLogin(normalizedPhone)] }
     },
     include: {
       parentAccount: true

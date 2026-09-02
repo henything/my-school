@@ -189,7 +189,7 @@ function CreateCoachForm() {
       </div>
       <label className="label">
         Телефон
-        <input className="field" name="phone" />
+        <input className="field" name="phone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" />
       </label>
       <label className="label">
         Комментарий
@@ -343,7 +343,7 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
             </label>
             <label className="label">
               Телефон
-              <input className="field" name="parentPhone" />
+              <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" />
             </label>
           </div>
           <label className="label">

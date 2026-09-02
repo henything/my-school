@@ -26,13 +26,14 @@ describe("child schemas", () => {
     const enrollment = createChildEnrollmentSchema.parse({
       fullName: "Анна Петрова",
       parentFullName: "Мария Петрова",
-      parentPhone: "+7 999 111-22-33",
+      parentPhone: "+79991112233",
       comment: "Общий комментарий по ребёнку",
       status: "ACTIVE",
       admissionStatus: "ADMITTED"
     });
 
     expect(enrollment.parentFullName).toBe("Мария Петрова");
+    expect(enrollment.parentPhone).toBe("+79991112233");
     expect(enrollment.comment).toBe("Общий комментарий по ребёнку");
     expect(enrollment.parentId).toBeUndefined();
   });

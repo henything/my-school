@@ -19,19 +19,26 @@ describe("trial schemas", () => {
       lessonId,
       childName: " ",
       childAge: "",
-      parentPhone: " +7 ",
+      parentPhone: "+79991234567",
       source: "VK"
     });
 
     expect(input.childName).toBeNull();
     expect(input.childAge).toBeNull();
-    expect(input.parentPhone).toBe("+7");
+    expect(input.parentPhone).toBe("+79991234567");
     expect(input.source).toBe("VK");
   });
 
   it("rejects invalid age values", () => {
     expect(createTrialSchema.safeParse({ lessonId, childAge: "19" }).success).toBe(false);
     expect(createTrialSchema.safeParse({ lessonId, childAge: "-1" }).success).toBe(false);
+  });
+
+  it("rejects invalid phone length", () => {
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+7" }).success).toBe(false);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "89991234567" }).success).toBe(false);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+7 999 123-45-67" }).success).toBe(false);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+799912345678" }).success).toBe(false);
   });
 
   it("parses coach/admin status updates", () => {

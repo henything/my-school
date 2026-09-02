@@ -8,11 +8,29 @@ export function normalizeParentPhone(phone: string | null | undefined) {
 
   const normalized = normalizeRussianPhoneDigits(digits);
 
-  if (normalized.length < 10 || normalized.length > 15) {
-    throw new Error("Телефон родителя должен содержать от 10 до 15 цифр.");
+  if (!normalized) {
+    throw new Error("Телефон должен быть в формате +7XXXXXXXXXX.");
   }
 
   return normalized;
+}
+
+export function normalizeOptionalPhone(phone: string | null | undefined) {
+  const raw = (phone ?? "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  return normalizeParentPhone(raw);
+}
+
+export function phoneDigitsForProvider(phone: string | null | undefined) {
+  return normalizeParentPhone(phone).slice(1);
+}
+
+export function legacyPhoneLogin(phone: string | null | undefined) {
+  return normalizeParentPhone(phone).slice(1);
 }
 
 export function tryNormalizeParentPhone(phone: string | null | undefined) {
@@ -25,12 +43,16 @@ export function tryNormalizeParentPhone(phone: string | null | undefined) {
 
 function normalizeRussianPhoneDigits(digits: string) {
   if (digits.length === 10) {
-    return `7${digits}`;
+    return `+7${digits}`;
   }
 
   if (digits.length === 11 && digits.startsWith("8")) {
-    return `7${digits.slice(1)}`;
+    return `+7${digits.slice(1)}`;
   }
 
-  return digits;
+  if (digits.length === 11 && digits.startsWith("7")) {
+    return `+${digits}`;
+  }
+
+  return null;
 }

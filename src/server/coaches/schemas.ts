@@ -1,16 +1,17 @@
 import { z } from "zod";
+import { optionalPhoneSchema } from "@/server/shared/phone-schema";
 import { optionalTextSchema } from "@/server/shared/schemas";
 
 export const createCoachSchema = z.object({
   login: z.string().trim().min(3, "Login must be at least 3 characters."),
   password: z.string().min(10, "Password must be at least 10 characters."),
   displayName: z.string().trim().min(2, "Display name is required."),
-  phone: optionalTextSchema,
+  phone: optionalPhoneSchema,
   notes: optionalTextSchema
 });
 
 export const updateCoachSchema = z.object({
-  phone: optionalTextSchema,
+  phone: optionalPhoneSchema,
   notes: optionalTextSchema,
   status: z.enum(["ACTIVE", "INACTIVE", "ARCHIVED"]).optional()
 });

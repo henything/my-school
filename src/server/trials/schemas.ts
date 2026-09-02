@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { optionalPhoneSchema } from "@/server/shared/phone-schema";
 import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
 
 const optionalAgeSchema = z
@@ -29,7 +30,7 @@ export const createTrialSchema = z.object({
   childName: optionalTextSchema,
   childAge: optionalAgeSchema,
   parentName: optionalTextSchema,
-  parentPhone: optionalTextSchema,
+  parentPhone: optionalPhoneSchema,
   parentVkUrl: optionalTextSchema,
   source: trialSourceSchema.default("UNKNOWN"),
   comment: optionalTextSchema
@@ -40,7 +41,7 @@ export const updateTrialStatusSchema = z.object({
   childName: optionalTextSchema,
   childAge: optionalAgeSchema,
   parentName: optionalTextSchema,
-  parentPhone: optionalTextSchema,
+  parentPhone: optionalPhoneSchema,
   parentVkUrl: optionalTextSchema,
   source: trialSourceSchema.optional(),
   comment: optionalTextSchema
@@ -49,7 +50,7 @@ export const updateTrialStatusSchema = z.object({
 export const convertTrialSchema = z.object({
   childFullName: optionalTextSchema,
   parentName: optionalTextSchema,
-  parentPhone: optionalTextSchema,
+  parentPhone: optionalPhoneSchema,
   parentVkUrl: optionalTextSchema,
   currentGroupId: uuidSchema.optional().nullable(),
   adminComment: optionalTextSchema
