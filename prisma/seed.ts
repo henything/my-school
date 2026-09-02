@@ -21,9 +21,9 @@ async function main() {
   const schoolSlug = process.env.SEED_SCHOOL_SLUG ?? "azbuka-dvizheniya";
   const users: SeedUser[] = [
     {
-      login: process.env.SEED_SUPER_ADMIN_LOGIN ?? "Owner",
-      password: process.env.SEED_SUPER_ADMIN_PASSWORD ?? "OwnerSuperAdmin123!",
-      displayName: process.env.SEED_SUPER_ADMIN_NAME ?? "Супер-админ",
+      login: "Owner",
+      password: "OwnerSuperAdmin123!",
+      displayName: "Супер-админ",
       role: "SUPER_ADMIN"
     },
     {
