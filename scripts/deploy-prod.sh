@@ -245,6 +245,7 @@ set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
 cd "$APP_DIR"
 sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm exec prisma migrate deploy
+sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:seed
 azbuka-dvizheniya-restart
 REMOTE
 }

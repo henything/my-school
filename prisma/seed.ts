@@ -9,12 +9,42 @@ const adapter = new PrismaPg({
 
 const prisma = new PrismaClient({ adapter });
 
+type SeedUser = {
+  login: string;
+  password: string;
+  displayName: string;
+  role: "SUPER_ADMIN" | "ADMIN" | "COACH";
+};
+
 async function main() {
   const schoolName = process.env.SEED_SCHOOL_NAME ?? "Азбука движения";
   const schoolSlug = process.env.SEED_SCHOOL_SLUG ?? "azbuka-dvizheniya";
-  const login = process.env.SEED_SUPER_ADMIN_LOGIN ?? "superadmin";
-  const password = process.env.SEED_SUPER_ADMIN_PASSWORD ?? "ChangeMe123!";
-  const displayName = process.env.SEED_SUPER_ADMIN_NAME ?? "Владелец продукта";
+  const users: SeedUser[] = [
+    {
+      login: process.env.SEED_SUPER_ADMIN_LOGIN ?? "Owner",
+      password: process.env.SEED_SUPER_ADMIN_PASSWORD ?? "OwnerSuperAdmin123!",
+      displayName: process.env.SEED_SUPER_ADMIN_NAME ?? "Супер-админ",
+      role: "SUPER_ADMIN"
+    },
+    {
+      login: "Gimaxon",
+      password: "VadimAdmin123!",
+      displayName: "Вадим",
+      role: "ADMIN"
+    },
+    {
+      login: "Shpak",
+      password: "OlegAdmin123!",
+      displayName: "Олег",
+      role: "ADMIN"
+    },
+    {
+      login: "Trainer",
+      password: "TrainerCoach123!",
+      displayName: "Тренер",
+      role: "COACH"
+    }
+  ];
 
   const school = await prisma.school.upsert({
     where: { slug: schoolSlug },
@@ -27,36 +57,68 @@ async function main() {
     }
   });
 
-  const passwordHash = await hashPassword(password);
+  for (const seedUser of users) {
+    await upsertSeedUser(school.id, seedUser);
+  }
+
+  console.info(`Seeded school "${school.name}" and ${users.length} users.`);
+}
+
+async function upsertSeedUser(schoolId: string, seedUser: SeedUser) {
+  const passwordHash = await hashPassword(seedUser.password);
 
   const user = await prisma.user.upsert({
     where: {
       schoolId_login: {
-        schoolId: school.id,
-        login
+        schoolId,
+        login: seedUser.login
       }
     },
     update: {
       passwordHash,
-      displayName,
-      role: "SUPER_ADMIN",
+      displayName: seedUser.displayName,
+      role: seedUser.role,
       status: "ACTIVE"
     },
     create: {
-      schoolId: school.id,
-      login,
+      schoolId,
+      login: seedUser.login,
       passwordHash,
-      displayName,
-      role: "SUPER_ADMIN",
+      displayName: seedUser.displayName,
+      role: seedUser.role,
       status: "ACTIVE"
     }
   });
 
+  if (seedUser.role === "SUPER_ADMIN" || seedUser.role === "ADMIN") {
+    await prisma.adminProfile.upsert({
+      where: { userId: user.id },
+      update: { schoolId },
+      create: {
+        schoolId,
+        userId: user.id
+      }
+    });
+  }
+
+  if (seedUser.role === "COACH") {
+    await prisma.coachProfile.upsert({
+      where: { userId: user.id },
+      update: {
+        schoolId
+      },
+      create: {
+        schoolId,
+        userId: user.id
+      }
+    });
+  }
+
   await prisma.auditLog.create({
     data: {
-      schoolId: school.id,
+      schoolId,
       actorUserId: user.id,
-      action: "SEED_SUPER_ADMIN_UPSERTED",
+      action: "SEED_USER_UPSERTED",
       entityType: "User",
       entityId: user.id,
       newValue: {
@@ -66,8 +128,6 @@ async function main() {
       }
     }
   });
-
-  console.info(`Seeded school "${school.name}" and SUPER_ADMIN "${user.login}".`);
 }
 
 function requiredEnv(name: string) {
