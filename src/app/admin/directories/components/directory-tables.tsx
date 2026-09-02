@@ -39,13 +39,14 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
   const [groupFilter, setGroupFilter] = useState("ALL");
 
   const normalizedQuery = normalize(query);
+  const hasActiveFilters = normalizedQuery.length > 0 || statusFilter !== "ALL" || groupFilter !== "ALL";
   const filteredGroups = useMemo(
     () =>
       groups.filter((group) => {
         const matchesStatus = statusFilter === "ALL" || group.status === statusFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${group.name} ${group.branch.name} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
+          toSearchText(`${group.name} ${group.branch.name} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
 
         return matchesStatus && matchesQuery;
       }),
@@ -59,7 +60,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
         const matchesGroup = groupFilter === "ALL" || child.currentGroup?.id === groupFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(
+          toSearchText(
             `${child.fullName} ${child.parent?.fullName ?? ""} ${child.parent?.phone ?? ""} ${child.currentGroup?.name ?? ""} ${labelsForSearch(child.status, child.admissionStatus)}`
           ).includes(normalizedQuery);
 
@@ -71,6 +72,8 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
   const overCapacityCount = groups.filter((group) => group.isOverCapacity).length;
   const childrenWithoutGroupCount = childRows.filter((child) => !child.currentGroup).length;
   const attentionCount = childRows.filter((child) => child.admissionStatus !== "ADMITTED" || child.status !== "ACTIVE").length + overCapacityCount;
+  const filteredTotal = filteredGroups.length + filteredChildren.length;
+  const totalEntries = groups.length + childRows.length;
 
   return (
     <section className="grid gap-4">
@@ -79,11 +82,12 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
           <div>
             <h2 className="flex items-center gap-2 text-lg font-bold">
               <Search className="text-[var(--accent)]" aria-hidden="true" size={18} />
-              Найти запись
+              Поиск по таблицам
             </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Дети, родители, группы и переполнения в одном рабочем поиске.</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Фильтрует таблицы групп и детей по ФИО, телефону, группе, тренеру и статусу.</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {hasActiveFilters ? <MetricChip label="Найдено" value={filteredTotal} tone={filteredTotal === 0 ? "warning" : "neutral"} /> : null}
             <MetricChip label="Группы" value={groups.length} />
             <MetricChip label="Дети" value={childRows.length} />
             <MetricChip label="Внимание" value={attentionCount} tone={attentionCount > 0 ? "warning" : "neutral"} />
@@ -121,9 +125,13 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
             </select>
           </label>
         </div>
-      </div>
 
-      {children ? <div className="grid gap-4">{children}</div> : null}
+        {hasActiveFilters ? (
+          <p className="mt-3 text-sm font-semibold text-[var(--muted)]">
+            Показано {filteredTotal} из {totalEntries} записей: группы и дети ниже уже отфильтрованы.
+          </p>
+        ) : null}
+      </div>
 
       <div className="grid gap-4">
         <div className="panel">
@@ -212,6 +220,8 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
           </div>
         </div>
       </div>
+
+      {children ? <div className="grid gap-4">{children}</div> : null}
     </section>
   );
 }
@@ -236,4 +246,11 @@ function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function toSearchText(value: string) {
+  const normalized = normalize(value);
+  const phoneSafe = normalized.replace(/[^\d+]/g, "");
+
+  return `${normalized} ${phoneSafe}`;
 }
