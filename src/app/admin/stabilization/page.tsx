@@ -12,7 +12,6 @@ import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
-import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { getStabilizationDashboard, type StabilizationStatus } from "@/server/stabilization/stabilization-service";
 import { requiresCloseComment } from "@/server/tasks/task-service";
 
@@ -37,7 +36,7 @@ const priorityClassName: Record<string, string> = {
 };
 
 export default async function StabilizationPage() {
-  const currentUser = await requireRole(ADMIN_ROLES);
+  const currentUser = await requireRole(["SUPER_ADMIN"]);
   const dashboard = await getStabilizationDashboard(currentUser);
 
   return (

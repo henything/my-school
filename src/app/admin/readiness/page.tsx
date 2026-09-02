@@ -2,7 +2,6 @@ import { Activity, AlertTriangle, CheckCircle2, CircleAlert, CircleX, ClipboardC
 import { PilotIssueForm } from "@/app/admin/readiness/components/pilot-issue-form";
 import { requireRole } from "@/server/auth/current-user";
 import { getReadinessDashboard, type ReadinessGateStatus } from "@/server/readiness/readiness-service";
-import { ADMIN_ROLES } from "@/server/rbac/rbac";
 
 const statusConfig: Record<ReadinessGateStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
   READY: { label: "Готово", className: "bg-[var(--green-soft)] text-[var(--success-strong)]", icon: CheckCircle2 },
@@ -18,7 +17,7 @@ const metricToneClassName: Record<string, string> = {
 };
 
 export default async function ReadinessPage() {
-  const currentUser = await requireRole(ADMIN_ROLES);
+  const currentUser = await requireRole(["SUPER_ADMIN"]);
   const dashboard = await getReadinessDashboard(currentUser);
   const blockers = dashboard.gates.flatMap((gate) =>
     gate.checks

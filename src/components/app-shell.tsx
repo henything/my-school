@@ -127,14 +127,18 @@ export function AppShell({ user, area, children }: AppShellProps) {
               <ListChecks aria-hidden="true" size={16} />
               Операции
             </Link>
-            <Link href="/admin/readiness" {...navLinkProps("/admin/readiness")}>
-              <Rocket aria-hidden="true" size={16} />
-              Readiness
-            </Link>
-            <Link href="/admin/stabilization" {...navLinkProps("/admin/stabilization")}>
-              <ShieldAlert aria-hidden="true" size={16} />
-              Стабилизация
-            </Link>
+            {user.role === "SUPER_ADMIN" ? (
+              <>
+                <Link href="/admin/readiness" {...navLinkProps("/admin/readiness")}>
+                  <Rocket aria-hidden="true" size={16} />
+                  Readiness
+                </Link>
+                <Link href="/admin/stabilization" {...navLinkProps("/admin/stabilization")}>
+                  <ShieldAlert aria-hidden="true" size={16} />
+                  Стабилизация
+                </Link>
+              </>
+            ) : null}
             <Link href="/admin/trials" {...navLinkProps("/admin/trials")}>
               <UserRoundPlus aria-hidden="true" size={16} />
               Пробники
