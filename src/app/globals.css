@@ -98,6 +98,14 @@ a {
   outline: none;
 }
 
+.field-leading-icon {
+  padding-left: 40px;
+}
+
+.field-trailing-icon {
+  padding-right: 40px;
+}
+
 .field:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(7, 136, 220, 0.16);

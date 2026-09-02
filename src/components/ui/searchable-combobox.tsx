@@ -113,7 +113,7 @@ export function SearchableCombobox({
         <Search className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-[var(--muted)]" aria-hidden="true" size={16} />
         <input
           id={inputId}
-          className={cn("field w-full pl-10 pr-10", compact ? "min-h-10 text-sm" : null)}
+          className={cn("field field-leading-icon field-trailing-icon w-full", compact ? "min-h-10 text-sm" : null)}
           role="combobox"
           aria-autocomplete="list"
           aria-controls={listboxId}
