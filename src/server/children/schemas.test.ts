@@ -27,11 +27,13 @@ describe("child schemas", () => {
       fullName: "Анна Петрова",
       parentFullName: "Мария Петрова",
       parentPhone: "+7 999 111-22-33",
+      comment: "Общий комментарий по ребёнку",
       status: "ACTIVE",
       admissionStatus: "ADMITTED"
     });
 
     expect(enrollment.parentFullName).toBe("Мария Петрова");
+    expect(enrollment.comment).toBe("Общий комментарий по ребёнку");
     expect(enrollment.parentId).toBeUndefined();
   });
 

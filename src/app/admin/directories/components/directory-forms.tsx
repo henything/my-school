@@ -297,13 +297,11 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
         parentFullName: nullable(formData.get("parentFullName")),
         parentPhone: nullable(formData.get("parentPhone")),
         parentVkProfileUrl: nullable(formData.get("parentVkProfileUrl")),
-        parentComment: nullable(formData.get("parentComment")),
         currentGroupId: nullable(formData.get("currentGroupId")),
         birthDate: nullable(formData.get("birthDate")),
         status: formData.get("status"),
         medicalNotes: nullable(formData.get("medicalNotes")),
-        coachComment: nullable(formData.get("coachComment")),
-        adminComment: nullable(formData.get("adminComment")),
+        comment: nullable(formData.get("comment")),
         admissionStatus: formData.get("admissionStatus")
       });
       form.reset();
@@ -351,10 +349,6 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
           <label className="label">
             VK
             <input className="field" name="parentVkProfileUrl" />
-          </label>
-          <label className="label">
-            Комментарий родителя
-            <input className="field" name="parentComment" />
           </label>
         </fieldset>
 
@@ -408,18 +402,14 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
           </div>
         </fieldset>
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <label className="label">
           Медицинские ограничения
           <input className="field" name="medicalNotes" />
         </label>
         <label className="label">
-          Комментарий тренера
-          <input className="field" name="coachComment" />
-        </label>
-        <label className="label">
-          Комментарий админа
-          <input className="field" name="adminComment" />
+          Комментарий
+          <input className="field" name="comment" />
         </label>
       </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" />

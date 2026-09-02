@@ -34,6 +34,7 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
   parentFullName: optionalTextSchema,
   parentPhone: optionalTextSchema,
   parentVkProfileUrl: optionalTextSchema,
+  comment: optionalTextSchema,
   parentComment: optionalTextSchema
 }).superRefine((input, context) => {
   const hasParentId = Boolean(input.parentId);

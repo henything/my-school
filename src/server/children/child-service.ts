@@ -165,6 +165,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
   return getPrisma().$transaction(async (tx) => {
     let parentId = input.parentId ?? null;
     let createdParent: ReturnType<typeof serializeParent> | null = null;
+    const sharedComment = input.comment ?? null;
 
     if (parentId) {
       await tx.parent.findFirstOrThrow({
@@ -180,7 +181,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
           fullName: input.parentFullName,
           phone: input.parentPhone,
           vkProfileUrl: input.parentVkProfileUrl,
-          comment: input.parentComment
+          comment: input.parentComment ?? sharedComment
         },
         include: { _count: { select: { children: true } } }
       });
@@ -220,8 +221,8 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
         birthDate: input.birthDate,
         status: input.status,
         medicalNotes: input.medicalNotes,
-        coachComment: input.coachComment,
-        adminComment: input.adminComment,
+        coachComment: input.coachComment ?? sharedComment,
+        adminComment: input.adminComment ?? sharedComment,
         admissionStatus: input.admissionStatus
       },
       include: childInclude
