@@ -18,7 +18,6 @@ export default async function SchedulePage() {
   return (
     <div className="grid gap-6">
       <section>
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-02</p>
         <h1 className="mt-2 text-2xl font-bold">Расписание и занятия</h1>
       </section>
 

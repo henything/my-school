@@ -11,7 +11,6 @@ export default async function AuditLogPage() {
   return (
     <div className="grid gap-6">
       <section className="min-w-0">
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-09</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Журнал аудита</h1>

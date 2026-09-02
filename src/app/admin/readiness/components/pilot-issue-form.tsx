@@ -54,7 +54,7 @@ export function PilotIssueForm({ titlePrefix, defaultPriority }: PilotIssueFormP
         body: JSON.stringify({
           priority: formData.get("priority"),
           title: `${titlePrefix}[${category}] ${title}`,
-          description: description ? `DEV-10 readiness intake\n\n${description}` : "DEV-10 readiness intake"
+          description: description ? `Readiness intake\n\n${description}` : "Readiness intake"
         })
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };

@@ -26,7 +26,6 @@ export default async function MakeupsPage() {
   return (
     <div className="grid gap-6">
       <section>
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-05</p>
         <h1 className="mt-2 text-2xl font-bold">Болезни, отпуска и переносы</h1>
       </section>
 

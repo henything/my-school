@@ -16,7 +16,6 @@ export default async function TrialsPage() {
   return (
     <div className="grid gap-6">
       <section>
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-07</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Пробные занятия</h1>

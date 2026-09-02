@@ -29,7 +29,6 @@ export default async function DirectoriesPage() {
   return (
     <div className="grid gap-6">
       <section>
-        <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">DEV-01</p>
         <h1 className="mt-2 text-2xl font-bold">Справочники школы</h1>
       </section>
 
