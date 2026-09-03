@@ -22,6 +22,7 @@ type SearchableComboboxProps = {
   disabled?: boolean;
   compact?: boolean;
   className?: string;
+  onValueChange?: (value: string) => void;
 };
 
 const MAX_VISIBLE_OPTIONS = 14;
@@ -36,7 +37,8 @@ export function SearchableCombobox({
   required = false,
   disabled = false,
   compact = false,
-  className
+  className,
+  onValueChange
 }: SearchableComboboxProps) {
   const inputId = useId();
   const listboxId = `${inputId}-listbox`;
@@ -73,22 +75,25 @@ export function SearchableCombobox({
       const nextSelected = options.some((option) => option.value === defaultValue) ? defaultValue : "";
       const nextSelectedOption = options.find((option) => option.value === nextSelected);
       setSelectedValue(nextSelected);
+      onValueChange?.(nextSelected);
       setQuery(nextSelectedOption?.label ?? "");
       setIsOpen(false);
     }
 
     form.addEventListener("reset", onReset);
     return () => form.removeEventListener("reset", onReset);
-  }, [defaultValue, options]);
+  }, [defaultValue, onValueChange, options]);
 
   function selectOption(option: SearchableComboboxOption) {
     setSelectedValue(option.value);
+    onValueChange?.(option.value);
     setQuery(option.label);
     setIsOpen(false);
   }
 
   function clearSelection() {
     setSelectedValue("");
+    onValueChange?.("");
     setQuery("");
     setIsOpen(false);
   }
@@ -130,6 +135,7 @@ export function SearchableCombobox({
           onChange={(event) => {
             setQuery(event.target.value);
             setSelectedValue("");
+            onValueChange?.("");
             setIsOpen(true);
           }}
           onKeyDown={(event) => {

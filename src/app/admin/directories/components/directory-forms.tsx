@@ -281,6 +281,10 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedParentId, setSelectedParentId] = useState("");
+  const [newParentFullName, setNewParentFullName] = useState("");
+  const [newParentVkProfileUrl, setNewParentVkProfileUrl] = useState("");
+  const isNewParentPhoneRequired = !selectedParentId && Boolean(newParentFullName.trim() || newParentVkProfileUrl.trim());
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -305,6 +309,9 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
         admissionStatus: formData.get("admissionStatus")
       });
       form.reset();
+      setSelectedParentId("");
+      setNewParentFullName("");
+      setNewParentVkProfileUrl("");
       setMessage("Ребёнок заведён.");
       router.refresh();
     } catch (error) {
@@ -329,6 +336,7 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
               name="parentId"
               placeholder="Найти родителя"
               emptyValueLabel="Новый или без родителя"
+              onValueChange={setSelectedParentId}
               options={parents.map((parent) => ({
                 value: parent.id,
                 label: parent.fullName ?? parent.phone ?? "Контакт",
@@ -339,16 +347,16 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="label">
               Имя нового родителя
-              <input className="field" name="parentFullName" />
+              <input className="field" name="parentFullName" value={newParentFullName} onChange={(event) => setNewParentFullName(event.target.value)} disabled={Boolean(selectedParentId)} />
             </label>
             <label className="label">
               Телефон
-              <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" />
+              <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+7 999 123-45-67" pattern="[+0-9()\\s.-]{5,30}" required={isNewParentPhoneRequired} disabled={Boolean(selectedParentId)} />
             </label>
           </div>
           <label className="label">
             VK
-            <input className="field" name="parentVkProfileUrl" />
+            <input className="field" name="parentVkProfileUrl" value={newParentVkProfileUrl} onChange={(event) => setNewParentVkProfileUrl(event.target.value)} disabled={Boolean(selectedParentId)} />
           </label>
         </fieldset>
 

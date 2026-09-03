@@ -15,8 +15,9 @@ describe("parent schemas", () => {
     expect(parent).not.toHaveProperty("password");
   });
 
-  it("requires at least a name or phone", () => {
+  it("requires a phone", () => {
     expect(() => createParentSchema.parse({ fullName: "", phone: "" })).toThrow();
+    expect(() => createParentSchema.parse({ fullName: "Анна Петрова", phone: "" })).toThrow();
   });
 
   it("requires parents to set a strong enough password from token links", () => {

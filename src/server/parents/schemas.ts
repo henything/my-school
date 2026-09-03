@@ -19,8 +19,9 @@ const parentBaseSchema = z.object({
   comment: optionalTextSchema
 });
 
-export const createParentSchema = parentBaseSchema.refine((input) => input.fullName || input.phone, {
-    message: "У родителя должно быть имя или телефон."
+export const createParentSchema = parentBaseSchema.refine((input) => input.phone, {
+    message: "У родителя должен быть телефон.",
+    path: ["phone"]
   });
 
 export const updateParentSchema = parentBaseSchema.partial();

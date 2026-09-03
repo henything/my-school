@@ -50,6 +50,17 @@ describe("child schemas", () => {
     ).toThrow();
   });
 
+  it("requires phone when enrollment creates a new parent", () => {
+    expect(() =>
+      createChildEnrollmentSchema.parse({
+        fullName: "Анна Петрова",
+        parentFullName: "Мария Петрова",
+        status: "ACTIVE",
+        admissionStatus: "ADMITTED"
+      })
+    ).toThrow();
+  });
+
   it("does not clear birth date when patch input omits it", () => {
     const patch = updateChildSchema.parse({
       currentGroupId: "11111111-1111-4111-8111-111111111111"

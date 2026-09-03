@@ -39,7 +39,6 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
   parentComment: optionalTextSchema
 }).superRefine((input, context) => {
   const hasParentId = Boolean(input.parentId);
-  const hasNewParentIdentity = Boolean(input.parentFullName || input.parentPhone);
   const hasNewParentFields = Boolean(input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment);
 
   if (hasParentId && hasNewParentFields) {
@@ -50,11 +49,11 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
     });
   }
 
-  if (!hasParentId && hasNewParentFields && !hasNewParentIdentity) {
+  if (!hasParentId && hasNewParentFields && !input.parentPhone) {
     context.addIssue({
       code: "custom",
-      message: "Для нового родителя нужно указать имя или телефон.",
-      path: ["parentFullName"]
+      message: "Для нового родителя нужно указать телефон.",
+      path: ["parentPhone"]
     });
   }
 });
