@@ -121,7 +121,7 @@ export function TrialPanel({ lessonId, trials }: TrialPanelProps) {
             </label>
             <label className="label">
               Телефон
-              <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" />
+              <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+7 999 123-45-67" pattern="[+0-9()\\s.-]{5,30}" />
             </label>
             <label className="label">
               VK
@@ -261,7 +261,7 @@ function TrialCard({ trial }: { trial: Trial }) {
         </label>
         <label className="label">
           Телефон
-          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+79991234567" pattern="\\+7[0-9]{10}" defaultValue={trial.parentPhone ?? ""} disabled={disabled} />
+          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+7 999 123-45-67" pattern="[+0-9()\\s.-]{5,30}" defaultValue={trial.parentPhone ?? ""} disabled={disabled} />
         </label>
         <label className="label">
           VK

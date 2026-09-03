@@ -34,11 +34,12 @@ describe("trial schemas", () => {
     expect(createTrialSchema.safeParse({ lessonId, childAge: "-1" }).success).toBe(false);
   });
 
-  it("rejects invalid phone length", () => {
+  it("accepts common phone number formatting", () => {
     expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+7" }).success).toBe(false);
-    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "89991234567" }).success).toBe(false);
-    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+7 999 123-45-67" }).success).toBe(false);
-    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+799912345678" }).success).toBe(false);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "89991234567" }).success).toBe(true);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+7 999 123-45-67" }).success).toBe(true);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "+799912345678" }).success).toBe(true);
+    expect(createTrialSchema.safeParse({ lessonId, parentPhone: "call me" }).success).toBe(false);
   });
 
   it("parses coach/admin status updates", () => {

@@ -2,17 +2,17 @@ import { describe, expect, it } from "vitest";
 import { createCoachSchema, updateCoachSchema } from "./schemas";
 
 describe("coach schemas", () => {
-  it("keeps phone numbers in the strict public format", () => {
+  it("accepts common phone number formatting", () => {
     expect(
       createCoachSchema.parse({
         login: "coach_1",
         password: "StrongPass123!",
         displayName: "Coach One",
-        phone: "+79991234567"
+        phone: "8 (999) 123-45-67"
       }).phone
-    ).toBe("+79991234567");
+    ).toBe("8 (999) 123-45-67");
 
-    expect(createCoachSchema.safeParse({ login: "coach_1", password: "StrongPass123!", displayName: "Coach One", phone: "89991234567" }).success).toBe(
+    expect(createCoachSchema.safeParse({ login: "coach_1", password: "StrongPass123!", displayName: "Coach One", phone: "call me" }).success).toBe(
       false
     );
   });

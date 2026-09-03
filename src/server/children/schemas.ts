@@ -6,7 +6,7 @@ import {
   optionalTextSchema,
   uuidSchema
 } from "@/server/shared/schemas";
-import { optionalPhoneSchema } from "@/server/shared/phone-schema";
+import { optionalParentPhoneSchema } from "@/server/parents/schemas";
 
 const patchDateSchema = z
   .union([
@@ -33,7 +33,7 @@ export const createChildSchema = z.object({
 export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: true }).extend({
   parentId: uuidSchema.optional().nullable(),
   parentFullName: optionalTextSchema,
-  parentPhone: optionalPhoneSchema,
+  parentPhone: optionalParentPhoneSchema,
   parentVkProfileUrl: optionalTextSchema,
   comment: optionalTextSchema,
   parentComment: optionalTextSchema

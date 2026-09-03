@@ -5,12 +5,12 @@ describe("parent schemas", () => {
   it("accepts parent contact data without auth fields", () => {
     const parent = createParentSchema.parse({
       fullName: "Анна Петрова",
-      phone: "+79000000000",
+      phone: "8 900 000-00-00",
       vkProfileUrl: "https://vk.com/example"
     });
 
     expect(parent.fullName).toBe("Анна Петрова");
-    expect(parent.phone).toBe("+79000000000");
+    expect(parent.phone).toBe("8 900 000-00-00");
     expect(parent).not.toHaveProperty("login");
     expect(parent).not.toHaveProperty("password");
   });
