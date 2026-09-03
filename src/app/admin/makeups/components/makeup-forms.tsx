@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, Loader2, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
+import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, FileUp, Loader2, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { labelForEnum } from "@/lib/labels";
 
@@ -151,6 +151,7 @@ function nullableText(value: string) {
 
 export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSickness, groupEvents, certificates }: MakeupFormsProps) {
   const activeChildren = childOptions.filter((child) => child.status !== "ARCHIVED" && child.currentGroup);
+  const certificateChildren = childOptions.filter((child) => child.status !== "ARCHIVED");
   const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
   const assignableLessons = lessons.filter((lesson) => lesson.status !== "CANCELLED");
 
@@ -204,14 +205,22 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
         </div>
       </section>
 
-      <MedicalCertificatePanel certificates={certificates} />
+      <MedicalCertificatePanel certificates={certificates} childOptions={certificateChildren} pendingSickness={pendingSickness} />
       <MakeupBoard makeups={makeups} lessons={assignableLessons} />
       <GroupEventsTable groupEvents={groupEvents} />
     </section>
   );
 }
 
-function MedicalCertificatePanel({ certificates }: { certificates: MedicalCertificate[] }) {
+function MedicalCertificatePanel({
+  certificates,
+  childOptions,
+  pendingSickness
+}: {
+  certificates: MedicalCertificate[];
+  childOptions: Child[];
+  pendingSickness: PendingSickness[];
+}) {
   const pendingCount = certificates.filter((certificate) => certificate.status === "PENDING").length;
 
   return (
@@ -226,6 +235,7 @@ function MedicalCertificatePanel({ certificates }: { certificates: MedicalCertif
         </div>
         <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingCount}</span>
       </div>
+      <AdminCertificateUploadForm childOptions={childOptions} pendingSickness={pendingSickness} />
       <div className="mt-4 table-shell">
         <table className="data-table min-w-[980px]">
           <thead>
@@ -281,6 +291,105 @@ function MedicalCertificatePanel({ certificates }: { certificates: MedicalCertif
         </table>
       </div>
     </section>
+  );
+}
+
+function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOptions: Child[]; pendingSickness: PendingSickness[] }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const disabled = childOptions.length === 0;
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setIsSubmitting(true);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const attendanceRecordId = String(formData.get("attendanceRecordId") ?? "");
+    const sickness = pendingSickness.find((record) => record.id === attendanceRecordId);
+
+    if (sickness) {
+      formData.set("childId", sickness.child.id);
+    }
+
+    try {
+      const response = await fetch("/api/medical-certificates", {
+        method: "POST",
+        body: formData
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Не удалось загрузить справку.");
+      }
+
+      form.reset();
+      setMessage("Справка загружена и ждёт решения.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось загрузить справку.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="mt-4 grid gap-4 rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] p-4" onSubmit={onSubmit}>
+      <h3 className="flex items-center gap-2 font-bold">
+        <FileUp aria-hidden="true" size={16} />
+        Прикрепить справку
+      </h3>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <label className="label">
+          Ребёнок
+          <select className="field" name="childId" required disabled={disabled}>
+            <option value="">Выбрать</option>
+            {childOptions.map((child) => (
+              <option key={child.id} value={child.id}>
+                {child.fullName} · {child.currentGroup?.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="label">
+          Привязать к болезни
+          <select className="field" name="attendanceRecordId" disabled={pendingSickness.length === 0}>
+            <option value="">Без привязки</option>
+            {pendingSickness.map((record) => (
+              <option key={record.id} value={record.id}>
+                {record.child.fullName} · {record.lesson.group.name} · {record.lesson.lessonDate}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <label className="label">
+          Период с
+          <input className="field" name="periodStart" type="date" required disabled={disabled} />
+        </label>
+        <label className="label">
+          Период по
+          <input className="field" name="periodEnd" type="date" required disabled={disabled} />
+        </label>
+        <label className="label">
+          Файл
+          <input className="field" name="file" type="file" accept="application/pdf,image/jpeg,image/png,image/webp" required disabled={disabled} />
+        </label>
+      </div>
+      <label className="label">
+        Комментарий
+        <input className="field" name="comment" disabled={disabled} />
+      </label>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={disabled || isSubmitting}>
+          {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
+          Загрузить
+        </Button>
+        {message ? <span className="text-sm font-semibold text-[var(--muted)]">{message}</span> : null}
+      </div>
+    </form>
   );
 }
 
