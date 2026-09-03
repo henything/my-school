@@ -2,6 +2,7 @@ import type { InvoiceStatus, PaymentRecordStatus } from "@/generated/prisma/enum
 import type { Prisma } from "@/generated/prisma/client";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { serializeMedicalCertificate } from "@/server/medical-certificates/medical-certificate-service";
 import { dateToKey } from "@/server/schedule/generation";
 import { getActiveParentAccount } from "./parent-auth-service";
 
@@ -88,6 +89,23 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
       makeupCredits: {
         orderBy: [{ status: "asc" }, { createdAt: "desc" }],
         take: 20
+      },
+      medicalCertificates: {
+        include: {
+          child: { select: { id: true, fullName: true, currentGroup: { select: { id: true, name: true } } } },
+          attendanceRecord: {
+            select: {
+              id: true,
+              status: true,
+              finalStatus: true,
+              lesson: { select: { id: true, lessonDate: true, startTime: true, endTime: true, group: { select: { id: true, name: true } } } }
+            }
+          },
+          uploadedBy: { select: { id: true, displayName: true, role: true } },
+          reviewedBy: { select: { id: true, displayName: true, role: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20
       }
     }
   });
@@ -113,7 +131,17 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
       status: makeup.status,
       assignedDate: makeup.assignedDate ? dateToKey(makeup.assignedDate) : null,
       usedAt: makeup.usedAt?.toISOString() ?? null
-    }))
+    })),
+    pendingSickness: child.attendanceRecords
+      .filter((record) => record.status === "ABSENT_SICK_PENDING" && !record.finalStatus)
+      .map((record) => ({
+        id: record.id,
+        lessonDate: dateToKey(record.lesson.lessonDate),
+        startTime: record.lesson.startTime,
+        endTime: record.lesson.endTime,
+        group: record.lesson.group
+      })),
+    medicalCertificates: child.medicalCertificates.map(serializeMedicalCertificate)
   };
 }
 

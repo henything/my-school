@@ -4,6 +4,7 @@ import { requireRole } from "@/server/auth/current-user";
 import { listChildren } from "@/server/children/child-service";
 import { listGroups } from "@/server/groups/group-service";
 import { listGroupEvents, listMakeups, listPendingSickness } from "@/server/makeups/makeup-service";
+import { listMedicalCertificates } from "@/server/medical-certificates/medical-certificate-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTasks } from "@/server/tasks/task-service";
@@ -12,14 +13,15 @@ const taskTypes = new Set(["CERTIFICATE_PENDING", "SICKNESS_FOLLOW_UP", "MAKEUP_
 
 export default async function MakeupsPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [children, groups, lessons, makeups, pendingSickness, groupEvents, tasks] = await Promise.all([
+  const [children, groups, lessons, makeups, pendingSickness, groupEvents, tasks, certificates] = await Promise.all([
     listChildren(currentUser),
     listGroups(currentUser),
     listLessons(currentUser),
     listMakeups(currentUser),
     listPendingSickness(currentUser),
     listGroupEvents(currentUser),
-    listTasks(currentUser)
+    listTasks(currentUser),
+    listMedicalCertificates(currentUser)
   ]);
   const operationalTasks = tasks.filter((task) => taskTypes.has(task.type));
 
@@ -54,6 +56,7 @@ export default async function MakeupsPage() {
         makeups={makeups}
         pendingSickness={pendingSickness}
         groupEvents={groupEvents}
+        certificates={certificates}
       />
     </div>
   );

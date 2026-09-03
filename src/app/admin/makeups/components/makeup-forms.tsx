@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck2, CalendarRange, FileCheck2, Loader2, RefreshCcw, ShieldAlert } from "lucide-react";
+import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, Loader2, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { labelForEnum } from "@/lib/labels";
 
@@ -67,6 +67,31 @@ type GroupEvent = {
   createdAt: string;
 };
 
+type MedicalCertificate = {
+  id: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  originalFileName: string;
+  comment: string | null;
+  adminComment: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  child: { id: string; fullName: string; currentGroup: { id: string; name: string } | null };
+  attendanceRecord: {
+    id: string;
+    lesson: {
+      id: string;
+      lessonDate: string;
+      startTime: string;
+      endTime: string;
+      group: { id: string; name: string };
+    };
+  } | null;
+  uploadedBy: { id: string; displayName: string; role: string };
+  reviewedBy: { id: string; displayName: string; role: string } | null;
+};
+
 type MakeupFormsProps = {
   childOptions: Child[];
   groups: Group[];
@@ -74,6 +99,7 @@ type MakeupFormsProps = {
   makeups: Makeup[];
   pendingSickness: PendingSickness[];
   groupEvents: GroupEvent[];
+  certificates: MedicalCertificate[];
 };
 
 const finalStatuses = [
@@ -118,7 +144,12 @@ function nullable(value: FormDataEntryValue | null) {
   return text.length > 0 ? text : null;
 }
 
-export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSickness, groupEvents }: MakeupFormsProps) {
+function nullableText(value: string) {
+  const text = value.trim();
+  return text.length > 0 ? text : null;
+}
+
+export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSickness, groupEvents, certificates }: MakeupFormsProps) {
   const activeChildren = childOptions.filter((child) => child.status !== "ARCHIVED" && child.currentGroup);
   const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
   const assignableLessons = lessons.filter((lesson) => lesson.status !== "CANCELLED");
@@ -173,9 +204,131 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
         </div>
       </section>
 
+      <MedicalCertificatePanel certificates={certificates} />
       <MakeupBoard makeups={makeups} lessons={assignableLessons} />
       <GroupEventsTable groupEvents={groupEvents} />
     </section>
+  );
+}
+
+function MedicalCertificatePanel({ certificates }: { certificates: MedicalCertificate[] }) {
+  const pendingCount = certificates.filter((certificate) => certificate.status === "PENDING").length;
+
+  return (
+    <section className="panel p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <FileText aria-hidden="true" size={18} />
+            Справки
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">Одобрение привязанной справки подтверждает болезнь и создаёт перенос.</p>
+        </div>
+        <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingCount}</span>
+      </div>
+      <div className="mt-4 table-shell">
+        <table className="data-table min-w-[980px]">
+          <thead>
+            <tr>
+              <th>Ребёнок</th>
+              <th>Период</th>
+              <th>Статус</th>
+              <th>Файл</th>
+              <th>Болезнь</th>
+              <th>Решение</th>
+            </tr>
+          </thead>
+          <tbody>
+            {certificates.map((certificate) => (
+              <tr key={certificate.id}>
+                <td>
+                  <div className="font-semibold">{certificate.child.fullName}</div>
+                  <div className="text-sm text-[var(--muted)]">{certificate.child.currentGroup?.name ?? "Без группы"}</div>
+                </td>
+                <td>
+                  {certificate.periodStart} - {certificate.periodEnd}
+                </td>
+                <td>
+                  <StatusBadgeLabel status={certificate.status} />
+                </td>
+                <td>
+                  <a className="font-semibold text-[var(--accent-strong)]" href={`/api/medical-certificates/${certificate.id}/file`} target="_blank">
+                    {certificate.originalFileName}
+                  </a>
+                  {certificate.comment ? <div className="mt-1 text-sm text-[var(--muted)]">{certificate.comment}</div> : null}
+                </td>
+                <td>{certificate.attendanceRecord ? formatLesson(certificate.attendanceRecord.lesson) : "—"}</td>
+                <td>
+                  {certificate.status === "PENDING" ? (
+                    <CertificateReviewControls certificate={certificate} />
+                  ) : (
+                    <div className="text-sm text-[var(--muted)]">
+                      {certificate.adminComment ?? "—"}
+                      {certificate.reviewedAt ? <div>{new Date(certificate.reviewedAt).toLocaleString("ru-RU")}</div> : null}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {certificates.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center text-[var(--muted)]">
+                  Справок пока нет.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function CertificateReviewControls({ certificate }: { certificate: MedicalCertificate }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [adminComment, setAdminComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function review(status: "APPROVED" | "REJECTED") {
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      await submitJson(`/api/admin/medical-certificates/${certificate.id}/review`, {
+        status,
+        adminComment: nullableText(adminComment)
+      });
+      setAdminComment("");
+      setMessage(status === "APPROVED" ? "Одобрено." : "Отклонено.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить решение.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="grid min-w-[220px] gap-2">
+      <input
+        className="field min-h-9"
+        value={adminComment}
+        onChange={(event) => setAdminComment(event.target.value)}
+        placeholder="Комментарий"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={() => void review("APPROVED")} disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <CheckCircle2 aria-hidden="true" size={14} />}
+          Одобрить
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={() => void review("REJECTED")} disabled={isSubmitting}>
+          <XCircle aria-hidden="true" size={14} />
+          Отклонить
+        </Button>
+      </div>
+      {message ? <span className="text-sm font-semibold text-[var(--muted)]">{message}</span> : null}
+    </div>
   );
 }
 
@@ -649,6 +802,17 @@ function FormFooter({ isSubmitting, message, label, disabled = false }: { isSubm
       {message ? <span className="text-sm font-semibold text-[var(--muted)]">{message}</span> : null}
     </div>
   );
+}
+
+function StatusBadgeLabel({ status }: { status: string }) {
+  const className =
+    status === "APPROVED"
+      ? "bg-[var(--green-soft)] text-[var(--success-strong)]"
+      : status === "REJECTED"
+        ? "bg-[var(--red-soft)] text-[var(--danger-strong)]"
+        : "bg-[var(--yellow-soft)] text-[var(--warning-strong)]";
+
+  return <span className={`badge ${className}`}>{labelForEnum(status)}</span>;
 }
 
 function formatLesson(lesson: { lessonDate: string; startTime: string; endTime: string }) {

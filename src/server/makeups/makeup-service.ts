@@ -184,102 +184,111 @@ export async function listGroupEvents(currentUser: CurrentUser) {
 export async function finalizeAttendance(currentUser: CurrentUser, attendanceRecordId: string, input: FinalizeAttendanceInput) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => {
-    const existing = await tx.attendanceRecord.findFirstOrThrow({
-      where: {
-        id: attendanceRecordId,
-        lesson: { schoolId: currentUser.schoolId }
-      },
-      include: {
-        child: { select: { id: true, fullName: true, cachedMakeupBalance: true } },
-        lesson: {
-          select: {
-            id: true,
-            schoolId: true,
-            lessonDate: true,
-            startTime: true,
-            endTime: true,
-            groupId: true,
-            group: {
-              select: {
-                id: true,
-                name: true,
-                children: { where: { status: "ACTIVE" }, select: { id: true, fullName: true } }
-              }
+  return getPrisma().$transaction((tx) => finalizeAttendanceInTransaction(tx, currentUser, attendanceRecordId, input));
+}
+
+export async function finalizeAttendanceInTransaction(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  attendanceRecordId: string,
+  input: FinalizeAttendanceInput
+) {
+  assertAdmin(currentUser);
+
+  const existing = await tx.attendanceRecord.findFirstOrThrow({
+    where: {
+      id: attendanceRecordId,
+      lesson: { schoolId: currentUser.schoolId }
+    },
+    include: {
+      child: { select: { id: true, fullName: true, cachedMakeupBalance: true } },
+      lesson: {
+        select: {
+          id: true,
+          schoolId: true,
+          lessonDate: true,
+          startTime: true,
+          endTime: true,
+          groupId: true,
+          group: {
+            select: {
+              id: true,
+              name: true,
+              children: { where: { status: "ACTIVE" }, select: { id: true, fullName: true } }
             }
           }
         }
       }
-    });
-
-    if (input.finalStatus === "ABSENT_SICK_CONFIRMED" && existing.status !== "ABSENT_SICK_PENDING") {
-      throw new Error("Подтвердить болезнь можно только для статуса ожидания справки.");
     }
-
-    const oldValue = {
-      status: existing.status,
-      finalStatus: existing.finalStatus,
-      comment: existing.comment
-    };
-    const balanceEffectStatus = finalStatusBalanceEffectStatus(input.finalStatus);
-    const storedStatus = finalStatusStoredAttendanceStatus(input.finalStatus, existing.status);
-    const updated = await tx.attendanceRecord.update({
-      where: { id: existing.id },
-      data: {
-        status: storedStatus,
-        finalStatus: input.finalStatus,
-        finalizedByUserId: currentUser.id,
-        finalizedAt: new Date(),
-        comment: input.comment ?? existing.comment
-      },
-      include: pendingSicknessInclude
-    });
-
-    await applyAttendanceBalanceEffect(tx, currentUser, existing.lesson, {
-      id: existing.id,
-      childId: existing.childId,
-      status: balanceEffectStatus
-    });
-
-    const reason = makeupReasonForFinalStatus(input.finalStatus);
-    const makeup = reason
-      ? await createMakeupCredit(tx, currentUser, {
-          childId: existing.childId,
-          groupId: existing.lesson.groupId,
-          sourceLessonId: existing.lessonId,
-          sourceAttendanceRecordId: existing.id,
-          reason,
-          comment: input.comment
-        })
-      : null;
-
-    await closeRelatedTasks(tx, currentUser, ["CERTIFICATE_PENDING", "SICKNESS_FOLLOW_UP"], "AttendanceRecord", existing.id);
-    await closeRelatedTasks(tx, currentUser, ["ABSENCE_NEEDS_FINALIZATION"], "Child", existing.childId);
-
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: "ATTENDANCE_FINALIZED",
-        entityType: "AttendanceRecord",
-        entityId: existing.id,
-        oldValue,
-        newValue: {
-          status: updated.status,
-          finalStatus: updated.finalStatus,
-          comment: updated.comment,
-          makeupCreditId: makeup?.id ?? null
-        },
-        comment: input.comment
-      },
-      tx
-    );
-
-    return {
-      attendanceRecord: serializePendingSickness(updated),
-      makeup: makeup ? serializeMakeup(await loadMakeup(tx, makeup.id)) : null
-    };
   });
+
+  if (input.finalStatus === "ABSENT_SICK_CONFIRMED" && existing.status !== "ABSENT_SICK_PENDING") {
+    throw new Error("Подтвердить болезнь можно только для статуса ожидания справки.");
+  }
+
+  const oldValue = {
+    status: existing.status,
+    finalStatus: existing.finalStatus,
+    comment: existing.comment
+  };
+  const balanceEffectStatus = finalStatusBalanceEffectStatus(input.finalStatus);
+  const storedStatus = finalStatusStoredAttendanceStatus(input.finalStatus, existing.status);
+  const updated = await tx.attendanceRecord.update({
+    where: { id: existing.id },
+    data: {
+      status: storedStatus,
+      finalStatus: input.finalStatus,
+      finalizedByUserId: currentUser.id,
+      finalizedAt: new Date(),
+      comment: input.comment ?? existing.comment
+    },
+    include: pendingSicknessInclude
+  });
+
+  await applyAttendanceBalanceEffect(tx, currentUser, existing.lesson, {
+    id: existing.id,
+    childId: existing.childId,
+    status: balanceEffectStatus
+  });
+
+  const reason = makeupReasonForFinalStatus(input.finalStatus);
+  const makeup = reason
+    ? await createMakeupCredit(tx, currentUser, {
+        childId: existing.childId,
+        groupId: existing.lesson.groupId,
+        sourceLessonId: existing.lessonId,
+        sourceAttendanceRecordId: existing.id,
+        reason,
+        comment: input.comment
+      })
+    : null;
+
+  await closeRelatedTasks(tx, currentUser, ["CERTIFICATE_PENDING", "SICKNESS_FOLLOW_UP"], "AttendanceRecord", existing.id);
+  await closeRelatedTasks(tx, currentUser, ["ABSENCE_NEEDS_FINALIZATION"], "Child", existing.childId);
+
+  await writeAuditLog(
+    {
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "ATTENDANCE_FINALIZED",
+      entityType: "AttendanceRecord",
+      entityId: existing.id,
+      oldValue,
+      newValue: {
+        status: updated.status,
+        finalStatus: updated.finalStatus,
+        comment: updated.comment,
+        makeupCreditId: makeup?.id ?? null
+      },
+      comment: input.comment
+    },
+    tx
+  );
+
+  return {
+    attendanceRecord: serializePendingSickness(updated),
+    makeup: makeup ? serializeMakeup(await loadMakeup(tx, makeup.id)) : null
+  };
 }
 
 export async function createVacation(currentUser: CurrentUser, childId: string, input: CreateVacationInput) {

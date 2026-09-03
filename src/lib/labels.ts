@@ -21,6 +21,8 @@ const enumLabels: Record<string, string> = {
   CREATED: "Создан",
   REDIRECTED: "Переход к оплате",
   PENDING: "В ожидании",
+  APPROVED: "Одобрена",
+  REJECTED: "Отклонена",
   SUCCEEDED: "Успешно",
   FAILED: "Ошибка",
   EXPIRED: "Истёк",

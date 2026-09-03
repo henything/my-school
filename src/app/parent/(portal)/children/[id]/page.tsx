@@ -1,8 +1,9 @@
-import { CalendarDays, History, RefreshCcw, WalletCards } from "lucide-react";
+import { CalendarDays, FileText, History, RefreshCcw, WalletCards } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentChildDetail } from "@/server/parents/parent-portal-service";
+import { CertificateUploadForm } from "./certificate-upload-form";
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -145,6 +146,48 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
             </table>
             {child.makeups.length === 0 ? <EmptyState text="Переносов пока нет." /> : null}
           </div>
+        </div>
+      </section>
+
+      <section className="panel">
+        <PanelHeader icon={<FileText aria-hidden="true" size={18} />} title="Справки" />
+        <CertificateUploadForm childId={child.id} pendingSickness={child.pendingSickness} />
+        <div className="table-shell">
+          <table className="data-table min-w-[760px]">
+            <thead>
+              <tr>
+                <th>Период</th>
+                <th>Статус</th>
+                <th>Файл</th>
+                <th>Комментарий</th>
+              </tr>
+            </thead>
+            <tbody>
+              {child.medicalCertificates.map((certificate) => (
+                <tr key={certificate.id}>
+                  <td>
+                    {certificate.periodStart} - {certificate.periodEnd}
+                  </td>
+                  <td>
+                    <StatusBadge status={certificate.status} />
+                  </td>
+                  <td>
+                    <a className="font-semibold text-[var(--accent-strong)]" href={`/api/medical-certificates/${certificate.id}/file`} target="_blank">
+                      {certificate.originalFileName}
+                    </a>
+                  </td>
+                  <td>{certificate.adminComment ?? certificate.comment ?? "—"}</td>
+                </tr>
+              ))}
+              {child.medicalCertificates.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="text-center text-[var(--muted)]">
+                    Справок пока нет.
+                  </td>
+                </tr>
+              ) : null}
+            </tbody>
+          </table>
         </div>
       </section>
     </div>
