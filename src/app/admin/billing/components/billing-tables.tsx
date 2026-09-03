@@ -23,7 +23,6 @@ type Subscription = {
   periodStart: string;
   periodEnd: string;
   plannedLessonsCount: number;
-  lessonPriceKopeks: number;
   totalAmountKopeks: number;
   paymentStatus: string;
   paymentStatusChangedAt: string | null;
@@ -254,8 +253,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
               <th>Ребёнок</th>
               <th>Период</th>
               <th>Занятия</th>
-              <th>Цена</th>
-              <th>Сумма</th>
+              <th>Сумма абонемента</th>
               <th>Оплата</th>
               <th>Комментарий</th>
             </tr>
@@ -268,7 +266,6 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                   {subscription.periodStart} - {subscription.periodEnd}
                 </td>
                 <td>{subscription.plannedLessonsCount}</td>
-                <td>{formatKopeks(subscription.lessonPriceKopeks)}</td>
                 <td className="font-semibold">{formatKopeks(subscription.totalAmountKopeks)}</td>
                 <td>
                   <PaymentBadge status={subscription.paymentStatus} />
@@ -279,7 +276,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                 <td>{subscription.paymentStatusComment ?? "-"}</td>
               </tr>
             ))}
-            {filteredSubscriptions.length === 0 ? <EmptyTableRow colSpan={7} label="Абонементы по фильтрам не найдены." /> : null}
+            {filteredSubscriptions.length === 0 ? <EmptyTableRow colSpan={6} label="Абонементы по фильтрам не найдены." /> : null}
           </tbody>
         </table>
       </DataPanel>

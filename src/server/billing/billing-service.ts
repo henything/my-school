@@ -20,6 +20,7 @@ import { dateToKey } from "@/server/schedule/generation";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
+  calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
   DEFAULT_LESSON_PRICE_KOPEKS
@@ -345,11 +346,7 @@ async function createInvoiceForSubscription(
   const applicableMakeups = await findApplicableMakeupCredits(tx, currentUser.schoolId, subscription);
   const appliedMakeupCredits = applicableMakeups.slice(0, subscription.plannedLessonsCount);
   const billableLessonsCount = calculateBillableLessons(subscription.plannedLessonsCount, appliedMakeupCredits.length);
-  const amountKopeks = calculateSubscriptionTotal(
-    subscription.plannedLessonsCount,
-    subscription.lessonPriceKopeks,
-    appliedMakeupCredits.length
-  );
+  const amountKopeks = calculateSubscriptionInvoiceAmount(subscription.totalAmountKopeks, subscription.plannedLessonsCount, appliedMakeupCredits.length);
   const issuedAt = new Date();
   const invoiceNumber = await createInvoiceNumber(tx, currentUser.schoolId, subscription.child.parent.fullName, issuedAt);
   const isFullyCoveredByMakeups = amountKopeks === 0;
@@ -386,7 +383,7 @@ async function createInvoiceForSubscription(
   await tx.subscription.update({
     where: { id: subscription.id },
     data: {
-      totalAmountKopeks: amountKopeks,
+      totalAmountKopeks: subscription.totalAmountKopeks,
       paymentStatus: isFullyCoveredByMakeups ? "PAID" : "INVOICED",
       paymentStatusChangedAt: issuedAt,
       paymentStatusComment
@@ -591,7 +588,8 @@ export async function createSubscription(currentUser: CurrentUser, input: Create
       throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
     }
 
-    const totalAmountKopeks = calculateSubscriptionTotal(plannedLessonsCount, input.lessonPriceKopeks);
+    const totalAmountKopeks = input.totalAmountKopeks ?? calculateSubscriptionTotal(plannedLessonsCount, input.lessonPriceKopeks);
+    const lessonPriceKopeks = input.totalAmountKopeks ? Math.round(totalAmountKopeks / plannedLessonsCount) : input.lessonPriceKopeks;
     const subscription = await tx.subscription.create({
       data: {
         schoolId: currentUser.schoolId,
@@ -599,7 +597,7 @@ export async function createSubscription(currentUser: CurrentUser, input: Create
         periodStart: input.periodStart,
         periodEnd: input.periodEnd,
         plannedLessonsCount,
-        lessonPriceKopeks: input.lessonPriceKopeks,
+        lessonPriceKopeks,
         totalAmountKopeks,
         paymentStatus: input.paymentStatus,
         createdByUserId: currentUser.id

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
+  calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
   DEFAULT_LESSON_PRICE_KOPEKS
@@ -21,11 +22,13 @@ describe("billing calculations", () => {
   it("reduces future invoices by available makeup credits", () => {
     expect(calculateBillableLessons(8, 2)).toBe(6);
     expect(calculateSubscriptionTotal(8, 45000, 2)).toBe(270000);
+    expect(calculateSubscriptionInvoiceAmount(360000, 8, 2)).toBe(270000);
   });
 
   it("does not let makeup credits make an invoice negative", () => {
     expect(calculateBillableLessons(2, 5)).toBe(0);
     expect(calculateSubscriptionTotal(2, 45000, 5)).toBe(0);
+    expect(calculateSubscriptionInvoiceAmount(360000, 2, 5)).toBe(0);
   });
 
   it("allows one credit lesson only from zero balance and admitted status", () => {

@@ -16,9 +16,14 @@ export const createSubscriptionSchema = z
     periodStart: dateOnlySchema,
     periodEnd: dateOnlySchema,
     plannedLessonsCount: z.coerce.number().int().positive().optional(),
+    totalAmountRub: z.coerce.number().positive("Сумма абонемента должна быть больше 0.").optional(),
     lessonPriceKopeks: z.coerce.number().int().positive().default(DEFAULT_LESSON_PRICE_KOPEKS),
     paymentStatus: paymentStatusSchema.default("NOT_INVOICED")
   })
+  .transform((input) => ({
+    ...input,
+    totalAmountKopeks: input.totalAmountRub === undefined ? undefined : Math.round(input.totalAmountRub * 100)
+  }))
   .refine((input) => input.periodEnd >= input.periodStart, {
     message: "Дата окончания абонемента должна быть не раньше даты начала.",
     path: ["periodEnd"]

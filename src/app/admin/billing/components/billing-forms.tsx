@@ -78,7 +78,7 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const plannedLessonsCount = optionalNumber(formData.get("plannedLessonsCount"));
-    const lessonPriceKopeks = optionalNumber(formData.get("lessonPriceKopeks"));
+    const totalAmountRub = optionalNumber(formData.get("totalAmountRub"));
 
     try {
       await submitJson("/api/subscriptions", "POST", {
@@ -86,7 +86,7 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
         periodStart: formData.get("periodStart"),
         periodEnd: formData.get("periodEnd"),
         ...(plannedLessonsCount !== undefined ? { plannedLessonsCount } : {}),
-        ...(lessonPriceKopeks !== undefined ? { lessonPriceKopeks } : {})
+        ...(totalAmountRub !== undefined ? { totalAmountRub } : {})
       });
       form.reset();
       setMessage("Абонемент и счёт созданы.");
@@ -124,8 +124,8 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
           <input className="field" name="plannedLessonsCount" type="number" min={1} placeholder="По расписанию" disabled={disabled} />
         </label>
         <label className="label">
-          Цена, коп.
-          <input className="field" name="lessonPriceKopeks" type="number" min={1} placeholder="45000" disabled={disabled} />
+          Сумма абонемента, ₽
+          <input className="field" name="totalAmountRub" type="number" min={1} step="1" placeholder="3600" required disabled={disabled} />
         </label>
       </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" disabled={disabled} />

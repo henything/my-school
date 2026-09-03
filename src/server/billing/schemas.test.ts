@@ -4,14 +4,16 @@ import { createInvoiceSchema, createSubscriptionSchema, manualBalanceAdjustmentS
 const childId = "11111111-1111-4111-8111-111111111111";
 
 describe("billing schemas", () => {
-  it("defaults subscription lesson price to 450 RUB", () => {
+  it("accepts subscription monthly amount in rubles", () => {
     const input = createSubscriptionSchema.parse({
       childId,
       periodStart: "2026-06-01",
       periodEnd: "2026-06-30",
-      plannedLessonsCount: 8
+      plannedLessonsCount: 8,
+      totalAmountRub: 3600
     });
 
+    expect(input.totalAmountKopeks).toBe(360000);
     expect(input.lessonPriceKopeks).toBe(45000);
   });
 
