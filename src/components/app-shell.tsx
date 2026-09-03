@@ -108,6 +108,10 @@ export function AppShell({ user, area, children }: AppShellProps) {
               <Users aria-hidden="true" size={16} />
               Пользователи
             </Link>
+            <Link href="/admin/trials" {...navLinkProps("/admin/trials")}>
+              <UserRoundPlus aria-hidden="true" size={16} />
+              Пробники
+            </Link>
             <Link href="/admin/directories" {...navLinkProps("/admin/directories")}>
               <MapPinned aria-hidden="true" size={16} />
               Справочники
@@ -116,21 +120,25 @@ export function AppShell({ user, area, children }: AppShellProps) {
               <CalendarDays aria-hidden="true" size={16} />
               Расписание
             </Link>
+            <Link href="/admin/makeups" {...navLinkProps("/admin/makeups")}>
+              <RefreshCcw aria-hidden="true" size={16} />
+              Переносы
+            </Link>
             <Link href="/admin/billing" {...navLinkProps("/admin/billing")}>
               <WalletCards aria-hidden="true" size={16} />
               Балансы
+            </Link>
+            <Link href="/admin/operations" {...navLinkProps("/admin/operations")}>
+              <ListChecks aria-hidden="true" size={16} />
+              Задачи
             </Link>
             <Link href="/admin/analytics" {...navLinkProps("/admin/analytics")}>
               <BarChart3 aria-hidden="true" size={16} />
               Аналитика
             </Link>
-            <Link href="/admin/makeups" {...navLinkProps("/admin/makeups")}>
-              <RefreshCcw aria-hidden="true" size={16} />
-              Переносы
-            </Link>
-            <Link href="/admin/operations" {...navLinkProps("/admin/operations")}>
-              <ListChecks aria-hidden="true" size={16} />
-              Операции
+            <Link href="/admin/audit" {...navLinkProps("/admin/audit")}>
+              <History aria-hidden="true" size={16} />
+              Аудит
             </Link>
             {user.role === "SUPER_ADMIN" ? (
               <>
@@ -142,21 +150,11 @@ export function AppShell({ user, area, children }: AppShellProps) {
                   <ShieldAlert aria-hidden="true" size={16} />
                   Стабилизация
                 </Link>
+                <Link href="/admin/import" {...navLinkProps("/admin/import")}>
+                  <FileSpreadsheet aria-hidden="true" size={16} />
+                  Excel import
+                </Link>
               </>
-            ) : null}
-            <Link href="/admin/trials" {...navLinkProps("/admin/trials")}>
-              <UserRoundPlus aria-hidden="true" size={16} />
-              Пробники
-            </Link>
-            <Link href="/admin/audit" {...navLinkProps("/admin/audit")}>
-              <History aria-hidden="true" size={16} />
-              Аудит
-            </Link>
-            {user.role === "SUPER_ADMIN" ? (
-              <Link href="/admin/import" {...navLinkProps("/admin/import")}>
-                <FileSpreadsheet aria-hidden="true" size={16} />
-                Excel import
-              </Link>
             ) : null}
           </div>
         </nav>
