@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Baby,
+  BarChart3,
   CalendarDays,
   CreditCard,
   FileSpreadsheet,
@@ -118,6 +119,10 @@ export function AppShell({ user, area, children }: AppShellProps) {
             <Link href="/admin/billing" {...navLinkProps("/admin/billing")}>
               <WalletCards aria-hidden="true" size={16} />
               Балансы
+            </Link>
+            <Link href="/admin/analytics" {...navLinkProps("/admin/analytics")}>
+              <BarChart3 aria-hidden="true" size={16} />
+              Аналитика
             </Link>
             <Link href="/admin/makeups" {...navLinkProps("/admin/makeups")}>
               <RefreshCcw aria-hidden="true" size={16} />
