@@ -86,6 +86,26 @@ a {
   box-shadow: 0 16px 36px rgba(23, 34, 31, 0.07);
 }
 
+.accordion-summary::-webkit-details-marker {
+  display: none;
+}
+
+.accordion-summary {
+  transition: background 140ms ease;
+}
+
+.accordion-summary:hover {
+  background: var(--panel-soft);
+}
+
+.accordion-chevron {
+  transition: transform 140ms ease;
+}
+
+.accordion-panel[open] .accordion-chevron {
+  transform: rotate(180deg);
+}
+
 .field {
   width: 100%;
   min-width: 0;

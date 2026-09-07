@@ -667,7 +667,14 @@ export async function ensureGroupOverCapacityTask(
 
 async function assertTaskReferences(tx: Prisma.TransactionClient, schoolId: string, input: CreateManualTaskInput) {
   if (input.assigneeUserId) {
-    await tx.user.findFirstOrThrow({ where: { id: input.assigneeUserId, schoolId, status: "ACTIVE" }, select: { id: true } });
+    const assignee = await tx.user.findFirstOrThrow({
+      where: { id: input.assigneeUserId, schoolId, status: "ACTIVE" },
+      select: { id: true, role: true }
+    });
+
+    if (assignee.role === "PARENT") {
+      throw new Error("Ручную задачу нельзя назначить родителю.");
+    }
   }
 
   if (input.childId) {

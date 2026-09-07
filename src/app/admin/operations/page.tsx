@@ -3,6 +3,7 @@ import Image from "next/image";
 import {
   AlertTriangle,
   CalendarDays,
+  ChevronDown,
   ClipboardList,
   FileCheck2,
   ListChecks,
@@ -92,14 +93,12 @@ export default async function OperationsPage() {
       </section>
 
       <section className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="panel min-w-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
-            <h2 className="flex items-center gap-2 text-lg font-bold">
-              <ListChecks className="text-[var(--accent)]" aria-hidden="true" size={18} />
-              Задачи в работе
-            </h2>
-            <span className="text-sm font-semibold text-[var(--muted)]">critical/high и задачи со сроком до конца дня</span>
-          </div>
+        <AccordionPanel
+          title="Задачи в работе"
+          count={center.tasks.length}
+          icon={<ListChecks className="text-[var(--accent)]" aria-hidden="true" size={18} />}
+          defaultOpen={center.tasks.length > 0 && center.tasks.length <= 3}
+        >
           {center.tasks.length === 0 ? (
             <p className="px-5 py-4 text-sm text-[var(--muted)]">Открытых операционных задач нет.</p>
           ) : (
@@ -137,7 +136,7 @@ export default async function OperationsPage() {
               </table>
             </div>
           )}
-        </div>
+        </AccordionPanel>
 
         <div className="grid min-w-0 content-start gap-6">
           <div className="panel overflow-hidden">
@@ -154,20 +153,24 @@ export default async function OperationsPage() {
         </div>
       </section>
 
-      <section className="grid min-w-0 gap-4 lg:grid-cols-2">
-        <InfoPanel title="Сегодняшние занятия" empty="На сегодня занятий нет.">
+      <section className="grid min-w-0 gap-3">
+        <InfoPanel title="Сегодняшние занятия" count={center.counts.todayLessons} empty="На сегодня занятий нет.">
           {center.widgets.todayLessons.map((lesson) => (
             <ListRow key={lesson.id} title={lesson.group.name} meta={`${lesson.startTime}-${lesson.endTime} · ${lesson.coachName} · ${labelForEnum(lesson.status)}`} />
           ))}
         </InfoPanel>
 
-        <InfoPanel title="Табели без отметок" empty="Незаполненных табелей нет.">
+        <InfoPanel title="Табели без отметок" count={center.counts.unfilledLessons} empty="Незаполненных табелей нет.">
           {center.widgets.unfilledLessons.map((lesson) => (
             <ListRow key={lesson.id} title={lesson.group.name} meta={`${formatDate(lesson.lessonDate)} · ${lesson.startTime}-${lesson.endTime} · ${labelForEnum(lesson.status)}`} />
           ))}
         </InfoPanel>
 
-        <InfoPanel title="Деньги и допуск" empty="Детей с долгом, недопуском или без абонемента не найдено.">
+        <InfoPanel
+          title="Деньги и допуск"
+          count={center.counts.childrenWithoutActiveSubscription + center.counts.childrenWithDebt + center.counts.notAdmittedChildren}
+          empty="Детей с долгом, недопуском или без абонемента не найдено."
+        >
           {center.widgets.childrenWithoutActiveSubscription.map((child) => (
             <ListRow key={`sub-${child.id}`} title={child.fullName} meta={`Нет активного абонемента · ${child.currentGroup?.name ?? "без группы"}`} />
           ))}
@@ -179,7 +182,11 @@ export default async function OperationsPage() {
           ))}
         </InfoPanel>
 
-        <InfoPanel title="Справки и переносы" empty="Нет ожидающих справок и доступных переносов.">
+        <InfoPanel
+          title="Справки и переносы"
+          count={center.counts.pendingCertificates + center.counts.availableMakeups}
+          empty="Нет ожидающих справок и доступных переносов."
+        >
           {center.widgets.pendingCertificates.map((record) => (
             <ListRow key={`cert-${record.id}`} title={record.child.fullName} meta={`Справка · ${record.lesson.group.name} · ${formatDate(record.lesson.lessonDate)}`} />
           ))}
@@ -188,13 +195,13 @@ export default async function OperationsPage() {
           ))}
         </InfoPanel>
 
-        <InfoPanel title="Группы сверх лимита" empty="Переполненных групп нет.">
+        <InfoPanel title="Группы сверх лимита" count={center.counts.groupsOverCapacity} empty="Переполненных групп нет.">
           {center.widgets.groupsOverCapacity.map((group) => (
             <ListRow key={group.id} title={group.name} meta={`Активных детей: ${group.activeChildrenCount}. Лимит: ${group.capacityLimit}.`} />
           ))}
         </InfoPanel>
 
-        <InfoPanel title="Пробные занятия" empty="Задач по пробным занятиям пока нет.">
+        <InfoPanel title="Пробные занятия" count={center.counts.trialsToProcess} empty="Задач по пробным занятиям пока нет.">
           {center.widgets.trialsToProcess.map((task) => (
             <ListRow key={task.id} title={task.title} meta={task.description ?? labelForEnum(task.type)} />
           ))}
@@ -208,17 +215,44 @@ function PriorityBadge({ priority }: { priority: string }) {
   return <span className={cn("badge", priorityClassName[priority] ?? "bg-[#ececec] text-[#555]")}>{labelForEnum(priority)}</span>;
 }
 
-function InfoPanel({ title, empty, children }: { title: string; empty: string; children: ReactNode }) {
+function AccordionPanel({
+  title,
+  count,
+  icon,
+  children,
+  defaultOpen = false
+}: {
+  title: string;
+  count: number;
+  icon?: ReactNode;
+  children: ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details className="panel accordion-panel min-w-0" open={defaultOpen}>
+      <summary className="accordion-summary flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+        <span className="flex min-w-0 items-center gap-2">
+          {icon}
+          <span className="truncate text-lg font-bold">{title}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{count}</span>
+          <ChevronDown className="accordion-chevron text-[var(--muted)]" aria-hidden="true" size={18} />
+        </span>
+      </summary>
+      <div className="border-t border-[var(--line)]">{children}</div>
+    </details>
+  );
+}
+
+function InfoPanel({ title, count, empty, children }: { title: string; count: number; empty: string; children: ReactNode }) {
   const items = Children.toArray(children).filter(Boolean);
   const isEmpty = items.length === 0;
 
   return (
-    <div className="panel min-w-0">
-      <div className="border-b border-[var(--line)] px-5 py-4">
-        <h2 className="text-lg font-bold">{title}</h2>
-      </div>
+    <AccordionPanel title={title} count={count}>
       {isEmpty ? <p className="px-5 py-4 text-sm text-[var(--muted)]">{empty}</p> : <div className="grid gap-3 p-4">{items}</div>}
-    </div>
+    </AccordionPanel>
   );
 }
 

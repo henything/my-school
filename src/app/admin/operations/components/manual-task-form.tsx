@@ -34,7 +34,7 @@ export function ManualTaskForm({ users }: ManualTaskFormProps) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const activeUsers = users.filter((user) => user.status === "ACTIVE");
+  const activeAssignees = users.filter((user) => user.status === "ACTIVE" && user.role !== "PARENT");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -85,7 +85,7 @@ export function ManualTaskForm({ users }: ManualTaskFormProps) {
         Адресат
         <select className="field" name="assigneeUserId">
           <option value="">Общая задача админам</option>
-          {activeUsers.map((user) => (
+          {activeAssignees.map((user) => (
             <option key={user.id} value={user.id}>
               {user.displayName} · {labelForEnum(user.role)}
             </option>
