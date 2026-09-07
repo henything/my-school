@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import Image from "next/image";
 import {
   AlertTriangle,
@@ -153,60 +153,6 @@ export default async function OperationsPage() {
         </div>
       </section>
 
-      <section className="grid min-w-0 gap-3">
-        <InfoPanel title="Сегодняшние занятия" count={center.counts.todayLessons} empty="На сегодня занятий нет.">
-          {center.widgets.todayLessons.map((lesson) => (
-            <ListRow key={lesson.id} title={lesson.group.name} meta={`${lesson.startTime}-${lesson.endTime} · ${lesson.coachName} · ${labelForEnum(lesson.status)}`} />
-          ))}
-        </InfoPanel>
-
-        <InfoPanel title="Табели без отметок" count={center.counts.unfilledLessons} empty="Незаполненных табелей нет.">
-          {center.widgets.unfilledLessons.map((lesson) => (
-            <ListRow key={lesson.id} title={lesson.group.name} meta={`${formatDate(lesson.lessonDate)} · ${lesson.startTime}-${lesson.endTime} · ${labelForEnum(lesson.status)}`} />
-          ))}
-        </InfoPanel>
-
-        <InfoPanel
-          title="Деньги и допуск"
-          count={center.counts.childrenWithoutActiveSubscription + center.counts.childrenWithDebt + center.counts.notAdmittedChildren}
-          empty="Детей с долгом, недопуском или без абонемента не найдено."
-        >
-          {center.widgets.childrenWithoutActiveSubscription.map((child) => (
-            <ListRow key={`sub-${child.id}`} title={child.fullName} meta={`Нет активного абонемента · ${child.currentGroup?.name ?? "без группы"}`} />
-          ))}
-          {center.widgets.childrenWithDebt.map((child) => (
-            <ListRow key={`debt-${child.id}`} title={child.fullName} meta={`Баланс: ${child.cachedLessonBalance} · ${child.currentGroup?.name ?? "без группы"}`} />
-          ))}
-          {center.widgets.notAdmittedChildren.map((child) => (
-            <ListRow key={`admission-${child.id}`} title={child.fullName} meta={`Недопуск · баланс ${child.cachedLessonBalance} · ${child.currentGroup?.name ?? "без группы"}`} />
-          ))}
-        </InfoPanel>
-
-        <InfoPanel
-          title="Справки и переносы"
-          count={center.counts.pendingCertificates + center.counts.availableMakeups}
-          empty="Нет ожидающих справок и доступных переносов."
-        >
-          {center.widgets.pendingCertificates.map((record) => (
-            <ListRow key={`cert-${record.id}`} title={record.child.fullName} meta={`Справка · ${record.lesson.group.name} · ${formatDate(record.lesson.lessonDate)}`} />
-          ))}
-          {center.widgets.availableMakeups.map((makeup) => (
-            <ListRow key={`makeup-${makeup.id}`} title={makeup.child.fullName} meta={`Перенос ${labelForEnum(makeup.reason)} · ${makeup.group.name}`} />
-          ))}
-        </InfoPanel>
-
-        <InfoPanel title="Группы сверх лимита" count={center.counts.groupsOverCapacity} empty="Переполненных групп нет.">
-          {center.widgets.groupsOverCapacity.map((group) => (
-            <ListRow key={group.id} title={group.name} meta={`Активных детей: ${group.activeChildrenCount}. Лимит: ${group.capacityLimit}.`} />
-          ))}
-        </InfoPanel>
-
-        <InfoPanel title="Пробные занятия" count={center.counts.trialsToProcess} empty="Задач по пробным занятиям пока нет.">
-          {center.widgets.trialsToProcess.map((task) => (
-            <ListRow key={task.id} title={task.title} meta={task.description ?? labelForEnum(task.type)} />
-          ))}
-        </InfoPanel>
-      </section>
     </div>
   );
 }
@@ -242,26 +188,6 @@ function AccordionPanel({
       </summary>
       <div className="border-t border-[var(--line)]">{children}</div>
     </details>
-  );
-}
-
-function InfoPanel({ title, count, empty, children }: { title: string; count: number; empty: string; children: ReactNode }) {
-  const items = Children.toArray(children).filter(Boolean);
-  const isEmpty = items.length === 0;
-
-  return (
-    <AccordionPanel title={title} count={count}>
-      {isEmpty ? <p className="px-5 py-4 text-sm text-[var(--muted)]">{empty}</p> : <div className="grid gap-3 p-4">{items}</div>}
-    </AccordionPanel>
-  );
-}
-
-function ListRow({ title, meta }: { title: string; meta: string }) {
-  return (
-    <div className="rounded-lg border border-[var(--line)] bg-white px-4 py-3">
-      <div className="font-semibold">{title}</div>
-      <div className="mt-1 text-sm text-[var(--muted)]">{meta}</div>
-    </div>
   );
 }
 
