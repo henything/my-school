@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
+  calculateCurrentMonthSubscriptionPeriod,
   calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
@@ -17,6 +18,20 @@ describe("billing calculations", () => {
   it("calculates mid-period totals from remaining lessons", () => {
     expect(calculateSubscriptionTotal(3, 45000)).toBe(135000);
     expect(calculateSubscriptionTotal(5, 50000)).toBe(250000);
+  });
+
+  it("builds a current-month subscription period from a mid-month start", () => {
+    const period = calculateCurrentMonthSubscriptionPeriod(new Date("2026-09-15T14:30:00.000Z"));
+
+    expect(period.periodStart.toISOString()).toBe("2026-09-15T00:00:00.000Z");
+    expect(period.periodEnd.toISOString()).toBe("2026-09-30T00:00:00.000Z");
+  });
+
+  it("keeps a first-day start as a full calendar month", () => {
+    const period = calculateCurrentMonthSubscriptionPeriod(new Date("2026-12-01T00:00:00.000Z"));
+
+    expect(period.periodStart.toISOString()).toBe("2026-12-01T00:00:00.000Z");
+    expect(period.periodEnd.toISOString()).toBe("2026-12-31T00:00:00.000Z");
   });
 
   it("reduces future invoices by available makeup credits", () => {

@@ -20,6 +20,7 @@ import { dateToKey } from "@/server/schedule/generation";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
+  calculateCurrentMonthSubscriptionPeriod,
   calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
@@ -139,6 +140,16 @@ type AttendanceBalanceRecord = {
   id: string;
   childId: string;
   status: CoachAttendanceStatus;
+};
+
+type SubscriptionCreationInput = {
+  childId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  plannedLessonsCount?: number;
+  totalAmountKopeks?: number;
+  lessonPriceKopeks: number;
+  paymentStatus: PaymentStatus;
 };
 
 export { DEFAULT_LESSON_PRICE_KOPEKS };
@@ -557,105 +568,166 @@ export async function getChildBalance(currentUser: CurrentUser, childId: string)
 export async function createSubscription(currentUser: CurrentUser, input: CreateSubscriptionInput) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => {
-    const child = await tx.child.findFirstOrThrow({
-      where: {
-        id: input.childId,
-        schoolId: currentUser.schoolId,
-        status: { not: "ARCHIVED" }
-      },
-      select: {
-        id: true,
-        fullName: true,
-        parentId: true,
-        parent: { select: { id: true, fullName: true, phone: true } },
-        currentGroupId: true,
-        cachedLessonBalance: true,
-        cachedMakeupBalance: true,
-        admissionStatus: true
-      }
-    });
+  return getPrisma().$transaction(async (tx) => createSubscriptionInTransaction(tx, currentUser, input));
+}
 
-    if (!child.parentId || !child.parent) {
-      throw new Error("Нельзя создать абонемент и счёт: у ребёнка нет родителя.");
+export async function ensureCurrentMonthSubscriptionForChild(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  childId: string,
+  anchorDate = new Date()
+) {
+  assertAdmin(currentUser);
+
+  const { periodStart, periodEnd } = calculateCurrentMonthSubscriptionPeriod(anchorDate);
+
+  const child = await tx.child.findFirst({
+    where: {
+      id: childId,
+      schoolId: currentUser.schoolId,
+      status: { not: "ARCHIVED" },
+      parentId: { not: null },
+      currentGroupId: { not: null }
+    },
+    select: { id: true, currentGroupId: true }
+  });
+
+  if (!child?.currentGroupId) {
+    return null;
+  }
+
+  const existingCurrentMonthSubscription = await tx.subscription.findFirst({
+    where: {
+      schoolId: currentUser.schoolId,
+      childId,
+      periodStart: { lte: periodEnd },
+      periodEnd: { gte: periodStart }
+    },
+    select: { id: true }
+  });
+
+  if (existingCurrentMonthSubscription) {
+    return null;
+  }
+
+  const plannedLessonsCount = await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, periodStart, periodEnd);
+
+  if (plannedLessonsCount <= 0) {
+    return null;
+  }
+
+  return createSubscriptionInTransaction(tx, currentUser, {
+    childId,
+    periodStart,
+    periodEnd,
+    plannedLessonsCount,
+    lessonPriceKopeks: DEFAULT_LESSON_PRICE_KOPEKS,
+    paymentStatus: "NOT_INVOICED"
+  });
+}
+
+async function createSubscriptionInTransaction(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  input: SubscriptionCreationInput
+) {
+  const child = await tx.child.findFirstOrThrow({
+    where: {
+      id: input.childId,
+      schoolId: currentUser.schoolId,
+      status: { not: "ARCHIVED" }
+    },
+    select: {
+      id: true,
+      fullName: true,
+      parentId: true,
+      parent: { select: { id: true, fullName: true, phone: true } },
+      currentGroupId: true,
+      cachedLessonBalance: true,
+      cachedMakeupBalance: true,
+      admissionStatus: true
     }
+  });
 
-    const plannedLessonsCount =
-      input.plannedLessonsCount ??
-      (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, input.periodStart, input.periodEnd));
+  if (!child.parentId || !child.parent) {
+    throw new Error("Нельзя создать абонемент и счёт: у ребёнка нет родителя.");
+  }
 
-    if (plannedLessonsCount <= 0) {
-      throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
-    }
+  const plannedLessonsCount =
+    input.plannedLessonsCount ??
+    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, input.periodStart, input.periodEnd));
 
-    const totalAmountKopeks = input.totalAmountKopeks ?? calculateSubscriptionTotal(plannedLessonsCount, input.lessonPriceKopeks);
-    const lessonPriceKopeks = input.totalAmountKopeks ? Math.round(totalAmountKopeks / plannedLessonsCount) : input.lessonPriceKopeks;
-    const subscription = await tx.subscription.create({
-      data: {
-        schoolId: currentUser.schoolId,
-        childId: child.id,
-        periodStart: input.periodStart,
-        periodEnd: input.periodEnd,
-        plannedLessonsCount,
-        lessonPriceKopeks,
-        totalAmountKopeks,
-        paymentStatus: input.paymentStatus,
-        createdByUserId: currentUser.id
-      },
-      include: subscriptionListInclude
-    });
+  if (plannedLessonsCount <= 0) {
+    throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
+  }
 
-    const transaction = await tx.lessonBalanceTransaction.create({
-      data: {
-        schoolId: currentUser.schoolId,
-        childId: child.id,
-        subscriptionId: subscription.id,
-        type: "SUBSCRIPTION_CREATED",
-        balanceType: "LESSON_BALANCE",
-        amount: plannedLessonsCount,
-        reason: "SUBSCRIPTION_CREATED",
-        createdByUserId: currentUser.id,
-        comment: `Абонемент ${dateToKey(input.periodStart)}-${dateToKey(input.periodEnd)}`
-      }
-    });
+  const totalAmountKopeks = input.totalAmountKopeks ?? calculateSubscriptionTotal(plannedLessonsCount, input.lessonPriceKopeks);
+  const lessonPriceKopeks = input.totalAmountKopeks ? Math.round(totalAmountKopeks / plannedLessonsCount) : input.lessonPriceKopeks;
+  const subscription = await tx.subscription.create({
+    data: {
+      schoolId: currentUser.schoolId,
+      childId: child.id,
+      periodStart: input.periodStart,
+      periodEnd: input.periodEnd,
+      plannedLessonsCount,
+      lessonPriceKopeks,
+      totalAmountKopeks,
+      paymentStatus: input.paymentStatus,
+      createdByUserId: currentUser.id
+    },
+    include: subscriptionListInclude
+  });
 
-    const nextBalance = child.cachedLessonBalance + plannedLessonsCount;
-    await tx.child.update({
-      where: { id: child.id },
-      data: {
-        cachedLessonBalance: { increment: plannedLessonsCount },
-        admissionStatus: admissionStatusAfterLessonBalance(nextBalance, child.admissionStatus)
-      }
-    });
-
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: "SUBSCRIPTION_CREATED",
-        entityType: "Subscription",
-        entityId: subscription.id,
-        newValue: serializeSubscription(subscription)
-      },
-      tx
-    );
-
-    await auditBalanceTransaction(tx, currentUser, transaction.id, {
+  const transaction = await tx.lessonBalanceTransaction.create({
+    data: {
+      schoolId: currentUser.schoolId,
       childId: child.id,
       subscriptionId: subscription.id,
+      type: "SUBSCRIPTION_CREATED",
+      balanceType: "LESSON_BALANCE",
       amount: plannedLessonsCount,
-      type: "SUBSCRIPTION_CREATED"
-    });
-
-    await createInvoiceForSubscription(tx, currentUser, subscription.id, defaultInvoiceDueDate(input.periodStart));
-
-    const updatedSubscription = await tx.subscription.findUniqueOrThrow({
-      where: { id: subscription.id },
-      include: subscriptionListInclude
-    });
-
-    return serializeSubscription(updatedSubscription);
+      reason: "SUBSCRIPTION_CREATED",
+      createdByUserId: currentUser.id,
+      comment: `Абонемент ${dateToKey(input.periodStart)}-${dateToKey(input.periodEnd)}`
+    }
   });
+
+  const nextBalance = child.cachedLessonBalance + plannedLessonsCount;
+  await tx.child.update({
+    where: { id: child.id },
+    data: {
+      cachedLessonBalance: { increment: plannedLessonsCount },
+      admissionStatus: admissionStatusAfterLessonBalance(nextBalance, child.admissionStatus)
+    }
+  });
+
+  await writeAuditLog(
+    {
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "SUBSCRIPTION_CREATED",
+      entityType: "Subscription",
+      entityId: subscription.id,
+      newValue: serializeSubscription(subscription)
+    },
+    tx
+  );
+
+  await auditBalanceTransaction(tx, currentUser, transaction.id, {
+    childId: child.id,
+    subscriptionId: subscription.id,
+    amount: plannedLessonsCount,
+    type: "SUBSCRIPTION_CREATED"
+  });
+
+  await createInvoiceForSubscription(tx, currentUser, subscription.id, defaultInvoiceDueDate(input.periodStart));
+
+  const updatedSubscription = await tx.subscription.findUniqueOrThrow({
+    where: { id: subscription.id },
+    include: subscriptionListInclude
+  });
+
+  return serializeSubscription(updatedSubscription);
 }
 
 export async function updateChildPaymentStatus(currentUser: CurrentUser, childId: string, input: UpdatePaymentStatusInput) {

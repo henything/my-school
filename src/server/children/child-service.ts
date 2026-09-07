@@ -1,6 +1,7 @@
 import { hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
+import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing-service";
 import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { serializeParent } from "@/server/parents/parent-service";
@@ -157,7 +158,14 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
       });
     }
 
-    return serializeChild(child);
+    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id, child.createdAt);
+
+    const refreshedChild = await tx.child.findUniqueOrThrow({
+      where: { id: child.id },
+      include: childInclude
+    });
+
+    return serializeChild(refreshedChild);
   });
 }
 
@@ -253,8 +261,15 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
       });
     }
 
+    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id, child.createdAt);
+
+    const refreshedChild = await tx.child.findUniqueOrThrow({
+      where: { id: child.id },
+      include: childInclude
+    });
+
     return {
-      child: serializedChild,
+      child: serializeChild(refreshedChild),
       parent: createdParent
     };
   });
@@ -439,7 +454,17 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
       }
     }
 
-    const serialized = serializeChild(updated);
+    const subscriptionAnchorDate = new Date();
+    if (existing.currentGroup?.id !== updated.currentGroup?.id) {
+      await ensureCurrentMonthSubscriptionForChild(tx, currentUser, updated.id, subscriptionAnchorDate);
+    }
+
+    const refreshedUpdated = await tx.child.findUniqueOrThrow({
+      where: { id: updated.id },
+      include: childInclude
+    });
+
+    const serialized = serializeChild(refreshedUpdated);
 
     if (isCoach && !isAdmin) {
       const { cachedLessonBalance, cachedMakeupBalance, ...coachVisibleChild } = serialized;

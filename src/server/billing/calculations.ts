@@ -2,6 +2,21 @@ import type { AdmissionStatus } from "@/generated/prisma/enums";
 
 export const DEFAULT_LESSON_PRICE_KOPEKS = 45000;
 
+export function startOfDateUtc(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+export function endOfCalendarMonthUtc(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0));
+}
+
+export function calculateCurrentMonthSubscriptionPeriod(anchorDate: Date) {
+  return {
+    periodStart: startOfDateUtc(anchorDate),
+    periodEnd: endOfCalendarMonthUtc(anchorDate)
+  };
+}
+
 export function calculateBillableLessons(plannedLessonsCount: number, makeupCreditsToApply = 0) {
   return Math.max(plannedLessonsCount - Math.max(makeupCreditsToApply, 0), 0);
 }

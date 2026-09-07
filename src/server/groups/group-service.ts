@@ -1,5 +1,6 @@
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
+import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing-service";
 import { getPrisma } from "@/server/db/prisma";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
 import { countActiveChildren } from "./capacity";
@@ -257,6 +258,8 @@ export async function attachChildToGroup(currentUser: CurrentUser, groupId: stri
       activeChildrenCount: countActiveChildren(updatedGroup.children),
       capacityLimit: updatedGroup.capacityLimit
     });
+
+    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id);
 
     return serializeGroup(updatedGroup);
   });
