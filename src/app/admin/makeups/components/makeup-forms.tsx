@@ -168,7 +168,7 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-bold">Ожидают финализации болезни</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Файлы справок и заявлений не хранятся в системе.</p>
+            <p className="mt-1 text-sm text-[var(--muted)]">Справку можно прикрепить ниже и одобрить после проверки.</p>
           </div>
           <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingSickness.length}</span>
         </div>
@@ -298,7 +298,22 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [childId, setChildId] = useState("");
+  const [attendanceRecordId, setAttendanceRecordId] = useState("");
+  const [periodStart, setPeriodStart] = useState("");
+  const [periodEnd, setPeriodEnd] = useState("");
   const disabled = childOptions.length === 0;
+
+  function selectAttendanceRecord(nextAttendanceRecordId: string) {
+    setAttendanceRecordId(nextAttendanceRecordId);
+
+    const sickness = pendingSickness.find((record) => record.id === nextAttendanceRecordId);
+    if (sickness) {
+      setChildId(sickness.child.id);
+      setPeriodStart(sickness.lesson.lessonDate);
+      setPeriodEnd(sickness.lesson.lessonDate);
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -306,7 +321,6 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
     setIsSubmitting(true);
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const attendanceRecordId = String(formData.get("attendanceRecordId") ?? "");
     const sickness = pendingSickness.find((record) => record.id === attendanceRecordId);
 
     if (sickness) {
@@ -325,6 +339,10 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
       }
 
       form.reset();
+      setChildId("");
+      setAttendanceRecordId("");
+      setPeriodStart("");
+      setPeriodEnd("");
       setMessage("Справка загружена и ждёт решения.");
       router.refresh();
     } catch (error) {
@@ -343,7 +361,7 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
       <div className="grid gap-4 lg:grid-cols-2">
         <label className="label">
           Ребёнок
-          <select className="field" name="childId" required disabled={disabled}>
+          <select className="field" name="childId" value={childId} onChange={(event) => setChildId(event.target.value)} required disabled={disabled}>
             <option value="">Выбрать</option>
             {childOptions.map((child) => (
               <option key={child.id} value={child.id}>
@@ -354,7 +372,13 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
         </label>
         <label className="label">
           Привязать к болезни
-          <select className="field" name="attendanceRecordId" disabled={pendingSickness.length === 0}>
+          <select
+            className="field"
+            name="attendanceRecordId"
+            value={attendanceRecordId}
+            onChange={(event) => selectAttendanceRecord(event.target.value)}
+            disabled={pendingSickness.length === 0}
+          >
             <option value="">Без привязки</option>
             {pendingSickness.map((record) => (
               <option key={record.id} value={record.id}>
@@ -367,11 +391,27 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
       <div className="grid gap-4 lg:grid-cols-3">
         <label className="label">
           Период с
-          <input className="field" name="periodStart" type="date" required disabled={disabled} />
+          <input
+            className="field"
+            name="periodStart"
+            type="date"
+            value={periodStart}
+            onChange={(event) => setPeriodStart(event.target.value)}
+            required
+            disabled={disabled}
+          />
         </label>
         <label className="label">
           Период по
-          <input className="field" name="periodEnd" type="date" required disabled={disabled} />
+          <input
+            className="field"
+            name="periodEnd"
+            type="date"
+            value={periodEnd}
+            onChange={(event) => setPeriodEnd(event.target.value)}
+            required
+            disabled={disabled}
+          />
         </label>
         <label className="label">
           Файл
