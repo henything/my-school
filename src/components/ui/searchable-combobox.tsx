@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Search, X } from "lucide-react";
+import { Check, ChevronDown, Search, X } from "lucide-react";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/cn";
 
@@ -48,9 +48,10 @@ export function SearchableCombobox({
   const [isOpen, setIsOpen] = useState(false);
 
   const selectedOption = useMemo(() => options.find((option) => option.value === selectedValue), [options, selectedValue]);
+  const effectiveQuery = selectedOption && query === selectedOption.label ? "" : query;
 
   const filteredOptions = useMemo(() => {
-    const normalizedQuery = normalize(query);
+    const normalizedQuery = normalize(effectiveQuery);
 
     if (!normalizedQuery) {
       return options.slice(0, MAX_VISIBLE_OPTIONS);
@@ -59,7 +60,7 @@ export function SearchableCombobox({
     return options
       .filter((option) => normalize(`${option.label} ${option.description ?? ""} ${option.searchText ?? ""}`).includes(normalizedQuery))
       .slice(0, MAX_VISIBLE_OPTIONS);
-  }, [options, query]);
+  }, [effectiveQuery, options]);
 
   const hiddenOptionCount = Math.max(0, options.length - filteredOptions.length);
 
@@ -131,7 +132,13 @@ export function SearchableCombobox({
           required={required}
           disabled={disabled}
           onBlur={restoreSelectedLabel}
-          onFocus={() => setIsOpen(true)}
+          onFocus={(event) => {
+            setIsOpen(true);
+            if (selectedOption && event.currentTarget.value === selectedOption.label) {
+              event.currentTarget.select();
+            }
+          }}
+          onClick={() => setIsOpen(true)}
           onChange={(event) => {
             setQuery(event.target.value);
             setSelectedValue("");
@@ -160,8 +167,20 @@ export function SearchableCombobox({
           >
             <X aria-hidden="true" size={15} />
           </button>
-        ) : null}
+        ) : (
+          <ChevronDown
+            className={cn("pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] transition-transform", isOpen ? "rotate-180" : null)}
+            aria-hidden="true"
+            size={16}
+          />
+        )}
       </div>
+      {!compact && selectedOption ? (
+        <div className="mt-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm">
+          <span className="font-semibold text-[var(--foreground)]">{selectedOption.label}</span>
+          {selectedOption.description ? <span className="ml-2 text-[var(--muted)]">{selectedOption.description}</span> : null}
+        </div>
+      ) : null}
 
       {isOpen && !disabled ? (
         <div
@@ -197,7 +216,7 @@ export function SearchableCombobox({
           ))}
 
           {filteredOptions.length === 0 ? <div className="px-3 py-2 text-sm font-semibold text-[var(--muted)]">Ничего не найдено</div> : null}
-          {hiddenOptionCount > 0 && query.length === 0 ? (
+          {hiddenOptionCount > 0 && effectiveQuery.length === 0 ? (
             <div className="px-3 py-2 text-xs font-semibold text-[var(--muted)]">Введите текст, чтобы сузить список из {options.length} вариантов.</div>
           ) : null}
         </div>

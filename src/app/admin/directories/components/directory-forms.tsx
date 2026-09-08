@@ -242,7 +242,7 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
         Название
         <input className="field" name="name" minLength={2} required disabled={disabled} />
       </label>
-      <div className="grid gap-4 sm:grid-cols-[1fr_1fr_120px]">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]">
         <div className="label">
           <span>Филиал</span>
           <SearchableCombobox
