@@ -6,10 +6,12 @@ import {
   ChevronDown,
   ClipboardList,
   FileCheck2,
+  Link2,
   ListChecks,
   ShieldAlert,
   TicketCheck,
   UserMinus,
+  UserRound,
   WalletCards,
   Users
 } from "lucide-react";
@@ -102,38 +104,34 @@ export default async function OperationsPage() {
           {center.tasks.length === 0 ? (
             <p className="px-5 py-4 text-sm text-[var(--muted)]">Открытых операционных задач нет.</p>
           ) : (
-            <div className="table-shell">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Задача</th>
-                    <th>Адресат</th>
-                    <th>Связь</th>
-                    <th>Срок</th>
-                    <th>Действие</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {center.tasks.map((task) => (
-                    <tr key={task.id} className={task.priority === "CRITICAL" ? "bg-[var(--red-soft)]" : undefined}>
-                      <td>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <PriorityBadge priority={task.priority} />
-                          <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.type)}</span>
-                        </div>
-                        <div className="mt-2 font-semibold">{task.title}</div>
-                        {task.description ? <p className="mt-1 text-sm text-[var(--muted)]">{task.description}</p> : null}
-                      </td>
-                      <td>{task.assigneeUser?.displayName ?? "Не назначено"}</td>
-                      <td>{relatedLabel(task)}</td>
-                      <td>{task.dueAt ? formatDateTime(task.dueAt) : "Без срока"}</td>
-                      <td>
-                        <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} allowCancel />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="grid gap-3 p-4">
+              {center.tasks.map((task) => (
+                <article
+                  key={task.id}
+                  className={cn(
+                    "grid min-w-0 gap-4 rounded-lg border bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_280px]",
+                    task.priority === "CRITICAL" ? "border-[#ffb3bd] bg-[var(--red-soft)]" : "border-[var(--line)]"
+                  )}
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <PriorityBadge priority={task.priority} />
+                      <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{labelForEnum(task.type)}</span>
+                    </div>
+                    <h3 className="mt-3 text-base font-extrabold leading-snug">{task.title}</h3>
+                    {task.description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-[var(--muted)]">{task.description}</p> : null}
+                    <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-3">
+                      <TaskMeta icon={<UserRound aria-hidden="true" size={15} />} label="Ответственный" value={task.assigneeUser?.displayName ?? "Не назначено"} />
+                      <TaskMeta icon={<CalendarDays aria-hidden="true" size={15} />} label="Срок" value={task.dueAt ? formatDateTime(task.dueAt) : "Без срока"} />
+                      <TaskMeta icon={<Link2 aria-hidden="true" size={15} />} label="Связь" value={relatedLabel(task)} />
+                    </dl>
+                  </div>
+                  <div className="rounded-lg border border-[var(--line)] bg-white/85 p-3">
+                    <div className="mb-3 text-sm font-bold text-[var(--muted)]">Закрытие задачи</div>
+                    <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} allowCancel />
+                  </div>
+                </article>
+              ))}
             </div>
           )}
         </AccordionPanel>
@@ -159,6 +157,20 @@ export default async function OperationsPage() {
 
 function PriorityBadge({ priority }: { priority: string }) {
   return <span className={cn("badge", priorityClassName[priority] ?? "bg-[#ececec] text-[#555]")}>{labelForEnum(priority)}</span>;
+}
+
+function TaskMeta({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+  return (
+    <div className="min-w-0 rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2">
+      <dt className="flex items-center gap-1.5 text-xs font-bold uppercase text-[var(--muted)]">
+        {icon}
+        {label}
+      </dt>
+      <dd className="mt-1 truncate font-semibold text-[var(--foreground)]" title={value}>
+        {value}
+      </dd>
+    </div>
+  );
 }
 
 function AccordionPanel({
