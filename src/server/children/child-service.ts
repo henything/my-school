@@ -15,7 +15,7 @@ const childInclude = {
       id: true,
       name: true,
       capacityLimit: true,
-      branch: { select: { id: true, name: true } },
+      branch: { select: { id: true, name: true, address: true } },
       mainCoach: { select: { id: true, userId: true, user: { select: { displayName: true } } } },
       children: { select: { id: true, status: true } }
     }
@@ -44,7 +44,7 @@ type ChildRecord = {
     id: string;
     name: string;
     capacityLimit: number;
-    branch: { id: string; name: string };
+    branch: { id: string; name: string; address: string | null };
     mainCoach: { id: string; userId: string; user: { displayName: string } };
     children: Array<{ id: string; status: string }>;
   } | null;

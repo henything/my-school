@@ -13,7 +13,7 @@ type Group = {
   capacityLimit: number;
   activeChildrenCount: number;
   isOverCapacity: boolean;
-  branch: { name: string };
+  branch: { name: string; address: string | null };
   mainCoach: { displayName: string };
 };
 
@@ -24,7 +24,7 @@ type Child = {
   admissionStatus: string;
   cachedMakeupBalance: number;
   parent: { fullName: string | null; phone: string | null } | null;
-  currentGroup: { id: string; name: string } | null;
+  currentGroup: { id: string; name: string; branch?: { address: string | null } } | null;
 };
 
 type DirectoryTablesProps = {
@@ -37,20 +37,29 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
+  const [addressFilter, setAddressFilter] = useState("ALL");
 
   const normalizedQuery = normalize(query);
-  const hasActiveFilters = normalizedQuery.length > 0 || statusFilter !== "ALL" || groupFilter !== "ALL";
+  const hasActiveFilters = normalizedQuery.length > 0 || statusFilter !== "ALL" || groupFilter !== "ALL" || addressFilter !== "ALL";
+  const addressOptions = useMemo(
+    () =>
+      Array.from(new Set(groups.map((group) => group.branch.address).filter((address): address is string => Boolean(address?.trim())))).sort((left, right) =>
+        left.localeCompare(right, "ru")
+      ),
+    [groups]
+  );
   const filteredGroups = useMemo(
     () =>
       groups.filter((group) => {
         const matchesStatus = statusFilter === "ALL" || group.status === statusFilter;
+        const matchesAddress = addressFilter === "ALL" || group.branch.address === addressFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          toSearchText(`${group.name} ${group.branch.name} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
+          toSearchText(`${group.name} ${group.branch.name} ${group.branch.address ?? ""} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
 
-        return matchesStatus && matchesQuery;
+        return matchesStatus && matchesAddress && matchesQuery;
       }),
-    [groups, normalizedQuery, statusFilter]
+    [addressFilter, groups, normalizedQuery, statusFilter]
   );
 
   const filteredChildren = useMemo(
@@ -58,15 +67,16 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
       childRows.filter((child) => {
         const matchesStatus = statusFilter === "ALL" || child.status === statusFilter || child.admissionStatus === statusFilter;
         const matchesGroup = groupFilter === "ALL" || child.currentGroup?.id === groupFilter;
+        const matchesAddress = addressFilter === "ALL" || child.currentGroup?.branch?.address === addressFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
           toSearchText(
             `${child.fullName} ${child.parent?.fullName ?? ""} ${child.parent?.phone ?? ""} ${child.currentGroup?.name ?? ""} ${labelsForSearch(child.status, child.admissionStatus)}`
           ).includes(normalizedQuery);
 
-        return matchesStatus && matchesGroup && matchesQuery;
+        return matchesStatus && matchesGroup && matchesAddress && matchesQuery;
       }),
-    [childRows, groupFilter, normalizedQuery, statusFilter]
+    [addressFilter, childRows, groupFilter, normalizedQuery, statusFilter]
   );
 
   const overCapacityCount = groups.filter((group) => group.isOverCapacity).length;
@@ -84,7 +94,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
               <Search className="text-[var(--accent)]" aria-hidden="true" size={18} />
               Поиск по таблицам
             </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Фильтрует таблицы групп и детей по ФИО, телефону, группе, тренеру и статусу.</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Фильтрует таблицы групп и детей по ФИО, телефону, группе, тренеру, адресу и статусу.</p>
           </div>
           <div className="flex flex-wrap gap-2">
             {hasActiveFilters ? <MetricChip label="Найдено" value={filteredTotal} tone={filteredTotal === 0 ? "warning" : "neutral"} /> : null}
@@ -95,10 +105,10 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_minmax(180px,240px)]">
+        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_minmax(180px,240px)_minmax(180px,240px)]">
           <label className="label">
             Поиск
-            <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ФИО, телефон, группа, тренер" />
+            <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="ФИО, телефон, группа, тренер, адрес" />
           </label>
           <label className="label">
             Статус
@@ -120,6 +130,17 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
               {groups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="label">
+            Адрес
+            <select className="field" value={addressFilter} onChange={(event) => setAddressFilter(event.target.value)}>
+              <option value="ALL">Все адреса</option>
+              {addressOptions.map((address) => (
+                <option key={address} value={address}>
+                  {address}
                 </option>
               ))}
             </select>
@@ -148,6 +169,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
                 <tr>
                   <th>Название</th>
                   <th>Филиал</th>
+                  <th>Адрес</th>
                   <th>Тренер</th>
                   <th>Статус</th>
                   <th>Заполненность</th>
@@ -158,6 +180,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
                   <tr key={group.id} className={group.isOverCapacity ? "bg-[#fff9ec]" : undefined}>
                     <td className="font-semibold">{group.name}</td>
                     <td>{group.branch.name}</td>
+                    <td>{group.branch.address ?? "-"}</td>
                     <td>{group.mainCoach.displayName}</td>
                     <td>
                       <StatusBadge status={group.status} />
@@ -169,7 +192,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
                     </td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={5} label="Группы по фильтрам не найдены." /> : null}
+                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={6} label="Группы по фильтрам не найдены." /> : null}
               </tbody>
             </table>
           </div>

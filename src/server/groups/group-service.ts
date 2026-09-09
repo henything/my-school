@@ -16,6 +16,7 @@ type GroupRecord = {
   branch: {
     id: string;
     name: string;
+    address: string | null;
   };
   mainCoach: {
     id: string;
@@ -33,7 +34,7 @@ type GroupRecord = {
 };
 
 const groupInclude = {
-  branch: { select: { id: true, name: true } },
+  branch: { select: { id: true, name: true, address: true } },
   mainCoach: {
     select: {
       id: true,
