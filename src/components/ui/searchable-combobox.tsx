@@ -176,17 +176,16 @@ export function SearchableCombobox({
         )}
       </div>
       {!compact && selectedOption ? (
-        <div className="mt-2 rounded-md border border-[var(--line)] bg-[var(--panel-soft)] px-3 py-2 text-sm">
-          <span className="font-semibold text-[var(--foreground)]">{selectedOption.label}</span>
-          {selectedOption.description ? <span className="ml-2 text-[var(--muted)]">{selectedOption.description}</span> : null}
-        </div>
+        <p className="mt-1 min-w-0 truncate text-xs font-semibold text-[var(--muted)]" title={[selectedOption.label, selectedOption.description].filter(Boolean).join(" · ")}>
+          {selectedOption.description ?? "Выбрано"}
+        </p>
       ) : null}
 
       {isOpen && !disabled ? (
         <div
           id={listboxId}
           role="listbox"
-          className="absolute left-0 right-0 z-30 mt-2 max-h-80 overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-[0_18px_44px_rgba(31,37,35,0.16)]"
+          className="absolute left-0 z-30 mt-2 max-h-80 w-[min(28rem,calc(100vw-2rem))] min-w-full overflow-y-auto rounded-lg border border-[var(--line)] bg-white p-1 shadow-[0_18px_44px_rgba(31,37,35,0.16)]"
           onMouseDown={(event) => event.preventDefault()}
         >
           {!required && emptyValueLabel ? (
@@ -207,9 +206,9 @@ export function SearchableCombobox({
               className="combo-option"
               onClick={() => selectOption(option)}
             >
-              <span className="min-w-0">
-                <span className="block truncate font-semibold">{option.label}</span>
-                {option.description ? <span className="block truncate text-xs text-[var(--muted)]">{option.description}</span> : null}
+              <span className="min-w-0 flex-1">
+                <span className="block whitespace-normal break-words font-semibold leading-snug">{option.label}</span>
+                {option.description ? <span className="mt-1 block whitespace-normal break-words text-xs leading-snug text-[var(--muted)]">{option.description}</span> : null}
               </span>
               {option.value === selectedValue ? <Check className="shrink-0 text-[var(--accent)]" aria-hidden="true" size={15} /> : null}
             </button>
