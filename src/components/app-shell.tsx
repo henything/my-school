@@ -17,7 +17,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   UserRoundPlus,
-  UserCircle,
   Users,
   WalletCards
 } from "lucide-react";
@@ -92,10 +91,6 @@ export function AppShell({ user, area, children }: AppShellProps) {
             <Link href="/parent/payments" {...navLinkProps("/parent/payments")}>
               <CreditCard aria-hidden="true" size={16} />
               Оплаты
-            </Link>
-            <Link href="/parent/profile" {...navLinkProps("/parent/profile")}>
-              <UserCircle aria-hidden="true" size={16} />
-              Профиль
             </Link>
           </div>
         </nav>

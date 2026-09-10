@@ -193,6 +193,12 @@ enum MedicalCertificateStatus {
   REJECTED
 }
 
+enum VacationRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum TrialStatus {
   TRIAL_BOOKED
   TRIAL_ATTENDED
@@ -232,32 +238,33 @@ model School {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users         User[]
-  adminProfiles AdminProfile[]
-  coachProfiles CoachProfile[]
-  branches      Branch[]
-  parents       Parent[]
-  parentAccounts ParentAccount[]
-  parentInvites  ParentInvite[]
-  passwordResetTokens PasswordResetToken[]
-  children      Child[]
-  groups        TrainingGroup[]
-  scheduleTemplates ScheduleTemplate[]
-  lessons       Lesson[]
-  subscriptions Subscription[]
-  invoices      Invoice[]
-  paymentAttempts PaymentAttempt[]
-  payments      Payment[]
-  paymentWebhookEvents PaymentWebhookEvent[]
+  users                     User[]
+  adminProfiles             AdminProfile[]
+  coachProfiles             CoachProfile[]
+  branches                  Branch[]
+  parents                   Parent[]
+  parentAccounts            ParentAccount[]
+  parentInvites             ParentInvite[]
+  passwordResetTokens       PasswordResetToken[]
+  children                  Child[]
+  groups                    TrainingGroup[]
+  scheduleTemplates         ScheduleTemplate[]
+  lessons                   Lesson[]
+  subscriptions             Subscription[]
+  invoices                  Invoice[]
+  paymentAttempts           PaymentAttempt[]
+  payments                  Payment[]
+  paymentWebhookEvents      PaymentWebhookEvent[]
   lessonBalanceTransactions LessonBalanceTransaction[]
-  makeupCredits MakeupCredit[]
-  groupEvents   GroupEvent[]
-  sessions      Session[]
-  tasks         Task[]
-  auditLogs     AuditLog[]
-  trialParticipants TrialParticipant[]
-  importBatches ImportBatch[]
-  medicalCertificates MedicalCertificate[]
+  makeupCredits             MakeupCredit[]
+  groupEvents               GroupEvent[]
+  sessions                  Session[]
+  tasks                     Task[]
+  auditLogs                 AuditLog[]
+  trialParticipants         TrialParticipant[]
+  importBatches             ImportBatch[]
+  medicalCertificates       MedicalCertificate[]
+  vacationRequests          VacationRequest[]
 
   @@map("schools")
 }
@@ -273,28 +280,30 @@ model User {
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
 
-  school        School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  adminProfile  AdminProfile?
-  coachProfile  CoachProfile?
-  parentAccount ParentAccount? @relation("ParentAccountUser")
-  sessions      Session[]
-  assignedTasks Task[]        @relation("TaskAssignee")
-  closedTasks   Task[]        @relation("TaskClosedBy")
-  markedAttendance AttendanceRecord[] @relation("AttendanceMarkedBy")
-  finalizedAttendance AttendanceRecord[] @relation("AttendanceFinalizedBy")
-  createdSubscriptions Subscription[] @relation("SubscriptionCreatedBy")
-  createdInvoices Invoice[] @relation("InvoiceCreatedBy")
-  createdParentInvites ParentInvite[] @relation("ParentInviteCreatedBy")
-  passwordResetTokens PasswordResetToken[] @relation("PasswordResetTokenUser")
-  createdPasswordResetTokens PasswordResetToken[] @relation("PasswordResetTokenCreatedBy")
-  createdBalanceTransactions LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
-  createdMakeupCredits MakeupCredit[] @relation("MakeupCreditCreatedBy")
-  createdGroupEvents GroupEvent[] @relation("GroupEventCreatedBy")
-  createdTrialParticipants TrialParticipant[] @relation("TrialParticipantCreatedBy")
-  uploadedImportBatches ImportBatch[] @relation("ImportBatchUploadedBy")
-  uploadedMedicalCertificates MedicalCertificate[] @relation("MedicalCertificateUploadedBy")
-  reviewedMedicalCertificates MedicalCertificate[] @relation("MedicalCertificateReviewedBy")
-  auditLogs     AuditLog[]    @relation("AuditActor")
+  school                      School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  adminProfile                AdminProfile?
+  coachProfile                CoachProfile?
+  parentAccount               ParentAccount?             @relation("ParentAccountUser")
+  sessions                    Session[]
+  assignedTasks               Task[]                     @relation("TaskAssignee")
+  closedTasks                 Task[]                     @relation("TaskClosedBy")
+  markedAttendance            AttendanceRecord[]         @relation("AttendanceMarkedBy")
+  finalizedAttendance         AttendanceRecord[]         @relation("AttendanceFinalizedBy")
+  createdSubscriptions        Subscription[]             @relation("SubscriptionCreatedBy")
+  createdInvoices             Invoice[]                  @relation("InvoiceCreatedBy")
+  createdParentInvites        ParentInvite[]             @relation("ParentInviteCreatedBy")
+  passwordResetTokens         PasswordResetToken[]       @relation("PasswordResetTokenUser")
+  createdPasswordResetTokens  PasswordResetToken[]       @relation("PasswordResetTokenCreatedBy")
+  createdBalanceTransactions  LessonBalanceTransaction[] @relation("BalanceTransactionCreatedBy")
+  createdMakeupCredits        MakeupCredit[]             @relation("MakeupCreditCreatedBy")
+  createdGroupEvents          GroupEvent[]               @relation("GroupEventCreatedBy")
+  createdTrialParticipants    TrialParticipant[]         @relation("TrialParticipantCreatedBy")
+  uploadedImportBatches       ImportBatch[]              @relation("ImportBatchUploadedBy")
+  uploadedMedicalCertificates MedicalCertificate[]       @relation("MedicalCertificateUploadedBy")
+  reviewedMedicalCertificates MedicalCertificate[]       @relation("MedicalCertificateReviewedBy")
+  uploadedVacationRequests    VacationRequest[]          @relation("VacationRequestUploadedBy")
+  reviewedVacationRequests    VacationRequest[]          @relation("VacationRequestReviewedBy")
+  auditLogs                   AuditLog[]                 @relation("AuditActor")
 
   @@unique([schoolId, login])
   @@index([schoolId])
@@ -326,12 +335,12 @@ model CoachProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  school School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  user   User            @relation(fields: [userId], references: [id], onDelete: Restrict)
-  groups TrainingGroup[]
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  groups            TrainingGroup[]
   scheduleTemplates ScheduleTemplate[]
-  lessons Lesson[] @relation("LessonCoach")
-  substituteLessons Lesson[] @relation("LessonSubstituteCoach")
+  lessons           Lesson[]           @relation("LessonCoach")
+  substituteLessons Lesson[]           @relation("LessonSubstituteCoach")
   trialParticipants TrialParticipant[]
 
   @@index([schoolId])
@@ -349,10 +358,10 @@ model Branch {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
 
-  school School          @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  groups TrainingGroup[]
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  groups            TrainingGroup[]
   scheduleTemplates ScheduleTemplate[]
-  lessons Lesson[]
+  lessons           Lesson[]
 
   @@unique([schoolId, name])
   @@index([schoolId])
@@ -370,13 +379,13 @@ model Parent {
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
-  school   School  @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  children Child[]
-  account  ParentAccount?
-  invites  ParentInvite[]
-  invoices Invoice[]
+  school          School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  children        Child[]
+  account         ParentAccount?
+  invites         ParentInvite[]
+  invoices        Invoice[]
   paymentAttempts PaymentAttempt[]
-  payments Payment[]
+  payments        Payment[]
 
   @@index([schoolId])
   @@index([phone])
@@ -441,18 +450,19 @@ model Child {
   createdAt           DateTime        @default(now()) @map("created_at")
   updatedAt           DateTime        @updatedAt @map("updated_at")
 
-  school       School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  parent       Parent?        @relation(fields: [parentId], references: [id], onDelete: SetNull)
-  currentGroup TrainingGroup? @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
-  attendanceRecords AttendanceRecord[]
-  subscriptions Subscription[]
-  invoices Invoice[]
-  payments Payment[]
+  school                    School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  parent                    Parent?                    @relation(fields: [parentId], references: [id], onDelete: SetNull)
+  currentGroup              TrainingGroup?             @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
+  attendanceRecords         AttendanceRecord[]
+  subscriptions             Subscription[]
+  invoices                  Invoice[]
+  payments                  Payment[]
   lessonBalanceTransactions LessonBalanceTransaction[]
-  makeupCredits MakeupCredit[]
-  convertedTrials TrialParticipant[] @relation("TrialConvertedChild")
-  tasks        Task[]
-  medicalCertificates MedicalCertificate[]
+  makeupCredits             MakeupCredit[]
+  convertedTrials           TrialParticipant[]         @relation("TrialConvertedChild")
+  tasks                     Task[]
+  medicalCertificates       MedicalCertificate[]
+  vacationRequests          VacationRequest[]
 
   @@index([schoolId])
   @@index([parentId])
@@ -464,26 +474,26 @@ model Child {
 }
 
 model TrainingGroup {
-  id             String       @id @default(uuid()) @db.Uuid
-  schoolId       String       @map("school_id") @db.Uuid
-  branchId       String       @map("branch_id") @db.Uuid
-  mainCoachId    String       @map("main_coach_id") @db.Uuid
-  name           String
-  status         EntityStatus @default(ACTIVE)
-  capacityLimit  Int          @default(15) @map("capacity_limit")
-  comment        String?
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  id            String       @id @default(uuid()) @db.Uuid
+  schoolId      String       @map("school_id") @db.Uuid
+  branchId      String       @map("branch_id") @db.Uuid
+  mainCoachId   String       @map("main_coach_id") @db.Uuid
+  name          String
+  status        EntityStatus @default(ACTIVE)
+  capacityLimit Int          @default(15) @map("capacity_limit")
+  comment       String?
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
 
-  school    School       @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  branch    Branch       @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  mainCoach CoachProfile @relation(fields: [mainCoachId], references: [id], onDelete: Restrict)
-  children  Child[]      @relation("CurrentGroup")
+  school            School             @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  mainCoach         CoachProfile       @relation(fields: [mainCoachId], references: [id], onDelete: Restrict)
+  children          Child[]            @relation("CurrentGroup")
   scheduleTemplates ScheduleTemplate[]
-  lessons Lesson[]
-  tasks     Task[]
-  makeupCredits MakeupCredit[]
-  groupEvents   GroupEvent[]
+  lessons           Lesson[]
+  tasks             Task[]
+  makeupCredits     MakeupCredit[]
+  groupEvents       GroupEvent[]
   trialParticipants TrialParticipant[]
 
   @@unique([branchId, name])
@@ -539,17 +549,17 @@ model Lesson {
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
 
-  school           School            @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  group            TrainingGroup     @relation(fields: [groupId], references: [id], onDelete: Restrict)
-  branch           Branch            @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  coach            CoachProfile      @relation("LessonCoach", fields: [coachId], references: [id], onDelete: Restrict)
-  substituteCoach  CoachProfile?     @relation("LessonSubstituteCoach", fields: [substituteCoachId], references: [id], onDelete: SetNull)
-  scheduleTemplate ScheduleTemplate? @relation(fields: [scheduleTemplateId], references: [id], onDelete: SetNull)
-  attendanceRecords AttendanceRecord[]
+  school                    School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  group                     TrainingGroup              @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  branch                    Branch                     @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  coach                     CoachProfile               @relation("LessonCoach", fields: [coachId], references: [id], onDelete: Restrict)
+  substituteCoach           CoachProfile?              @relation("LessonSubstituteCoach", fields: [substituteCoachId], references: [id], onDelete: SetNull)
+  scheduleTemplate          ScheduleTemplate?          @relation(fields: [scheduleTemplateId], references: [id], onDelete: SetNull)
+  attendanceRecords         AttendanceRecord[]
   lessonBalanceTransactions LessonBalanceTransaction[]
-  sourceMakeupCredits MakeupCredit[] @relation("MakeupCreditSourceLesson")
-  assignedMakeupCredits MakeupCredit[] @relation("MakeupCreditAssignedLesson")
-  trialParticipants TrialParticipant[]
+  sourceMakeupCredits       MakeupCredit[]             @relation("MakeupCreditSourceLesson")
+  assignedMakeupCredits     MakeupCredit[]             @relation("MakeupCreditAssignedLesson")
+  trialParticipants         TrialParticipant[]
 
   @@unique([groupId, lessonDate, startTime])
   @@index([schoolId])
@@ -577,12 +587,12 @@ model AttendanceRecord {
   createdAt         DateTime                    @default(now()) @map("created_at")
   updatedAt         DateTime                    @updatedAt @map("updated_at")
 
-  lesson             Lesson                     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
-  child              Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
-  markedBy           User?                      @relation("AttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
-  finalizedBy        User?                      @relation("AttendanceFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
+  lesson              Lesson                     @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  child               Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
+  markedBy            User?                      @relation("AttendanceMarkedBy", fields: [markedByUserId], references: [id], onDelete: SetNull)
+  finalizedBy         User?                      @relation("AttendanceFinalizedBy", fields: [finalizedByUserId], references: [id], onDelete: SetNull)
   balanceTransactions LessonBalanceTransaction[]
-  makeupCredits MakeupCredit[]
+  makeupCredits       MakeupCredit[]
   medicalCertificates MedicalCertificate[]
 
   @@unique([lessonId, childId])
@@ -629,21 +639,54 @@ model MedicalCertificate {
   @@map("medical_certificates")
 }
 
+model VacationRequest {
+  id               String                @id @default(uuid()) @db.Uuid
+  schoolId         String                @map("school_id") @db.Uuid
+  childId          String                @map("child_id") @db.Uuid
+  status           VacationRequestStatus @default(PENDING)
+  periodStart      DateTime              @map("period_start") @db.Date
+  periodEnd        DateTime              @map("period_end") @db.Date
+  originalFileName String                @map("original_file_name")
+  storageKey       String                @unique @map("storage_key")
+  mimeType         String                @map("mime_type")
+  fileSizeBytes    Int                   @map("file_size_bytes")
+  comment          String?
+  adminComment     String?               @map("admin_comment")
+  lessonCount      Int?                  @map("lesson_count")
+  makeupCount      Int?                  @map("makeup_count")
+  uploadedByUserId String                @map("uploaded_by_user_id") @db.Uuid
+  reviewedByUserId String?               @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt       DateTime?             @map("reviewed_at")
+  createdAt        DateTime              @default(now()) @map("created_at")
+  updatedAt        DateTime              @updatedAt @map("updated_at")
+
+  school     School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  child      Child  @relation(fields: [childId], references: [id], onDelete: Restrict)
+  uploadedBy User   @relation("VacationRequestUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy User?  @relation("VacationRequestReviewedBy", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([schoolId])
+  @@index([childId])
+  @@index([status])
+  @@index([periodStart, periodEnd])
+  @@map("vacation_requests")
+}
+
 model Subscription {
-  id                  String        @id @default(uuid()) @db.Uuid
-  schoolId            String        @map("school_id") @db.Uuid
-  childId             String        @map("child_id") @db.Uuid
-  periodStart         DateTime      @map("period_start") @db.Date
-  periodEnd           DateTime      @map("period_end") @db.Date
-  plannedLessonsCount Int           @map("planned_lessons_count")
-  lessonPriceKopeks   Int           @default(45000) @map("lesson_price_kopeks")
-  totalAmountKopeks   Int           @map("total_amount_kopeks")
-  paymentStatus       PaymentStatus @default(NOT_INVOICED) @map("payment_status")
-  paymentStatusChangedAt DateTime?  @map("payment_status_changed_at")
-  paymentStatusComment   String?    @map("payment_status_comment")
-  createdByUserId     String        @map("created_by_user_id") @db.Uuid
-  createdAt           DateTime      @default(now()) @map("created_at")
-  updatedAt           DateTime      @updatedAt @map("updated_at")
+  id                     String        @id @default(uuid()) @db.Uuid
+  schoolId               String        @map("school_id") @db.Uuid
+  childId                String        @map("child_id") @db.Uuid
+  periodStart            DateTime      @map("period_start") @db.Date
+  periodEnd              DateTime      @map("period_end") @db.Date
+  plannedLessonsCount    Int           @map("planned_lessons_count")
+  lessonPriceKopeks      Int           @default(45000) @map("lesson_price_kopeks")
+  totalAmountKopeks      Int           @map("total_amount_kopeks")
+  paymentStatus          PaymentStatus @default(NOT_INVOICED) @map("payment_status")
+  paymentStatusChangedAt DateTime?     @map("payment_status_changed_at")
+  paymentStatusComment   String?       @map("payment_status_comment")
+  createdByUserId        String        @map("created_by_user_id") @db.Uuid
+  createdAt              DateTime      @default(now()) @map("created_at")
+  updatedAt              DateTime      @updatedAt @map("updated_at")
 
   school              School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   child               Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
@@ -717,9 +760,9 @@ model GroupEvent {
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
 
-  school        School        @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  group         TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
-  createdBy     User          @relation("GroupEventCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  school        School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  group         TrainingGroup  @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  createdBy     User           @relation("GroupEventCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   makeupCredits MakeupCredit[]
 
   @@index([schoolId])
@@ -804,31 +847,31 @@ model PasswordResetToken {
 }
 
 model Invoice {
-  id                String        @id @default(uuid()) @db.Uuid
-  schoolId          String        @map("school_id") @db.Uuid
-  parentId          String        @map("parent_id") @db.Uuid
-  childId           String        @map("child_id") @db.Uuid
-  subscriptionId    String?       @map("subscription_id") @db.Uuid
-  number            String
-  status            InvoiceStatus @default(ISSUED)
-  amountKopeks      Int           @map("amount_kopeks")
-  paidAmountKopeks  Int           @default(0) @map("paid_amount_kopeks")
-  currency          String        @default("RUB")
-  periodStart       DateTime?     @map("period_start") @db.Date
-  periodEnd         DateTime?     @map("period_end") @db.Date
-  dueDate           DateTime      @map("due_date") @db.Date
-  issuedAt          DateTime      @default(now()) @map("issued_at")
-  paidAt            DateTime?     @map("paid_at")
-  cancelledAt       DateTime?     @map("cancelled_at")
-  createdByUserId   String        @map("created_by_user_id") @db.Uuid
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  id               String        @id @default(uuid()) @db.Uuid
+  schoolId         String        @map("school_id") @db.Uuid
+  parentId         String        @map("parent_id") @db.Uuid
+  childId          String        @map("child_id") @db.Uuid
+  subscriptionId   String?       @map("subscription_id") @db.Uuid
+  number           String
+  status           InvoiceStatus @default(ISSUED)
+  amountKopeks     Int           @map("amount_kopeks")
+  paidAmountKopeks Int           @default(0) @map("paid_amount_kopeks")
+  currency         String        @default("RUB")
+  periodStart      DateTime?     @map("period_start") @db.Date
+  periodEnd        DateTime?     @map("period_end") @db.Date
+  dueDate          DateTime      @map("due_date") @db.Date
+  issuedAt         DateTime      @default(now()) @map("issued_at")
+  paidAt           DateTime?     @map("paid_at")
+  cancelledAt      DateTime?     @map("cancelled_at")
+  createdByUserId  String        @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  school       School         @relation(fields: [schoolId], references: [id], onDelete: Restrict)
-  parent       Parent         @relation(fields: [parentId], references: [id], onDelete: Restrict)
-  child        Child          @relation(fields: [childId], references: [id], onDelete: Restrict)
-  subscription Subscription?  @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  createdBy    User          @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  school       School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  parent       Parent           @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  child        Child            @relation(fields: [childId], references: [id], onDelete: Restrict)
+  subscription Subscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  createdBy    User             @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   attempts     PaymentAttempt[]
   payments     Payment[]
 

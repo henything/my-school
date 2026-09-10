@@ -8,12 +8,13 @@ import { listMedicalCertificates } from "@/server/medical-certificates/medical-c
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTasks } from "@/server/tasks/task-service";
+import { listVacationRequests } from "@/server/vacation-requests/vacation-request-service";
 
 const taskTypes = new Set(["CERTIFICATE_PENDING", "SICKNESS_FOLLOW_UP", "MAKEUP_NEEDS_ASSIGNMENT"]);
 
 export default async function MakeupsPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [children, groups, lessons, makeups, pendingSickness, groupEvents, tasks, certificates] = await Promise.all([
+  const [children, groups, lessons, makeups, pendingSickness, groupEvents, tasks, certificates, vacationRequests] = await Promise.all([
     listChildren(currentUser),
     listGroups(currentUser),
     listLessons(currentUser),
@@ -21,7 +22,8 @@ export default async function MakeupsPage() {
     listPendingSickness(currentUser),
     listGroupEvents(currentUser),
     listTasks(currentUser),
-    listMedicalCertificates(currentUser)
+    listMedicalCertificates(currentUser),
+    listVacationRequests(currentUser)
   ]);
   const operationalTasks = tasks.filter((task) => taskTypes.has(task.type));
 
@@ -57,6 +59,7 @@ export default async function MakeupsPage() {
         pendingSickness={pendingSickness}
         groupEvents={groupEvents}
         certificates={certificates}
+        vacationRequests={vacationRequests}
       />
     </div>
   );

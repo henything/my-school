@@ -2,7 +2,7 @@
 
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, FileUp, Loader2, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
+import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, FileUp, Loader2, Plane, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { labelForEnum } from "@/lib/labels";
 
@@ -92,6 +92,23 @@ type MedicalCertificate = {
   reviewedBy: { id: string; displayName: string; role: string } | null;
 };
 
+type VacationRequest = {
+  id: string;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  originalFileName: string;
+  comment: string | null;
+  adminComment: string | null;
+  lessonCount: number | null;
+  makeupCount: number | null;
+  createdAt: string;
+  reviewedAt: string | null;
+  child: { id: string; fullName: string; currentGroup: { id: string; name: string } | null };
+  uploadedBy: { id: string; displayName: string; role: string };
+  reviewedBy: { id: string; displayName: string; role: string } | null;
+};
+
 type MakeupFormsProps = {
   childOptions: Child[];
   groups: Group[];
@@ -100,6 +117,7 @@ type MakeupFormsProps = {
   pendingSickness: PendingSickness[];
   groupEvents: GroupEvent[];
   certificates: MedicalCertificate[];
+  vacationRequests: VacationRequest[];
 };
 
 const finalStatuses = [
@@ -149,7 +167,7 @@ function nullableText(value: string) {
   return text.length > 0 ? text : null;
 }
 
-export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSickness, groupEvents, certificates }: MakeupFormsProps) {
+export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSickness, groupEvents, certificates, vacationRequests }: MakeupFormsProps) {
   const activeChildren = childOptions.filter((child) => child.status !== "ARCHIVED" && child.currentGroup);
   const certificateChildren = childOptions.filter((child) => child.status !== "ARCHIVED");
   const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
@@ -206,8 +224,90 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
       </section>
 
       <MedicalCertificatePanel certificates={certificates} childOptions={certificateChildren} pendingSickness={pendingSickness} />
+      <VacationRequestPanel vacationRequests={vacationRequests} />
       <MakeupBoard makeups={makeups} lessons={assignableLessons} />
       <GroupEventsTable groupEvents={groupEvents} />
+    </section>
+  );
+}
+
+function VacationRequestPanel({ vacationRequests }: { vacationRequests: VacationRequest[] }) {
+  const pendingCount = vacationRequests.filter((request) => request.status === "PENDING").length;
+
+  return (
+    <section className="panel p-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h2 className="flex items-center gap-2 text-lg font-bold">
+            <Plane aria-hidden="true" size={18} />
+            Заявления на отпуск
+          </h2>
+          <p className="mt-1 text-sm text-[var(--muted)]">После одобрения система оформит отпуск и создаст переносы за занятия в периоде.</p>
+        </div>
+        <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingCount}</span>
+      </div>
+      <div className="mt-4 table-shell">
+        <table className="data-table min-w-[980px]">
+          <thead>
+            <tr>
+              <th>Ребёнок</th>
+              <th>Период</th>
+              <th>Статус</th>
+              <th>Заявление</th>
+              <th>Итог</th>
+              <th>Решение</th>
+            </tr>
+          </thead>
+          <tbody>
+            {vacationRequests.map((request) => (
+              <tr key={request.id}>
+                <td>
+                  <div className="font-semibold">{request.child.fullName}</div>
+                  <div className="text-sm text-[var(--muted)]">{request.child.currentGroup?.name ?? "Без группы"}</div>
+                </td>
+                <td>
+                  {request.periodStart} - {request.periodEnd}
+                </td>
+                <td>
+                  <StatusBadgeLabel status={request.status} />
+                </td>
+                <td>
+                  <a className="font-semibold text-[var(--accent-strong)]" href={`/api/vacation-requests/${request.id}/file`} target="_blank">
+                    {request.originalFileName}
+                  </a>
+                  {request.comment ? <div className="mt-1 text-sm text-[var(--muted)]">{request.comment}</div> : null}
+                </td>
+                <td>
+                  {request.status === "APPROVED" ? (
+                    <div className="text-sm font-semibold text-[var(--success-strong)]">
+                      Занятий: {request.lessonCount ?? 0}. Переносов: {request.makeupCount ?? 0}.
+                    </div>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
+                  {request.status === "PENDING" ? (
+                    <VacationRequestReviewControls request={request} />
+                  ) : (
+                    <div className="text-sm text-[var(--muted)]">
+                      {request.adminComment ?? "—"}
+                      {request.reviewedAt ? <div>{new Date(request.reviewedAt).toLocaleString("ru-RU")}</div> : null}
+                    </div>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {vacationRequests.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="text-center text-[var(--muted)]">
+                  Заявлений пока нет.
+                </td>
+              </tr>
+            ) : null}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
@@ -481,6 +581,57 @@ function CertificateReviewControls({ certificate }: { certificate: MedicalCertif
   );
 }
 
+function VacationRequestReviewControls({ request }: { request: VacationRequest }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [adminComment, setAdminComment] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function review(status: "APPROVED" | "REJECTED") {
+    setMessage("");
+    setIsSubmitting(true);
+
+    try {
+      const payload = await submitJson<{ result: { vacation?: { lessonCount: number; makeupCount: number } | null } }>(
+        `/api/admin/vacation-requests/${request.id}/review`,
+        {
+          status,
+          adminComment: nullableText(adminComment)
+        }
+      );
+      setAdminComment("");
+      setMessage(status === "APPROVED" ? `Одобрено. Переносов: ${payload.result.vacation?.makeupCount ?? 0}.` : "Отклонено.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить решение.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="grid min-w-[220px] gap-2">
+      <input
+        className="field min-h-9"
+        value={adminComment}
+        onChange={(event) => setAdminComment(event.target.value)}
+        placeholder="Комментарий"
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={() => void review("APPROVED")} disabled={isSubmitting}>
+          {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <CheckCircle2 aria-hidden="true" size={14} />}
+          Одобрить
+        </Button>
+        <Button type="button" size="sm" variant="secondary" onClick={() => void review("REJECTED")} disabled={isSubmitting}>
+          <XCircle aria-hidden="true" size={14} />
+          Отклонить
+        </Button>
+      </div>
+      {message ? <span className="text-sm font-semibold text-[var(--muted)]">{message}</span> : null}
+    </div>
+  );
+}
+
 function FinalizeSicknessForm({ pendingSickness }: { pendingSickness: PendingSickness[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
@@ -581,7 +732,7 @@ function VacationForm({ childOptions }: { childOptions: Child[] }) {
     <form className="panel grid content-start gap-4 p-5" onSubmit={onSubmit}>
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <CalendarRange aria-hidden="true" size={18} />
-        Отпуск
+        Отпуск вручную
       </h2>
       <label className="label">
         Ребёнок

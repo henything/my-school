@@ -295,96 +295,105 @@ export async function createVacation(currentUser: CurrentUser, childId: string, 
   assertAdmin(currentUser);
   assertVacationIsNotBackdated(input.periodStart, input.today ?? new Date());
 
-  return getPrisma().$transaction(async (tx) => {
-    const child = await tx.child.findFirstOrThrow({
-      where: {
-        id: childId,
-        schoolId: currentUser.schoolId,
-        status: { not: "ARCHIVED" },
-        currentGroupId: { not: null }
-      },
-      select: {
-        id: true,
-        fullName: true,
-        currentGroupId: true,
-        currentGroup: { select: { id: true, name: true } }
-      }
-    });
+  return getPrisma().$transaction((tx) => createVacationInTransaction(tx, currentUser, childId, input));
+}
 
-    if (!child.currentGroupId) {
-      throw new Error("У ребёнка нет активной группы для оформления отпуска.");
+export async function createVacationInTransaction(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  childId: string,
+  input: CreateVacationInput
+) {
+  assertAdmin(currentUser);
+
+  const child = await tx.child.findFirstOrThrow({
+    where: {
+      id: childId,
+      schoolId: currentUser.schoolId,
+      status: { not: "ARCHIVED" },
+      currentGroupId: { not: null }
+    },
+    select: {
+      id: true,
+      fullName: true,
+      currentGroupId: true,
+      currentGroup: { select: { id: true, name: true } }
     }
-
-    const lessons = await tx.lesson.findMany({
-      where: {
-        schoolId: currentUser.schoolId,
-        groupId: child.currentGroupId,
-        lessonDate: { gte: input.periodStart, lte: input.periodEnd },
-        status: { not: "CANCELLED" }
-      },
-      include: {
-        group: {
-          select: {
-            id: true,
-            name: true,
-            children: { where: { status: "ACTIVE" }, select: { id: true, fullName: true } }
-          }
-        }
-      },
-      orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }]
-    });
-
-    const makeups: MakeupRecord[] = [];
-
-    for (const lesson of lessons) {
-      const attendance = await upsertFinalAttendanceRecord(tx, currentUser, lesson, child.id, "ABSENT_VACATION_APPROVED", input.comment);
-      await applyAttendanceBalanceEffect(tx, currentUser, lesson, {
-        id: attendance.id,
-        childId: child.id,
-        status: "NOT_MARKED"
-      });
-      const makeup = await createMakeupCredit(tx, currentUser, {
-        childId: child.id,
-        groupId: child.currentGroupId,
-        sourceLessonId: lesson.id,
-        sourceAttendanceRecordId: attendance.id,
-        reason: "VACATION",
-        comment: input.comment
-      });
-      makeups.push(await loadMakeup(tx, makeup.id));
-    }
-
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: "VACATION_APPROVED",
-        entityType: "Child",
-        entityId: child.id,
-        newValue: {
-          childId: child.id,
-          groupId: child.currentGroupId,
-          periodStart: dateToKey(input.periodStart),
-          periodEnd: dateToKey(input.periodEnd),
-          lessonCount: lessons.length,
-          makeupCount: makeups.length
-        },
-        comment: input.comment
-      },
-      tx
-    );
-
-    return {
-      child: {
-        id: child.id,
-        fullName: child.fullName,
-        group: child.currentGroup
-      },
-      lessonCount: lessons.length,
-      makeupCount: makeups.length,
-      makeups: makeups.map(serializeMakeup)
-    };
   });
+
+  if (!child.currentGroupId) {
+    throw new Error("У ребёнка нет активной группы для оформления отпуска.");
+  }
+
+  const lessons = await tx.lesson.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      groupId: child.currentGroupId,
+      lessonDate: { gte: input.periodStart, lte: input.periodEnd },
+      status: { not: "CANCELLED" }
+    },
+    include: {
+      group: {
+        select: {
+          id: true,
+          name: true,
+          children: { where: { status: "ACTIVE" }, select: { id: true, fullName: true } }
+        }
+      }
+    },
+    orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }]
+  });
+
+  const makeups: MakeupRecord[] = [];
+
+  for (const lesson of lessons) {
+    const attendance = await upsertFinalAttendanceRecord(tx, currentUser, lesson, child.id, "ABSENT_VACATION_APPROVED", input.comment);
+    await applyAttendanceBalanceEffect(tx, currentUser, lesson, {
+      id: attendance.id,
+      childId: child.id,
+      status: "NOT_MARKED"
+    });
+    const makeup = await createMakeupCredit(tx, currentUser, {
+      childId: child.id,
+      groupId: child.currentGroupId,
+      sourceLessonId: lesson.id,
+      sourceAttendanceRecordId: attendance.id,
+      reason: "VACATION",
+      comment: input.comment
+    });
+    makeups.push(await loadMakeup(tx, makeup.id));
+  }
+
+  await writeAuditLog(
+    {
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "VACATION_APPROVED",
+      entityType: "Child",
+      entityId: child.id,
+      newValue: {
+        childId: child.id,
+        groupId: child.currentGroupId,
+        periodStart: dateToKey(input.periodStart),
+        periodEnd: dateToKey(input.periodEnd),
+        lessonCount: lessons.length,
+        makeupCount: makeups.length
+      },
+      comment: input.comment
+    },
+    tx
+  );
+
+  return {
+    child: {
+      id: child.id,
+      fullName: child.fullName,
+      group: child.currentGroup
+    },
+    lessonCount: lessons.length,
+    makeupCount: makeups.length,
+    makeups: makeups.map(serializeMakeup)
+  };
 }
 
 export async function createGroupEvent(currentUser: CurrentUser, input: CreateGroupEventInput) {

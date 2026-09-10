@@ -4,6 +4,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { serializeMedicalCertificate } from "@/server/medical-certificates/medical-certificate-service";
 import { dateToKey } from "@/server/schedule/generation";
+import { serializeVacationRequest } from "@/server/vacation-requests/vacation-request-service";
 import { getActiveParentAccount } from "./parent-auth-service";
 
 const childSummaryInclude = {
@@ -106,6 +107,15 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
         },
         orderBy: { createdAt: "desc" },
         take: 20
+      },
+      vacationRequests: {
+        include: {
+          child: { select: { id: true, fullName: true, currentGroup: { select: { id: true, name: true } } } },
+          uploadedBy: { select: { id: true, displayName: true, role: true } },
+          reviewedBy: { select: { id: true, displayName: true, role: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20
       }
     }
   });
@@ -141,7 +151,8 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
         endTime: record.lesson.endTime,
         group: record.lesson.group
       })),
-    medicalCertificates: child.medicalCertificates.map(serializeMedicalCertificate)
+    medicalCertificates: child.medicalCertificates.map(serializeMedicalCertificate),
+    vacationRequests: child.vacationRequests.map(serializeVacationRequest)
   };
 }
 
