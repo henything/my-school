@@ -1,10 +1,8 @@
-import { CalendarDays, FileCheck2, History, Plane, RefreshCcw, WalletCards } from "lucide-react";
+import { CalendarDays, History, RefreshCcw, WalletCards } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentChildDetail } from "@/server/parents/parent-portal-service";
-import { CertificateUploadForm } from "./certificate-upload-form";
-import { VacationRequestForm } from "./vacation-request-form";
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -150,51 +148,6 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
         </div>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        <div className="panel">
-          <PanelHeader
-            icon={<FileCheck2 aria-hidden="true" size={18} />}
-            title="Справки"
-            aside={`${child.medicalCertificates.filter((certificate) => certificate.status === "PENDING").length} на проверке`}
-          />
-          <CertificateUploadForm childId={child.id} pendingSickness={child.pendingSickness} />
-          <DocumentList
-            emptyText="Справок пока нет."
-            items={child.medicalCertificates.map((certificate) => ({
-              id: certificate.id,
-              periodStart: certificate.periodStart,
-              periodEnd: certificate.periodEnd,
-              status: certificate.status,
-              fileName: certificate.originalFileName,
-              fileHref: `/api/medical-certificates/${certificate.id}/file`,
-              comment: certificate.adminComment ?? certificate.comment,
-              result: certificate.reviewedAt ? new Date(certificate.reviewedAt).toLocaleDateString("ru-RU") : null
-            }))}
-          />
-        </div>
-
-        <div className="panel">
-          <PanelHeader
-            icon={<Plane aria-hidden="true" size={18} />}
-            title="Отпуск"
-            aside={`${child.vacationRequests.filter((request) => request.status === "PENDING").length} на проверке`}
-          />
-          <VacationRequestForm childId={child.id} />
-          <DocumentList
-            emptyText="Заявлений на отпуск пока нет."
-            items={child.vacationRequests.map((request) => ({
-              id: request.id,
-              periodStart: request.periodStart,
-              periodEnd: request.periodEnd,
-              status: request.status,
-              fileName: request.originalFileName,
-              fileHref: `/api/vacation-requests/${request.id}/file`,
-              comment: request.adminComment ?? request.comment,
-              result: request.status === "APPROVED" ? `Переносов: ${request.makeupCount ?? 0}` : null
-            }))}
-          />
-        </div>
-      </section>
     </div>
   );
 }
@@ -208,65 +161,17 @@ function SummaryPanel({ title, value }: { title: string; value: string }) {
   );
 }
 
-function PanelHeader({ icon, title, aside }: { icon: React.ReactNode; title: string; aside?: string }) {
+function PanelHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
-      <div className="flex items-center gap-2">
-        {icon}
-        <h2 className="text-lg font-bold">{title}</h2>
-      </div>
-      {aside ? <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{aside}</span> : null}
+    <div className="flex items-center gap-2 border-b border-[var(--line)] px-5 py-4">
+      {icon}
+      <h2 className="text-lg font-bold">{title}</h2>
     </div>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
   return <div className="p-5 text-sm font-semibold text-[var(--muted)]">{text}</div>;
-}
-
-function DocumentList({
-  items,
-  emptyText
-}: {
-  items: Array<{
-    id: string;
-    periodStart: string;
-    periodEnd: string;
-    status: string;
-    fileName: string;
-    fileHref: string;
-    comment: string | null;
-    result: string | null;
-  }>;
-  emptyText: string;
-}) {
-  if (items.length === 0) {
-    return <EmptyState text={emptyText} />;
-  }
-
-  return (
-    <div className="grid gap-3 p-5">
-      {items.map((item) => (
-        <div key={item.id} className="rounded-lg border border-[var(--line)] bg-white px-4 py-3">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="font-bold">
-                {item.periodStart} - {item.periodEnd}
-              </div>
-              <a className="mt-1 block break-words text-sm font-semibold text-[var(--accent-strong)]" href={item.fileHref} target="_blank">
-                {item.fileName}
-              </a>
-            </div>
-            <StatusBadge status={item.status} />
-          </div>
-          <div className="mt-3 grid gap-2 text-sm font-semibold text-[var(--muted)]">
-            {item.comment ? <div>{item.comment}</div> : null}
-            {item.result ? <div>{item.result}</div> : null}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
 }
 
 function parentAdmissionLabel(status: string) {

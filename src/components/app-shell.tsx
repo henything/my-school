@@ -7,11 +7,13 @@ import {
   BarChart3,
   CalendarDays,
   CreditCard,
+  FileCheck2,
   FileSpreadsheet,
   History,
   LayoutDashboard,
   ListChecks,
   MapPinned,
+  Plane,
   RefreshCcw,
   Rocket,
   ShieldAlert,
@@ -87,6 +89,14 @@ export function AppShell({ user, area, children }: AppShellProps) {
             <Link href="/parent" {...navLinkProps("/parent", true)}>
               <Baby aria-hidden="true" size={16} />
               Дети
+            </Link>
+            <Link href="/parent/certificates" {...navLinkProps("/parent/certificates")}>
+              <FileCheck2 aria-hidden="true" size={16} />
+              Справки
+            </Link>
+            <Link href="/parent/vacations" {...navLinkProps("/parent/vacations")}>
+              <Plane aria-hidden="true" size={16} />
+              Отпуск
             </Link>
             <Link href="/parent/payments" {...navLinkProps("/parent/payments")}>
               <CreditCard aria-hidden="true" size={16} />

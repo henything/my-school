@@ -156,6 +156,82 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
   };
 }
 
+export async function getParentDocumentCenter(currentUser: CurrentUser) {
+  const account = await getActiveParentAccount(currentUser);
+  const children = await getPrisma().child.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      parentId: account.parentId,
+      status: { not: "ARCHIVED" }
+    },
+    include: {
+      currentGroup: { select: { id: true, name: true } },
+      attendanceRecords: {
+        where: {
+          status: "ABSENT_SICK_PENDING",
+          finalStatus: null
+        },
+        include: {
+          lesson: {
+            select: {
+              id: true,
+              lessonDate: true,
+              startTime: true,
+              endTime: true,
+              group: { select: { id: true, name: true } }
+            }
+          }
+        },
+        orderBy: [{ markedAt: "asc" }, { createdAt: "asc" }]
+      },
+      medicalCertificates: {
+        include: {
+          child: { select: { id: true, fullName: true, currentGroup: { select: { id: true, name: true } } } },
+          attendanceRecord: {
+            select: {
+              id: true,
+              status: true,
+              finalStatus: true,
+              lesson: { select: { id: true, lessonDate: true, startTime: true, endTime: true, group: { select: { id: true, name: true } } } }
+            }
+          },
+          uploadedBy: { select: { id: true, displayName: true, role: true } },
+          reviewedBy: { select: { id: true, displayName: true, role: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      },
+      vacationRequests: {
+        include: {
+          child: { select: { id: true, fullName: true, currentGroup: { select: { id: true, name: true } } } },
+          uploadedBy: { select: { id: true, displayName: true, role: true } },
+          reviewedBy: { select: { id: true, displayName: true, role: true } }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      }
+    },
+    orderBy: { fullName: "asc" }
+  });
+
+  return {
+    children: children.map((child) => ({
+      id: child.id,
+      fullName: child.fullName,
+      currentGroup: child.currentGroup,
+      pendingSickness: child.attendanceRecords.map((record) => ({
+        id: record.id,
+        lessonDate: dateToKey(record.lesson.lessonDate),
+        startTime: record.lesson.startTime,
+        endTime: record.lesson.endTime,
+        group: record.lesson.group
+      })),
+      medicalCertificates: child.medicalCertificates.map(serializeMedicalCertificate),
+      vacationRequests: child.vacationRequests.map(serializeVacationRequest)
+    }))
+  };
+}
+
 export async function listParentInvoices(currentUser: CurrentUser) {
   const account = await getActiveParentAccount(currentUser);
   const invoices = await getPrisma().invoice.findMany({
