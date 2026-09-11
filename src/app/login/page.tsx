@@ -21,7 +21,7 @@ export default async function LoginPage() {
               </span>
               <div>
                 <div className="text-lg font-extrabold">Азбука движения</div>
-                <div className="text-sm font-semibold text-white/75">My School</div>
+                <div className="text-sm font-semibold text-white/75">Кабинет школы</div>
               </div>
             </div>
             <span className="brand-pill">Вход в систему</span>
@@ -63,7 +63,7 @@ export default async function LoginPage() {
         <div className="grid content-center gap-7 p-6 sm:p-8">
           <div>
             <p className="text-sm font-extrabold uppercase text-[var(--accent-strong)]">Добро пожаловать</p>
-            <h2 className="mt-2 text-2xl font-extrabold">Вход в My School</h2>
+            <h2 className="mt-2 text-2xl font-extrabold">Вход в платформу «Азбука движения»</h2>
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Для администраторов, тренеров и родителей.</p>
           </div>
           <LoginForm />
