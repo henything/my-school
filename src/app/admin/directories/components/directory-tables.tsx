@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2, Search, SlidersHorizontal, UserCheck } from "lucide-react";
-import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { Loader2, Search, SlidersHorizontal } from "lucide-react";
+import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
@@ -185,7 +185,6 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                   <th>Тренер</th>
                   <th>Статус</th>
                   <th>Заполненность</th>
-                  <th>Закрепить тренера</th>
                 </tr>
               </thead>
               <tbody>
@@ -194,7 +193,9 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                     <td className="font-semibold">{group.name}</td>
                     <td>{group.branch.name}</td>
                     <td>{group.branch.address ?? "-"}</td>
-                    <td>{group.mainCoach.displayName}</td>
+                    <td>
+                      <PermanentCoachForm group={group} coaches={activeCoaches} />
+                    </td>
                     <td>
                       <StatusBadge status={group.status} />
                     </td>
@@ -203,12 +204,9 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                         {group.activeChildrenCount}/{group.capacityLimit}
                       </span>
                     </td>
-                    <td>
-                      <PermanentCoachForm group={group} coaches={activeCoaches} />
-                    </td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={7} label="Группы по фильтрам не найдены." /> : null}
+                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={6} label="Группы по фильтрам не найдены." /> : null}
               </tbody>
             </table>
           </div>
@@ -269,20 +267,40 @@ function PermanentCoachForm({ group, coaches }: { group: Group; coaches: Coach[]
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState("");
+  const [selectedCoachId, setSelectedCoachId] = useState(group.mainCoach.id);
+  const [pendingCoachId, setPendingCoachId] = useState("");
+  const pendingCoach = coaches.find((coach) => coach.id === pendingCoachId);
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function onCoachChange(nextCoachId: string) {
     setMessage("");
-    setIsSubmitting(true);
+    setSelectedCoachId(nextCoachId || group.mainCoach.id);
 
-    const formData = new FormData(event.currentTarget);
+    if (!nextCoachId || nextCoachId === group.mainCoach.id) {
+      setPendingCoachId("");
+      return;
+    }
+
+    setPendingCoachId(nextCoachId);
+  }
+
+  function cancelChange() {
+    setPendingCoachId("");
+    setSelectedCoachId(group.mainCoach.id);
+  }
+
+  async function confirmChange() {
+    if (!pendingCoachId) {
+      return;
+    }
+
+    setIsSubmitting(true);
 
     try {
       const response = await fetch(`/api/groups/${group.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mainCoachId: formData.get("mainCoachId")
+          mainCoachId: pendingCoachId
         })
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -292,32 +310,50 @@ function PermanentCoachForm({ group, coaches }: { group: Group; coaches: Coach[]
       }
 
       setMessage("Тренер закреплён.");
+      setPendingCoachId("");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сменить тренера.");
+      setSelectedCoachId(group.mainCoach.id);
     } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
-    <form className="grid min-w-[230px] gap-2" onSubmit={onSubmit}>
-      <div className="flex items-center gap-2">
-        <SearchableCombobox
-          name="mainCoachId"
-          required
-          compact
-          defaultValue={group.mainCoach.id}
-          placeholder="Тренер"
-          className="min-w-0 flex-1"
-          options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
-        />
-        <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Закрепить тренера за группой постоянно">
-          {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <UserCheck aria-hidden="true" size={15} />}
-        </Button>
-      </div>
+    <div className="grid min-w-[230px] gap-2">
+      <SearchableCombobox
+        key={selectedCoachId}
+        name={`mainCoachId-${group.id}`}
+        required
+        compact
+        defaultValue={selectedCoachId}
+        placeholder="Тренер"
+        className="min-w-0"
+        onValueChange={onCoachChange}
+        options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
+      />
       {message ? <div className="text-xs font-semibold text-[var(--muted)]">{message}</div> : null}
-    </form>
+      {pendingCoach ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4">
+          <div className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-[0_18px_44px_rgba(31,37,35,0.22)]">
+            <h3 className="text-lg font-extrabold">Сменить тренера?</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Вы точно хотите поменять тренера с {group.mainCoach.displayName} на {pendingCoach.displayName}?
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={cancelChange} disabled={isSubmitting}>
+                Отмена
+              </Button>
+              <Button type="button" onClick={confirmChange} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
+                Да
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
