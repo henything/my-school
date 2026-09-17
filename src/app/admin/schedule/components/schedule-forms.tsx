@@ -1,11 +1,11 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ban, CalendarPlus, CalendarRange, Loader2, Repeat2, UserCheck, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
-import { labelForEnum, labelsForSearch } from "@/lib/labels";
+import { labelForEnum } from "@/lib/labels";
 
 type Group = {
   id: string;
@@ -368,62 +368,10 @@ function CreateLessonForm({ groups, coaches }: { groups: Group[]; coaches: Coach
 }
 
 function LessonActions({ lessons, coaches }: { lessons: Lesson[]; coaches: Coach[] }) {
-  const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("ALL");
-  const [groupFilter, setGroupFilter] = useState("ALL");
-  const normalizedQuery = normalize(query);
-  const groups = useMemo(() => uniqueLessonGroups(lessons), [lessons]);
-  const filteredLessons = useMemo(
-    () =>
-      lessons.filter((lesson) => {
-        const matchesStatus = statusFilter === "ALL" || lesson.status === statusFilter;
-        const matchesGroup = groupFilter === "ALL" || lesson.group.id === groupFilter;
-        const matchesQuery =
-          normalizedQuery.length === 0 ||
-          normalize(
-            `${lesson.lessonDate} ${lesson.group.name} ${lesson.branch.name} ${lesson.coach.displayName} ${lesson.substituteCoach?.displayName ?? ""} ${labelsForSearch(
-              lesson.status,
-              lesson.changeReason
-            )}`
-          ).includes(normalizedQuery);
-
-        return matchesStatus && matchesGroup && matchesQuery;
-      }),
-    [groupFilter, lessons, normalizedQuery, statusFilter]
-  );
-
   return (
     <section className="panel">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
+      <div className="border-b border-[var(--line)] px-5 py-4">
         <h2 className="text-lg font-bold">Действия с занятиями</h2>
-        <span className="text-sm font-semibold text-[var(--muted)]">{filteredLessons.length} из {lessons.length}</span>
-      </div>
-      <div className="grid gap-3 border-b border-[var(--line)] px-5 py-4 lg:grid-cols-[minmax(0,1fr)_180px_minmax(180px,240px)]">
-        <label className="label">
-          Поиск
-          <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Дата, группа, филиал, тренер" />
-        </label>
-        <label className="label">
-          Статус
-          <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-            <option value="ALL">Все статусы</option>
-            <option value="SCHEDULED">{labelForEnum("SCHEDULED")}</option>
-            <option value="ATTENDANCE_PENDING">{labelForEnum("ATTENDANCE_PENDING")}</option>
-            <option value="ATTENDANCE_COMPLETED">{labelForEnum("ATTENDANCE_COMPLETED")}</option>
-            <option value="CANCELLED">{labelForEnum("CANCELLED")}</option>
-          </select>
-        </label>
-        <label className="label">
-          Группа
-          <select className="field" value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-            <option value="ALL">Все группы</option>
-            {groups.map((group) => (
-              <option key={group.id} value={group.id}>
-                {group.name}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       <div className="table-shell">
         <table className="data-table min-w-[1180px]">
@@ -437,7 +385,7 @@ function LessonActions({ lessons, coaches }: { lessons: Lesson[]; coaches: Coach
             </tr>
           </thead>
           <tbody>
-            {filteredLessons.map((lesson) => (
+            {lessons.map((lesson) => (
               <tr key={lesson.id}>
                 <td>
                   <div className="font-semibold">{lesson.group.name}</div>
@@ -458,13 +406,6 @@ function LessonActions({ lessons, coaches }: { lessons: Lesson[]; coaches: Coach
                 </td>
               </tr>
             ))}
-            {filteredLessons.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="text-sm font-semibold text-[var(--muted)]">
-                  Занятия по фильтрам не найдены.
-                </td>
-              </tr>
-            ) : null}
           </tbody>
         </table>
       </div>
@@ -585,20 +526,6 @@ function ReasonSelect() {
       ))}
     </select>
   );
-}
-
-function uniqueLessonGroups(lessons: Lesson[]) {
-  const groupById = new Map<string, { id: string; name: string }>();
-
-  for (const lesson of lessons) {
-    groupById.set(lesson.group.id, lesson.group);
-  }
-
-  return [...groupById.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
-}
-
-function normalize(value: string) {
-  return value.trim().toLowerCase();
 }
 
 function FormFooter({ isSubmitting, message, label, disabled = false }: { isSubmitting: boolean; message: string; label: string; disabled?: boolean }) {
