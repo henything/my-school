@@ -4,6 +4,7 @@ import { Search, WalletCards } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { RoleBadge } from "@/components/badges";
 import { cn } from "@/lib/cn";
+import { formatDate, formatDateTime } from "@/lib/date-format";
 import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type Child = {
@@ -263,14 +264,14 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
               <tr key={subscription.id}>
                 <td className="font-semibold">{subscription.child.fullName}</td>
                 <td>
-                  {subscription.periodStart} - {subscription.periodEnd}
+                  {formatDate(subscription.periodStart)} - {formatDate(subscription.periodEnd)}
                 </td>
                 <td>{subscription.plannedLessonsCount}</td>
                 <td className="font-semibold">{formatKopeks(subscription.totalAmountKopeks)}</td>
                 <td>
                   <PaymentBadge status={subscription.paymentStatus} />
                   {subscription.paymentStatusChangedAt ? (
-                    <div className="mt-1 text-xs text-[var(--muted)]">{new Date(subscription.paymentStatusChangedAt).toLocaleString("ru-RU")}</div>
+                    <div className="mt-1 text-xs text-[var(--muted)]">{formatDateTime(subscription.paymentStatusChangedAt)}</div>
                   ) : null}
                 </td>
                 <td>{subscription.paymentStatusComment ?? "-"}</td>
@@ -305,7 +306,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                 </td>
                 <td className="font-semibold">{formatKopeks(invoice.amountKopeks)}</td>
                 <td>{formatKopeks(invoice.paidAmountKopeks)}</td>
-                <td>{invoice.dueDate}</td>
+                <td>{formatDate(invoice.dueDate)}</td>
                 <td>
                   <PaymentBadge status={invoice.status} />
                 </td>
@@ -331,7 +332,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
           <tbody>
             {filteredPayments.map((payment) => (
               <tr key={payment.id}>
-                <td>{new Date(payment.createdAt).toLocaleString("ru-RU")}</td>
+                <td>{formatDateTime(payment.createdAt)}</td>
                 <td>{payment.invoiceNumber}</td>
                 <td>{payment.child.fullName}</td>
                 <td>{payment.provider}</td>
@@ -364,7 +365,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
 
               return (
                 <tr key={transaction.id}>
-                  <td>{new Date(transaction.createdAt).toLocaleString("ru-RU")}</td>
+                  <td>{formatDateTime(transaction.createdAt)}</td>
                   <td className="font-semibold">{child?.fullName ?? transaction.childId}</td>
                   <td>{labelForEnum(transaction.type)}</td>
                   <td>{labelForEnum(transaction.balanceType)}</td>

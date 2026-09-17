@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, MapPin } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
+import { formatLessonDateTime } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { getCoachLessonDetail } from "@/server/attendance/attendance-service";
 import { AttendanceForm } from "./attendance-form";
@@ -25,7 +26,7 @@ export default async function CoachLessonPage({ params }: { params: Promise<{ id
             <div className="mt-4 flex flex-wrap gap-3 text-sm font-semibold text-white/80">
               <span className="inline-flex items-center gap-1">
                 <CalendarDays aria-hidden="true" size={15} />
-                {lesson.lessonDate} · {lesson.startTime}-{lesson.endTime}
+                {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)}
               </span>
               <span className="inline-flex items-center gap-1">
                 <MapPin aria-hidden="true" size={15} />

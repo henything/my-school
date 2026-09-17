@@ -1,6 +1,7 @@
 import { AlertTriangle, ArrowRightCircle, Clock3, UserRound } from "lucide-react";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type WorkQueueTask = {
@@ -82,7 +83,7 @@ export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: Wo
                 </span>
                 <span className="inline-flex min-h-8 items-center gap-1 rounded-md bg-[var(--panel-soft)] px-2">
                   <Clock3 aria-hidden="true" size={14} />
-                  {task.dueAt ? new Date(task.dueAt).toLocaleString("ru-RU") : "Без срока"}
+                  {task.dueAt ? formatDateTime(task.dueAt) : "Без срока"}
                 </span>
                 <span className="inline-flex min-h-8 items-center rounded-md bg-[var(--panel-soft)] px-2">{relatedLabel(task)}</span>
               </div>

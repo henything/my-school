@@ -1,4 +1,5 @@
 import { StatusBadge } from "@/components/badges";
+import { formatDate } from "@/lib/date-format";
 
 type DocumentListItem = {
   id: string;
@@ -28,7 +29,7 @@ export function ParentDocumentList({ items, emptyText }: ParentDocumentListProps
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="font-bold">
-                {item.periodStart} - {item.periodEnd}
+                {formatDate(item.periodStart)} - {formatDate(item.periodEnd)}
               </div>
               <a className="mt-1 block break-words text-sm font-semibold text-[var(--accent-strong)]" href={item.fileHref} target="_blank">
                 {item.fileName}

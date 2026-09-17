@@ -1,6 +1,7 @@
 import { UserRoundPlus } from "lucide-react";
 import { CreateTrialForm, ConvertTrialForm, TransferTrialForm } from "@/app/admin/trials/components/trial-admin-forms";
 import { StatusBadge } from "@/components/badges";
+import { formatLessonDateTime } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { listGroups } from "@/server/groups/group-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
@@ -48,7 +49,7 @@ export default async function TrialsPage() {
                       <h3 className="text-lg font-bold">{trial.childName ?? "Пробник без имени"}</h3>
                       <div className="mt-1 flex flex-wrap gap-2 text-sm text-[var(--muted)]">
                         <span>
-                          {trial.lesson.lessonDate} {trial.lesson.startTime}-{trial.lesson.endTime}
+                          {formatLessonDateTime(trial.lesson.lessonDate, trial.lesson.startTime, trial.lesson.endTime)}
                         </span>
                         <span>{trial.group.name}</span>
                         <span>{trial.coach.displayName}</span>

@@ -1,4 +1,5 @@
 import { FileCheck2 } from "lucide-react";
+import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentDocumentCenter } from "@/server/parents/parent-portal-service";
 import { ParentDocumentList } from "../components/document-list";
@@ -41,7 +42,7 @@ export default async function ParentCertificatesPage() {
                 fileName: certificate.originalFileName,
                 fileHref: `/api/medical-certificates/${certificate.id}/file`,
                 comment: certificate.adminComment ?? certificate.comment,
-                result: certificate.reviewedAt ? new Date(certificate.reviewedAt).toLocaleDateString("ru-RU") : null
+                result: certificate.reviewedAt ? formatDate(certificate.reviewedAt) : null
               }))}
             />
           </div>

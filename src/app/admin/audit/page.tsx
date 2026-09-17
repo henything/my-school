@@ -1,4 +1,5 @@
 import { History } from "lucide-react";
+import { formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listAuditLogs } from "@/server/audit/audit-log-service";
@@ -87,11 +88,4 @@ function JsonPreview({ value }: { value: unknown }) {
       {JSON.stringify(value, (_key, item) => (typeof item === "string" ? labelForEnum(item) : item), 2)}
     </pre>
   );
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
 }

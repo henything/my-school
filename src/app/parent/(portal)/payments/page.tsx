@@ -1,5 +1,6 @@
 import { CreditCard } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
+import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { listParentInvoices } from "@/server/parents/parent-portal-service";
 import { hasYooKassaSecretKey, hasYooKassaShopId } from "@/server/payments/yookassa";
@@ -48,7 +49,7 @@ export default async function ParentPaymentsPage() {
                   <td>{invoice.child.fullName}</td>
                   <td>{formatKopeks(invoice.amountKopeks)}</td>
                   <td className="font-bold">{formatKopeks(invoice.remainingAmountKopeks)}</td>
-                  <td>{invoice.dueDate}</td>
+                  <td>{formatDate(invoice.dueDate)}</td>
                   <td>
                     <StatusBadge status={invoice.status} />
                   </td>

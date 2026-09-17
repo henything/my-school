@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { FilePlus2, Loader2, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { formatDate } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type SubscriptionOption = {
@@ -100,7 +101,7 @@ function CreateInvoiceForm({ subscriptions }: { subscriptions: SubscriptionOptio
           options={subscriptions.map((subscription) => ({
             value: subscription.id,
             label: subscription.child.fullName,
-            description: `${subscription.periodStart}-${subscription.periodEnd} · ${formatKopeks(subscription.totalAmountKopeks)} · ${labelForEnum(subscription.paymentStatus)}`
+            description: `${formatDate(subscription.periodStart)}-${formatDate(subscription.periodEnd)} · ${formatKopeks(subscription.totalAmountKopeks)} · ${labelForEnum(subscription.paymentStatus)}`
           }))}
         />
       </div>

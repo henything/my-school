@@ -19,10 +19,10 @@ import { ManualTaskForm } from "@/app/admin/operations/components/manual-task-fo
 import { RunTaskChecksButton } from "@/app/admin/operations/components/run-task-checks-button";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { formatDate, formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
-import { dateToKey } from "@/server/schedule/generation";
 import { getOperationalCenter, requiresCloseComment } from "@/server/tasks/task-service";
 import { listUsers } from "@/server/users/user-service";
 
@@ -217,16 +217,4 @@ function relatedLabel(task: OperationalTask) {
   }
 
   return "Не указано";
-}
-
-function formatDate(value: string | Date) {
-  const key = value instanceof Date ? dateToKey(value) : value;
-  return new Intl.DateTimeFormat("ru-RU", { timeZone: "UTC" }).format(new Date(`${key}T00:00:00.000Z`));
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
 }

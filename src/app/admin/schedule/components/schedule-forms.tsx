@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Ban, CalendarPlus, CalendarRange, Loader2, Repeat2, UserCheck, WandSparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { formatLessonDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type Group = {
@@ -390,7 +391,7 @@ function LessonActions({ lessons, coaches }: { lessons: Lesson[]; coaches: Coach
                 <td>
                   <div className="font-semibold">{lesson.group.name}</div>
                   <div className="text-sm text-[var(--muted)]">
-                    {lesson.lessonDate} {lesson.startTime}-{lesson.endTime} · {lesson.coach.displayName}
+                    {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} · {lesson.coach.displayName}
                     {lesson.substituteCoach ? ` · замена: ${lesson.substituteCoach.displayName}` : ""}
                   </div>
                 </td>

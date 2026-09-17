@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, UserRoundPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatLessonDateTime } from "@/lib/date-format";
 
 type LessonOption = {
   id: string;
@@ -111,7 +112,7 @@ export function CreateTrialForm({ lessons }: CreateTrialFormProps) {
           <option value="">Выбрать</option>
           {availableLessons.map((lesson) => (
             <option key={lesson.id} value={lesson.id}>
-              {lesson.lessonDate} {lesson.startTime}-{lesson.endTime} · {lesson.group.name} · {lesson.coach.displayName}
+              {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} · {lesson.group.name} · {lesson.coach.displayName}
             </option>
           ))}
         </select>

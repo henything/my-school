@@ -1,6 +1,7 @@
 import { CreateUserForm } from "@/app/admin/create-user-form";
 import { UserStatusForm } from "@/app/admin/user-status-form";
 import { RoleBadge, StatusBadge } from "@/components/badges";
+import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listUsers } from "@/server/users/user-service";
@@ -74,7 +75,7 @@ export default async function AdminPage() {
                   <td>
                     <StatusBadge status={user.status} />
                   </td>
-                  <td>{new Date(user.createdAt).toLocaleDateString("ru-RU")}</td>
+                  <td>{formatDate(user.createdAt)}</td>
                   <td>
                     <UserStatusForm userId={user.id} status={user.status} disabled={!canManageUsers || user.id === currentUser.id} />
                   </td>

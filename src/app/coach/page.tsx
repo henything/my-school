@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarDays, ListChecks } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { TaskCloseForm } from "@/components/task-close-form";
+import { formatLessonDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listCoachLessons } from "@/server/schedule/lesson-service";
@@ -79,7 +80,7 @@ function LessonPanel({
                 <div>
                   <h3 className="font-bold">{lesson.group.name}</h3>
                   <p className="mt-1 text-sm text-[var(--muted)]">
-                    {lesson.lessonDate} · {lesson.startTime}-{lesson.endTime} · {lesson.branch.name}
+                    {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} · {lesson.branch.name}
                   </p>
                   {lesson.substituteCoach ? <p className="mt-1 text-sm font-semibold text-[var(--accent-strong)]">Вы назначены на замену</p> : null}
                 </div>

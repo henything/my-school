@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AlertTriangle, CheckCircle2, FileUp, KeyRound, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/cn";
+import { formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type PreviewSheet = {
@@ -432,11 +433,4 @@ function resultLabel(key: string) {
   };
 
   return labels[key] ?? key;
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
 }

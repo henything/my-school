@@ -4,6 +4,7 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileUp, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatLessonDateTime } from "@/lib/date-format";
 
 type PendingSickness = {
   id: string;
@@ -71,7 +72,7 @@ export function CertificateUploadForm({ childId, pendingSickness }: CertificateU
           <option value="">Без привязки</option>
           {pendingSickness.map((record) => (
             <option key={record.id} value={record.id}>
-              {record.lessonDate} · {record.startTime}-{record.endTime} · {record.group.name}
+              {formatLessonDateTime(record.lessonDate, record.startTime, record.endTime)} · {record.group.name}
             </option>
           ))}
         </select>

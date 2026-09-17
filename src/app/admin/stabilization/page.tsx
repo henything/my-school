@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
+import { formatDate, formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getStabilizationDashboard, type StabilizationStatus } from "@/server/stabilization/stabilization-service";
@@ -50,7 +51,7 @@ export default async function StabilizationPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">Дата: {dashboard.today}</span>
+            <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">Дата: {formatDate(dashboard.today)}</span>
             <StatusBadge status={dashboard.overallStatus} />
           </div>
         </div>
@@ -208,11 +209,4 @@ function relatedLabel(childName: string | null, groupName: string | null) {
   }
 
   return "Не указано";
-}
-
-function formatDateTime(value: string) {
-  return new Intl.DateTimeFormat("ru-RU", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
 }

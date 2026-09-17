@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, UserCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import { formatDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type ParentOption = {
@@ -68,7 +69,7 @@ function CreateParentInviteForm({ parents }: { parents: ParentOption[] }) {
         parentId: formData.get("parentId")
       });
       setActivationUrl(payload.invite.activationUrl);
-      setMessage(`Логин: ${payload.invite.login}. Ссылка действует до ${new Date(payload.invite.expiresAt).toLocaleString("ru-RU")}.`);
+      setMessage(`Логин: ${payload.invite.login}. Ссылка действует до ${formatDateTime(payload.invite.expiresAt)}.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось создать ссылку.");
@@ -122,7 +123,7 @@ function ParentResetPanel({ accounts }: { accounts: ParentAccount[] }) {
         `/api/admin/parent-accounts/${accountId}/password-reset`
       );
       setResetUrl(payload.reset.resetUrl);
-      setMessage(`Логин: ${payload.reset.login}. Ссылка действует до ${new Date(payload.reset.expiresAt).toLocaleString("ru-RU")}.`);
+      setMessage(`Логин: ${payload.reset.login}. Ссылка действует до ${formatDateTime(payload.reset.expiresAt)}.`);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось создать ссылку.");

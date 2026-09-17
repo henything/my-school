@@ -1,5 +1,6 @@
 import { CalendarDays, History, RefreshCcw, WalletCards } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
+import { formatDate, formatLessonDateTime, formatTimeRange } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentChildDetail } from "@/server/parents/parent-portal-service";
@@ -41,7 +42,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                 <div key={lesson.id} className="rounded-lg border border-[var(--line)] px-4 py-3">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="font-bold">
-                      {formatDate(lesson.lessonDate)} · {lesson.startTime}-{lesson.endTime}
+                      {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)}
                     </div>
                     <StatusBadge status={lesson.status} />
                   </div>
@@ -62,7 +63,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
             {child.latestSubscription ? (
               <div className="rounded-lg border border-[var(--line)] px-4 py-3">
                 <div className="font-bold">
-                  {child.latestSubscription.periodStart} - {child.latestSubscription.periodEnd}
+                  {formatDate(child.latestSubscription.periodStart)} - {formatDate(child.latestSubscription.periodEnd)}
                 </div>
                 <div className="mt-1 text-sm text-[var(--muted)]">
                   {child.latestSubscription.plannedLessonsCount} занятий · {formatKopeks(child.latestSubscription.totalAmountKopeks)}
@@ -82,7 +83,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                   <StatusBadge status={invoice.status} />
                 </div>
                 <div className="mt-1 text-sm text-[var(--muted)]">
-                  К оплате {formatKopeks(invoice.remainingAmountKopeks)} до {invoice.dueDate}
+                  К оплате {formatKopeks(invoice.remainingAmountKopeks)} до {formatDate(invoice.dueDate)}
                 </div>
               </div>
             ))}
@@ -105,12 +106,12 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
               <tbody>
                 {child.attendance.map((record) => (
                   <tr key={record.id}>
-                    <td>{record.lessonDate}</td>
+                    <td>{formatDate(record.lessonDate)}</td>
                     <td>
                       <StatusBadge status={record.finalStatus ?? record.status} />
                     </td>
                     <td>
-                      {record.startTime}-{record.endTime}
+                      {formatTimeRange(record.startTime, record.endTime)}
                     </td>
                   </tr>
                 ))}
@@ -138,7 +139,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                     <td>
                       <StatusBadge status={makeup.status} />
                     </td>
-                    <td>{makeup.assignedDate ?? "—"}</td>
+                    <td>{makeup.assignedDate ? formatDate(makeup.assignedDate) : "—"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -184,10 +185,6 @@ function parentAdmissionLabel(status: string) {
   }
 
   return "Нужна оплата";
-}
-
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "2-digit", month: "long" });
 }
 
 function formatKopeks(value: number) {

@@ -4,6 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarCheck2, CalendarRange, CheckCircle2, FileCheck2, FileText, FileUp, Loader2, Plane, RefreshCcw, ShieldAlert, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { formatDate, formatDateTime, formatLessonDateTime } from "@/lib/date-format";
 import { labelForEnum } from "@/lib/labels";
 
 type Child = {
@@ -206,9 +207,9 @@ export function MakeupForms({ childOptions, groups, lessons, makeups, pendingSic
                   <td className="font-semibold">{record.child.fullName}</td>
                   <td>{record.lesson.group.name}</td>
                   <td>
-                    {record.lesson.lessonDate} {record.lesson.startTime}-{record.lesson.endTime}
+                    {formatLesson(record.lesson)}
                   </td>
-                  <td>{record.markedAt ? new Date(record.markedAt).toLocaleDateString("ru-RU") : "—"}</td>
+                  <td>{record.markedAt ? formatDate(record.markedAt) : "—"}</td>
                 </tr>
               ))}
               {pendingSickness.length === 0 ? (
@@ -266,7 +267,7 @@ function VacationRequestPanel({ vacationRequests }: { vacationRequests: Vacation
                   <div className="text-sm text-[var(--muted)]">{request.child.currentGroup?.name ?? "Без группы"}</div>
                 </td>
                 <td>
-                  {request.periodStart} - {request.periodEnd}
+                  {formatDate(request.periodStart)} - {formatDate(request.periodEnd)}
                 </td>
                 <td>
                   <StatusBadgeLabel status={request.status} />
@@ -292,7 +293,7 @@ function VacationRequestPanel({ vacationRequests }: { vacationRequests: Vacation
                   ) : (
                     <div className="text-sm text-[var(--muted)]">
                       {request.adminComment ?? "—"}
-                      {request.reviewedAt ? <div>{new Date(request.reviewedAt).toLocaleString("ru-RU")}</div> : null}
+                      {request.reviewedAt ? <div>{formatDateTime(request.reviewedAt)}</div> : null}
                     </div>
                   )}
                 </td>
@@ -356,7 +357,7 @@ function MedicalCertificatePanel({
                   <div className="text-sm text-[var(--muted)]">{certificate.child.currentGroup?.name ?? "Без группы"}</div>
                 </td>
                 <td>
-                  {certificate.periodStart} - {certificate.periodEnd}
+                  {formatDate(certificate.periodStart)} - {formatDate(certificate.periodEnd)}
                 </td>
                 <td>
                   <StatusBadgeLabel status={certificate.status} />
@@ -374,7 +375,7 @@ function MedicalCertificatePanel({
                   ) : (
                     <div className="text-sm text-[var(--muted)]">
                       {certificate.adminComment ?? "—"}
-                      {certificate.reviewedAt ? <div>{new Date(certificate.reviewedAt).toLocaleString("ru-RU")}</div> : null}
+                      {certificate.reviewedAt ? <div>{formatDateTime(certificate.reviewedAt)}</div> : null}
                     </div>
                   )}
                 </td>
@@ -482,7 +483,7 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
             <option value="">Без привязки</option>
             {pendingSickness.map((record) => (
               <option key={record.id} value={record.id}>
-                {record.child.fullName} · {record.lesson.group.name} · {record.lesson.lessonDate}
+                {record.child.fullName} · {record.lesson.group.name} · {formatLesson(record.lesson)}
               </option>
             ))}
           </select>
@@ -672,7 +673,7 @@ function FinalizeSicknessForm({ pendingSickness }: { pendingSickness: PendingSic
           <option value="">Выбрать</option>
           {pendingSickness.map((record) => (
             <option key={record.id} value={record.id}>
-              {record.child.fullName} · {record.lesson.group.name} · {record.lesson.lessonDate}
+              {record.child.fullName} · {record.lesson.group.name} · {formatLesson(record.lesson)}
             </option>
           ))}
         </select>
@@ -981,7 +982,7 @@ function AssignMakeupForm({ makeup, lessons }: { makeup: Makeup; lessons: Lesson
           <option value="">Выбрать</option>
           {lessons.map((lesson) => (
             <option key={lesson.id} value={lesson.id}>
-              {lesson.lessonDate} {lesson.startTime}-{lesson.endTime}
+              {formatLesson(lesson)}
             </option>
           ))}
         </select>
@@ -1068,11 +1069,11 @@ function GroupEventsTable({ groupEvents }: { groupEvents: GroupEvent[] }) {
           <tbody>
             {groupEvents.map((event) => (
               <tr key={event.id}>
-                <td>{new Date(event.createdAt).toLocaleString("ru-RU")}</td>
+                <td>{formatDateTime(event.createdAt)}</td>
                 <td className="font-semibold">{event.group.name}</td>
                 <td>{labelForEnum(event.reason)}</td>
                 <td>
-                  {event.periodStart} - {event.periodEnd}
+                  {formatDate(event.periodStart)} - {formatDate(event.periodEnd)}
                 </td>
                 <td className="font-semibold">{event.makeupCount}</td>
                 <td>{event.comment ?? "—"}</td>
@@ -1116,7 +1117,7 @@ function StatusBadgeLabel({ status }: { status: string }) {
 }
 
 function formatLesson(lesson: { lessonDate: string; startTime: string; endTime: string }) {
-  return `${lesson.lessonDate} ${lesson.startTime}-${lesson.endTime}`;
+  return formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime);
 }
 
 function badgeClass(status: string) {

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarDays, CreditCard, RefreshCcw } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
+import { formatLessonDateTime } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentDashboard } from "@/server/parents/parent-portal-service";
 
@@ -60,7 +61,7 @@ export default async function ParentHomePage() {
                 <InfoTile
                   icon={<CalendarDays aria-hidden="true" size={18} />}
                   label="Следующее занятие"
-                  value={nextLesson ? `${formatDate(nextLesson.lessonDate)} ${nextLesson.startTime}` : "Нет в расписании"}
+                  value={nextLesson ? formatLessonDateTime(nextLesson.lessonDate, nextLesson.startTime) : "Нет в расписании"}
                 />
                 <InfoTile
                   icon={<RefreshCcw aria-hidden="true" size={18} />}
@@ -103,10 +104,6 @@ function parentAdmissionLabel(status: string) {
   }
 
   return "Нужна оплата";
-}
-
-function formatDate(value: string) {
-  return new Date(`${value}T00:00:00`).toLocaleDateString("ru-RU", { day: "2-digit", month: "long" });
 }
 
 function formatKopeks(value: number) {

@@ -3,6 +3,7 @@
 import { CalendarClock, Search } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/badges";
+import { formatLessonDateTime, formatTimeRange } from "@/lib/date-format";
 import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type ScheduleTemplate = {
@@ -139,7 +140,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                 <StatusBadge status={lesson.status} />
               </div>
               <div className="mt-1 text-sm text-[var(--muted)]">
-                {lesson.lessonDate} · {lesson.startTime}-{lesson.endTime} · {lesson.coach.displayName}
+                {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} · {lesson.coach.displayName}
               </div>
             </div>
           ))}
@@ -174,7 +175,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                   <td className="font-semibold">{template.group.name}</td>
                   <td>{weekdayLabels[template.weekday]}</td>
                   <td>
-                    {template.startTime}-{template.endTime}
+                    {formatTimeRange(template.startTime, template.endTime)}
                   </td>
                   <td>{template.coach.displayName}</td>
                   <td>
@@ -209,7 +210,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
               {filteredLessons.map((lesson) => (
                 <tr key={lesson.id}>
                   <td className="font-semibold">
-                    {lesson.lessonDate} {lesson.startTime}-{lesson.endTime}
+                    {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)}
                   </td>
                   <td>{lesson.group.name}</td>
                   <td>{lesson.branch.name}</td>
