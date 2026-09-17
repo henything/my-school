@@ -1,9 +1,12 @@
 "use client";
 
-import { Search, SlidersHorizontal } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { Loader2, Search, SlidersHorizontal, UserCheck } from "lucide-react";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
+import { Button } from "@/components/ui/button";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type Group = {
@@ -14,7 +17,14 @@ type Group = {
   activeChildrenCount: number;
   isOverCapacity: boolean;
   branch: { name: string; address: string | null };
-  mainCoach: { displayName: string };
+  mainCoach: { id: string; displayName: string };
+};
+
+type Coach = {
+  id: string;
+  displayName: string;
+  login: string;
+  status: string;
 };
 
 type Child = {
@@ -29,15 +39,17 @@ type Child = {
 
 type DirectoryTablesProps = {
   groups: Group[];
+  coaches: Coach[];
   childRows: Child[];
   children?: ReactNode;
 };
 
-export function DirectoryTables({ groups, childRows, children }: DirectoryTablesProps) {
+export function DirectoryTables({ groups, coaches, childRows, children }: DirectoryTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
   const [addressFilter, setAddressFilter] = useState("ALL");
+  const activeCoaches = useMemo(() => coaches.filter((coach) => coach.status === "ACTIVE"), [coaches]);
 
   const normalizedQuery = normalize(query);
   const hasActiveFilters = normalizedQuery.length > 0 || statusFilter !== "ALL" || groupFilter !== "ALL" || addressFilter !== "ALL";
@@ -173,6 +185,7 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
                   <th>Тренер</th>
                   <th>Статус</th>
                   <th>Заполненность</th>
+                  <th>Закрепить тренера</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,9 +203,12 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
                         {group.activeChildrenCount}/{group.capacityLimit}
                       </span>
                     </td>
+                    <td>
+                      <PermanentCoachForm group={group} coaches={activeCoaches} />
+                    </td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={6} label="Группы по фильтрам не найдены." /> : null}
+                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={7} label="Группы по фильтрам не найдены." /> : null}
               </tbody>
             </table>
           </div>
@@ -246,6 +262,62 @@ export function DirectoryTables({ groups, childRows, children }: DirectoryTables
 
       {children ? <div className="grid gap-4">{children}</div> : null}
     </section>
+  );
+}
+
+function PermanentCoachForm({ group, coaches }: { group: Group; coaches: Coach[] }) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    setIsSubmitting(true);
+
+    const formData = new FormData(event.currentTarget);
+
+    try {
+      const response = await fetch(`/api/groups/${group.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mainCoachId: formData.get("mainCoachId")
+        })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Не удалось сменить тренера.");
+      }
+
+      setMessage("Тренер закреплён.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сменить тренера.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  return (
+    <form className="grid min-w-[230px] gap-2" onSubmit={onSubmit}>
+      <div className="flex items-center gap-2">
+        <SearchableCombobox
+          name="mainCoachId"
+          required
+          compact
+          defaultValue={group.mainCoach.id}
+          placeholder="Тренер"
+          className="min-w-0 flex-1"
+          options={coaches.map((coach) => ({ value: coach.id, label: coach.displayName, description: `${coach.login} · ${labelForEnum(coach.status)}` }))}
+        />
+        <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Закрепить тренера за группой постоянно">
+          {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={15} /> : <UserCheck aria-hidden="true" size={15} />}
+        </Button>
+      </div>
+      {message ? <div className="text-xs font-semibold text-[var(--muted)]">{message}</div> : null}
+    </form>
   );
 }
 

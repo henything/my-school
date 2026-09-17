@@ -39,7 +39,7 @@ export default async function DirectoriesPage() {
         tone="warning"
       />
 
-      <DirectoryTables groups={groups} childRows={children}>
+      <DirectoryTables groups={groups} coaches={coaches} childRows={children}>
         <DirectoryForms
           canCreateCoach={currentUser.role === "SUPER_ADMIN"}
           branches={branches}

@@ -3,6 +3,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing-service";
 import { getPrisma } from "@/server/db/prisma";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
+import type { Prisma } from "@/generated/prisma/client";
 import { countActiveChildren } from "./capacity";
 import type { AttachChildToGroupInput, CreateGroupInput, UpdateGroupInput } from "./schemas";
 
@@ -158,11 +159,17 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
       });
     }
 
+    const mainCoachChanged = Boolean(input.mainCoachId && input.mainCoachId !== existing.mainCoachId);
+
     const group = await tx.trainingGroup.update({
       where: { id: existing.id },
       data: input,
       include: groupInclude
     });
+
+    const permanentCoachChange = mainCoachChanged
+      ? await applyPermanentCoachChange(tx, currentUser.schoolId, group.id, input.mainCoachId!)
+      : { templatesUpdated: 0, lessonsUpdated: 0 };
 
     await writeAuditLog(
       {
@@ -183,7 +190,8 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
           status: group.status,
           branchId: group.branch.id,
           mainCoachId: group.mainCoach.id,
-          capacityLimit: group.capacityLimit
+          capacityLimit: group.capacityLimit,
+          permanentCoachChange
         }
       },
       tx
@@ -200,6 +208,36 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
 
     return serializeGroup(group);
   });
+}
+
+async function applyPermanentCoachChange(tx: Prisma.TransactionClient, schoolId: string, groupId: string, coachId: string) {
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const [templates, lessons] = await Promise.all([
+    tx.scheduleTemplate.updateMany({
+      where: {
+        schoolId,
+        groupId,
+        status: { not: "ARCHIVED" }
+      },
+      data: { coachId }
+    }),
+    tx.lesson.updateMany({
+      where: {
+        schoolId,
+        groupId,
+        lessonDate: { gte: today },
+        status: { in: ["SCHEDULED", "ATTENDANCE_PENDING"] }
+      },
+      data: { coachId }
+    })
+  ]);
+
+  return {
+    templatesUpdated: templates.count,
+    lessonsUpdated: lessons.count
+  };
 }
 
 export async function attachChildToGroup(currentUser: CurrentUser, groupId: string, input: AttachChildToGroupInput) {
