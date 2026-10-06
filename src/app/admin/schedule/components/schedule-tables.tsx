@@ -3,7 +3,7 @@
 import { CalendarClock, Search } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/badges";
-import { formatLessonDateTime, formatTimeRange } from "@/lib/date-format";
+import { formatDate, formatLessonDateTime, formatTimeRange } from "@/lib/date-format";
 import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type ScheduleTemplate = {
@@ -37,13 +37,17 @@ type ScheduleTablesProps = {
 };
 
 const weekdayLabels = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+const weekdayNames = ["", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
 
 export function ScheduleTables({ scheduleTemplates, lessons, children }: ScheduleTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
+  const [monthFilter, setMonthFilter] = useState("ALL");
   const normalizedQuery = normalize(query);
   const groups = useMemo(() => uniqueGroups(scheduleTemplates, lessons), [scheduleTemplates, lessons]);
+  const months = useMemo(() => [...new Set(lessons.map((lesson) => lesson.lessonDate.slice(0, 7)))].sort().reverse(), [lessons]);
+  const hasActiveFilters = Boolean(normalizedQuery) || statusFilter !== "ALL" || groupFilter !== "ALL" || monthFilter !== "ALL";
 
   const filteredTemplates = useMemo(
     () =>
@@ -52,7 +56,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
         const matchesGroup = groupFilter === "ALL" || template.group.id === groupFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          normalize(`${template.group.name} ${template.branch.name} ${template.coach.displayName} ${weekdayLabels[template.weekday]} ${labelsForSearch(template.status)}`).includes(
+          normalize(`${template.group.name} ${template.branch.name} ${template.coach.displayName} ${weekdayLabels[template.weekday]} ${weekdayNames[template.weekday]} ${formatTimeRange(template.startTime, template.endTime)} ${labelsForSearch(template.status)}`).includes(
             normalizedQuery
           );
 
@@ -66,24 +70,25 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
       lessons.filter((lesson) => {
         const matchesStatus = statusFilter === "ALL" || lesson.status === statusFilter;
         const matchesGroup = groupFilter === "ALL" || lesson.group.id === groupFilter;
+        const matchesMonth = monthFilter === "ALL" || lesson.lessonDate.startsWith(monthFilter);
         const matchesQuery =
           normalizedQuery.length === 0 ||
           normalize(
-            `${lesson.lessonDate} ${lesson.group.name} ${lesson.branch.name} ${lesson.coach.displayName} ${lesson.substituteCoach?.displayName ?? ""} ${labelsForSearch(lesson.status, lesson.changeReason)}`
+            `${lesson.lessonDate} ${formatDate(lesson.lessonDate)} ${formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} ${lesson.group.name} ${lesson.branch.name} ${lesson.coach.displayName} ${lesson.substituteCoach?.displayName ?? ""} ${labelsForSearch(lesson.status, lesson.changeReason)}`
           ).includes(normalizedQuery);
 
-        return matchesStatus && matchesGroup && matchesQuery;
+        return matchesStatus && matchesGroup && matchesMonth && matchesQuery;
       }),
-    [groupFilter, lessons, normalizedQuery, statusFilter]
+    [groupFilter, lessons, monthFilter, normalizedQuery, statusFilter]
   );
 
   const upcomingLessons = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    const future = lessons.filter((lesson) => lesson.lessonDate >= today && lesson.status !== "CANCELLED");
-    return (future.length > 0 ? future : lessons).slice(0, 6);
-  }, [lessons]);
+    const future = filteredLessons.filter((lesson) => lesson.lessonDate >= today && lesson.status !== "CANCELLED");
+    return future.length > 0 ? future.slice(0, 6) : filteredLessons.slice(-6).reverse();
+  }, [filteredLessons]);
 
-  const needsAttention = lessons.filter((lesson) => lesson.status === "SCHEDULED" || lesson.status === "ATTENDANCE_PENDING").length;
+  const needsAttention = filteredLessons.filter((lesson) => lesson.status === "SCHEDULED" || lesson.status === "ATTENDANCE_PENDING").length;
 
   return (
     <section className="grid gap-4">
@@ -92,18 +97,18 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
           <div>
             <h2 className="flex items-center gap-2 text-lg font-bold">
               <CalendarClock className="text-[var(--accent)]" aria-hidden="true" size={18} />
-              Ближайшая нагрузка
+              {hasActiveFilters ? "Занятия по фильтру" : "Ближайшая нагрузка"}
             </h2>
-            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Сначала ближайшие занятия и фильтр, затем полные таблицы.</p>
+            <p className="mt-1 text-sm leading-6 text-[var(--muted)]">Поиск и фильтры обновляют карточки, счётчики и таблицы ниже.</p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <MetricChip label="Шаблоны" value={scheduleTemplates.length} />
-            <MetricChip label="Занятия" value={lessons.length} />
+            <MetricChip label="Шаблоны" value={filteredTemplates.length} />
+            <MetricChip label="Занятия" value={filteredLessons.length} />
             <MetricChip label="В работе" value={needsAttention} tone={needsAttention > 0 ? "warning" : "neutral"} />
           </div>
         </div>
 
-        <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1fr)_180px_minmax(180px,240px)]">
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_170px_minmax(180px,220px)_190px]">
           <label className="label">
             Поиск
             <input className="field" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Дата, группа, филиал, тренер" />
@@ -112,11 +117,11 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
             Статус
             <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="ALL">Все статусы</option>
-              <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
-              <option value="SCHEDULED">{labelForEnum("SCHEDULED")}</option>
-              <option value="ATTENDANCE_PENDING">{labelForEnum("ATTENDANCE_PENDING")}</option>
-              <option value="ATTENDANCE_COMPLETED">{labelForEnum("ATTENDANCE_COMPLETED")}</option>
-              <option value="CANCELLED">{labelForEnum("CANCELLED")}</option>
+              <option value="ACTIVE">{labelForEnum("ACTIVE")} · шаблоны</option>
+              <option value="SCHEDULED">{labelForEnum("SCHEDULED")} · занятия</option>
+              <option value="ATTENDANCE_PENDING">{labelForEnum("ATTENDANCE_PENDING")} · занятия</option>
+              <option value="ATTENDANCE_COMPLETED">{labelForEnum("ATTENDANCE_COMPLETED")} · занятия</option>
+              <option value="CANCELLED">{labelForEnum("CANCELLED")} · занятия</option>
             </select>
           </label>
           <label className="label">
@@ -130,6 +135,27 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
               ))}
             </select>
           </label>
+          <label className="label">
+            Месяц занятий
+            <select className="field" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
+              <option value="ALL">Все месяцы</option>
+              {months.map((month) => (
+                <option key={month} value={month}>{formatMonth(month)}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs text-[var(--muted)]">Месяц относится к занятиям; шаблоны повторяются каждую неделю.</p>
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              className="text-xs font-semibold text-[var(--accent-strong)] underline-offset-2 hover:underline"
+              onClick={() => { setQuery(""); setStatusFilter("ALL"); setGroupFilter("ALL"); setMonthFilter("ALL"); }}
+            >
+              Сбросить фильтры
+            </button>
+          ) : null}
         </div>
 
         <div className="mt-4 grid gap-3 lg:grid-cols-3">
@@ -144,11 +170,9 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
               </div>
             </div>
           ))}
-          {upcomingLessons.length === 0 ? <p className="text-sm font-semibold text-[var(--muted)]">Занятий пока нет.</p> : null}
+          {upcomingLessons.length === 0 ? <p className="text-sm font-semibold text-[var(--muted)]">Занятий по выбранным фильтрам нет.</p> : null}
         </div>
       </div>
-
-      {children ? <div className="grid gap-4">{children}</div> : null}
 
       <div className="panel">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
@@ -229,6 +253,13 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
           </table>
         </div>
       </div>
+
+      {children ? (
+        <section className="grid gap-4" aria-label="Управление расписанием">
+          <h2 className="text-lg font-bold">Управление расписанием</h2>
+          {children}
+        </section>
+      ) : null}
     </section>
   );
 }
@@ -266,5 +297,9 @@ function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
 }
 
 function normalize(value: string) {
-  return value.trim().toLowerCase();
+  return value.trim().toLowerCase().replace(/[./-]/g, "-").replace(/\s+/g, " ");
+}
+
+function formatMonth(month: string) {
+  return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00.000Z`));
 }
