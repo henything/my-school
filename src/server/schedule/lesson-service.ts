@@ -163,6 +163,30 @@ export async function createScheduleTemplate(currentUser: CurrentUser, input: Cr
   });
 }
 
+export async function deleteScheduleTemplate(currentUser: CurrentUser, templateId: string) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const template = await tx.scheduleTemplate.findFirst({
+      where: { id: templateId, schoolId: currentUser.schoolId },
+      include: templateInclude
+    });
+    if (!template) throw new Error("Шаблон расписания не найден.");
+
+    await tx.scheduleTemplate.delete({ where: { id: template.id } });
+    await writeAuditLog({
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "SCHEDULE_TEMPLATE_DELETED",
+      entityType: "ScheduleTemplate",
+      entityId: template.id,
+      oldValue: serializeScheduleTemplate(template)
+    }, tx);
+
+    return { id: template.id };
+  });
+}
+
 export async function listLessons(currentUser: CurrentUser) {
   const lessons = await getPrisma().lesson.findMany({
     where: { schoolId: currentUser.schoolId },

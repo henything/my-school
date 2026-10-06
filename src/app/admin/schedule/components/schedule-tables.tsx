@@ -1,8 +1,10 @@
 "use client";
 
-import { CalendarClock, Search } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CalendarClock, Search, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { StatusBadge } from "@/components/badges";
+import { Button } from "@/components/ui/button";
 import { formatDate, formatLessonDateTime, formatTimeRange } from "@/lib/date-format";
 import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
@@ -43,11 +45,10 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
-  const [monthFilter, setMonthFilter] = useState("ALL");
+  const [monthFilter, setMonthFilter] = useState("");
   const normalizedQuery = normalize(query);
   const groups = useMemo(() => uniqueGroups(scheduleTemplates, lessons), [scheduleTemplates, lessons]);
-  const months = useMemo(() => [...new Set(lessons.map((lesson) => lesson.lessonDate.slice(0, 7)))].sort().reverse(), [lessons]);
-  const hasActiveFilters = Boolean(normalizedQuery) || statusFilter !== "ALL" || groupFilter !== "ALL" || monthFilter !== "ALL";
+  const hasActiveFilters = Boolean(normalizedQuery) || statusFilter !== "ALL" || groupFilter !== "ALL" || Boolean(monthFilter);
 
   const filteredTemplates = useMemo(
     () =>
@@ -70,7 +71,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
       lessons.filter((lesson) => {
         const matchesStatus = statusFilter === "ALL" || lesson.status === statusFilter;
         const matchesGroup = groupFilter === "ALL" || lesson.group.id === groupFilter;
-        const matchesMonth = monthFilter === "ALL" || lesson.lessonDate.startsWith(monthFilter);
+        const matchesMonth = !monthFilter || lesson.lessonDate.startsWith(monthFilter);
         const matchesQuery =
           normalizedQuery.length === 0 ||
           normalize(
@@ -137,12 +138,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
           </label>
           <label className="label">
             Месяц занятий
-            <select className="field" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
-              <option value="ALL">Все месяцы</option>
-              {months.map((month) => (
-                <option key={month} value={month}>{formatMonth(month)}</option>
-              ))}
-            </select>
+            <input className="field" type="month" value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)} />
           </label>
         </div>
         <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
@@ -151,7 +147,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
             <button
               type="button"
               className="text-xs font-semibold text-[var(--accent-strong)] underline-offset-2 hover:underline"
-              onClick={() => { setQuery(""); setStatusFilter("ALL"); setGroupFilter("ALL"); setMonthFilter("ALL"); }}
+              onClick={() => { setQuery(""); setStatusFilter("ALL"); setGroupFilter("ALL"); setMonthFilter(""); }}
             >
               Сбросить фильтры
             </button>
@@ -191,6 +187,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                 <th>Время</th>
                 <th>Тренер</th>
                 <th>Статус</th>
+                <th>Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -205,9 +202,10 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                   <td>
                     <StatusBadge status={template.status} />
                   </td>
+                  <td><DeleteTemplateButton template={template} /></td>
                 </tr>
               ))}
-              {filteredTemplates.length === 0 ? <EmptyTableRow colSpan={5} label="Шаблоны по фильтрам не найдены." /> : null}
+              {filteredTemplates.length === 0 ? <EmptyTableRow colSpan={6} label="Шаблоны по фильтрам не найдены." /> : null}
             </tbody>
           </table>
         </div>
@@ -278,6 +276,57 @@ function uniqueGroups(templates: ScheduleTemplate[], lessons: Lesson[]) {
   return [...groupById.values()].sort((a, b) => a.name.localeCompare(b.name, "ru"));
 }
 
+function DeleteTemplateButton({ template }: { template: ScheduleTemplate }) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
+  const [error, setError] = useState("");
+
+  async function onDelete() {
+    setIsDeleting(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/schedule-templates/${template.id}`, { method: "DELETE" });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось удалить шаблон.");
+      setDeleted(true);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалось удалить шаблон.");
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
+  if (deleted) return <span className="text-xs text-[var(--muted)]">Удалено</span>;
+
+  return (
+    <div className="grid min-w-[150px] gap-2">
+      {confirming ? (
+        <>
+          <p className="text-xs text-[var(--muted)]">Удалить шаблон? Созданные занятия сохранятся.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant="danger" disabled={isDeleting} onClick={onDelete}>Подтвердить</Button>
+            <Button type="button" size="sm" variant="secondary" disabled={isDeleting} onClick={() => { setConfirming(false); setError(""); }}>Отмена</Button>
+          </div>
+        </>
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          variant="secondary"
+          aria-label={`Удалить шаблон: ${template.group.name}, ${weekdayNames[template.weekday]}, ${formatTimeRange(template.startTime, template.endTime)}`}
+          onClick={() => setConfirming(true)}
+        >
+          <Trash2 aria-hidden="true" size={15} /> Удалить
+        </Button>
+      )}
+      {error ? <span className="text-xs text-[var(--danger-strong)]" role="alert">{error}</span> : null}
+    </div>
+  );
+}
+
 function MetricChip({ label, value, tone = "neutral" }: { label: string; value: number; tone?: "neutral" | "warning" }) {
   return (
     <span className={tone === "warning" ? "badge bg-[var(--yellow-soft)] text-[var(--warning-strong)]" : "badge bg-[var(--blue-soft)] text-[var(--accent-strong)]"}>
@@ -298,8 +347,4 @@ function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase().replace(/[./-]/g, "-").replace(/\s+/g, " ");
-}
-
-function formatMonth(month: string) {
-  return new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${month}-01T00:00:00.000Z`));
 }

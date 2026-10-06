@@ -1,10 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ScheduleTables } from "./schedule-tables";
 
-afterEach(cleanup);
+const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); refresh.mockReset(); });
 
 const scheduleTemplates = [
   {
@@ -57,13 +59,19 @@ describe("schedule filters", () => {
   it("filters lessons by month while keeping recurring templates visible", () => {
     render(<ScheduleTables scheduleTemplates={scheduleTemplates} lessons={lessons} />);
 
-    fireEvent.change(screen.getByLabelText("Месяц занятий"), { target: { value: "2026-10" } });
+    const monthInput = screen.getByLabelText("Месяц занятий") as HTMLInputElement;
+    expect(monthInput.type).toBe("month");
+    fireEvent.change(monthInput, { target: { value: "2026-10" } });
 
     expect(screen.getByText("Занятия: 1")).toBeTruthy();
     expect(screen.getByText("Шаблоны: 2")).toBeTruthy();
     expect(lessonsTable().getByRole("row", { name: /06\/10\/2026/ })).toBeTruthy();
     expect(lessonsTable().queryByRole("row", { name: /05\/11\/2026/ })).toBeNull();
     expect(screen.getByText("1 из 2")).toBeTruthy();
+
+    fireEvent.change(monthInput, { target: { value: "2027-04" } });
+    expect(screen.getByText("Занятия: 0")).toBeTruthy();
+    expect(screen.getByText("Шаблоны: 2")).toBeTruthy();
   });
 
   it("finds a lesson by the date format shown on screen", () => {
@@ -74,5 +82,19 @@ describe("schedule filters", () => {
     expect(lessonsTable().getByRole("row", { name: /06\/10\/2026/ })).toBeTruthy();
     expect(lessonsTable().queryByRole("row", { name: /05\/11\/2026/ })).toBeNull();
     expect(screen.getByText("Занятия: 1")).toBeTruthy();
+  });
+
+  it("requires confirmation before deleting a specific group template", async () => {
+    const request = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ scheduleTemplate: { id: "template-a" } }) });
+    vi.stubGlobal("fetch", request);
+    render(<ScheduleTables scheduleTemplates={scheduleTemplates} lessons={lessons} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Удалить шаблон: Группа Альфа/ }));
+    expect(request).not.toHaveBeenCalled();
+    expect(screen.getByText("Удалить шаблон? Созданные занятия сохранятся.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Подтвердить" }));
+
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/schedule-templates/template-a", { method: "DELETE" }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
   });
 });
