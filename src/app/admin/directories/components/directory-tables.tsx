@@ -229,7 +229,7 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                   <th>Допуск</th>
                   <th>Переносы</th>
                   <th>Дни посещения</th>
-                  <th>Перевод</th>
+                  <th className="sticky right-0 z-20 border-l border-[var(--line)] bg-[#f7faf6]">Перевод</th>
                 </tr>
               </thead>
               <tbody>
@@ -251,8 +251,8 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                     <td>
                       <ChildAttendancePlanForm childId={child.id} hasGroup={Boolean(child.currentGroup)} plans={child.attendancePlans} />
                     </td>
-                    <td>
-                      <ChildTransferForm childId={child.id} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
+                    <td className={child.admissionStatus !== "ADMITTED" ? "sticky right-0 z-10 border-l border-[var(--line)] bg-[var(--red-soft)]" : "sticky right-0 z-10 border-l border-[var(--line)] bg-white"}>
+                      <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
                     </td>
                   </tr>
                 ))}

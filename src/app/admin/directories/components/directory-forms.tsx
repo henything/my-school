@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import { ArrowRightLeft, Baby, Building2, GraduationCap, Loader2, UserRoundPlus, UsersRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -434,46 +435,97 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
   );
 }
 
-export function ChildTransferForm({ childId, currentGroupId, groups }: { childId: string; currentGroupId: string; groups: Group[] }) {
+export function ChildTransferForm({
+  childId,
+  childName,
+  currentGroupId,
+  groups
+}: {
+  childId: string;
+  childName: string;
+  currentGroupId: string;
+  groups: Group[];
+}) {
   const router = useRouter();
+  const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedGroupId, setSelectedGroupId] = useState(currentGroupId);
+  const [error, setError] = useState("");
+
+  function close() {
+    if (isSubmitting) return;
+    setIsOpen(false);
+    setSelectedGroupId(currentGroupId);
+    setError("");
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSubmitting(true);
+    setError("");
 
-    const formData = new FormData(event.currentTarget);
-    const currentGroupIdValue = nullable(formData.get("currentGroupId"));
+    try {
+      const response = await fetch(`/api/children/${childId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ currentGroupId: selectedGroupId || null })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось перевести ребёнка.");
 
-    await fetch(`/api/children/${childId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ currentGroupId: currentGroupIdValue })
-    });
-
-    setIsSubmitting(false);
-    router.refresh();
+      setIsOpen(false);
+      router.refresh();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Не удалось перевести ребёнка.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
-    <form className="flex min-w-[230px] items-center gap-2" onSubmit={onSubmit}>
-      <SearchableCombobox
-        name="currentGroupId"
-        defaultValue={currentGroupId}
-        placeholder="Группа"
-        emptyValueLabel="Без группы"
-        compact
-        className="min-w-0 flex-1"
-        options={groups.map((group) => ({
-          value: group.id,
-          label: group.name,
-          description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
-        }))}
-      />
-      <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Перевести">
-        <ArrowRightLeft aria-hidden="true" size={15} />
+    <>
+      <Button type="button" size="sm" variant="secondary" onClick={() => setIsOpen(true)}>
+        <ArrowRightLeft aria-hidden="true" size={15} /> Перевести
       </Button>
-    </form>
+      {isOpen
+        ? createPortal(
+            <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4">
+              <div role="dialog" aria-modal="true" aria-labelledby={`child-transfer-title-${childId}`} className="w-full max-w-lg rounded-lg border border-[var(--line)] bg-white p-5 shadow-[0_18px_44px_rgba(31,37,35,0.22)]">
+                <h3 id={`child-transfer-title-${childId}`} className="text-lg font-extrabold">Перевести ребёнка</h3>
+                <p className="mt-2 text-sm text-[var(--muted)]">{childName}</p>
+                <form className="mt-4 grid gap-4" onSubmit={onSubmit}>
+                  <div className="label">
+                    <span>Новая группа</span>
+                    <SearchableCombobox
+                      name="currentGroupId"
+                      defaultValue={currentGroupId}
+                      placeholder="Выберите группу"
+                      ariaLabel="Новая группа"
+                      emptyValueLabel="Без группы"
+                      onValueChange={setSelectedGroupId}
+                      options={groups.map((group) => ({
+                        value: group.id,
+                        label: group.name,
+                        description: `${group.branch.name} · ${group.activeChildrenCount}/${group.capacityLimit}`
+                      }))}
+                    />
+                  </div>
+                  <p className="text-sm leading-6 text-[var(--muted)]">Выставленные счета и оплаты останутся без изменений. При необходимости проверьте их после перевода.</p>
+                  {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-strong)]">{error}</p> : null}
+                  <div className="flex flex-wrap justify-end gap-2">
+                    <Button type="button" variant="secondary" onClick={close} disabled={isSubmitting}>Отмена</Button>
+                    <Button type="submit" disabled={isSubmitting || selectedGroupId === currentGroupId}>
+                      {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
+                      Подтвердить перевод
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
