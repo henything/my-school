@@ -2,12 +2,14 @@ import type { InvoiceStatus, PaymentRecordStatus } from "@/generated/prisma/enum
 import type { Prisma } from "@/generated/prisma/client";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { isLessonInChildPlan } from "@/server/children/attendance-plan";
 import { serializeMedicalCertificate } from "@/server/medical-certificates/medical-certificate-service";
 import { dateToKey } from "@/server/schedule/generation";
 import { serializeVacationRequest } from "@/server/vacation-requests/vacation-request-service";
 import { getActiveParentAccount } from "./parent-auth-service";
 
 const childSummaryInclude = {
+  attendancePlans: { select: { effectiveFrom: true, weekday: true } },
   currentGroup: {
     select: {
       id: true,
@@ -44,7 +46,7 @@ export async function getParentDashboard(currentUser: CurrentUser) {
   for (const child of children) {
     childSummaries.push({
       ...serializeParentChild(child),
-      upcomingLessons: child.currentGroup ? await listUpcomingLessonsForGroup(currentUser.schoolId, child.currentGroup.id, 2) : []
+      upcomingLessons: child.currentGroup ? await listUpcomingLessonsForChild(currentUser.schoolId, child.currentGroup.id, child.attendancePlans, 2) : []
     });
   }
 
@@ -122,7 +124,7 @@ export async function getParentChildDetail(currentUser: CurrentUser, childId: st
 
   return {
     ...serializeParentChild(child),
-    upcomingLessons: child.currentGroup ? await listUpcomingLessonsForGroup(currentUser.schoolId, child.currentGroup.id, 8) : [],
+    upcomingLessons: child.currentGroup ? await listUpcomingLessonsForChild(currentUser.schoolId, child.currentGroup.id, child.attendancePlans, 8) : [],
     attendance: child.attendanceRecords.map((record) => ({
       id: record.id,
       lessonId: record.lesson.id,
@@ -249,7 +251,12 @@ export async function listParentInvoices(currentUser: CurrentUser) {
   return invoices.map(serializeInvoice);
 }
 
-async function listUpcomingLessonsForGroup(schoolId: string, groupId: string, limit: number) {
+async function listUpcomingLessonsForChild(
+  schoolId: string,
+  groupId: string,
+  plans: Array<{ effectiveFrom: Date; weekday: number | null }>,
+  limit: number
+) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -272,10 +279,10 @@ async function listUpcomingLessonsForGroup(schoolId: string, groupId: string, li
       substituteCoach: { select: { user: { select: { displayName: true } } } }
     },
     orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }],
-    take: limit
+    take: 100
   });
 
-  return lessons.map((lesson) => ({
+  return lessons.filter((lesson) => isLessonInChildPlan(plans, lesson.lessonDate)).slice(0, limit).map((lesson) => ({
     id: lesson.id,
     lessonDate: dateToKey(lesson.lessonDate),
     startTime: lesson.startTime,

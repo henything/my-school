@@ -4,6 +4,7 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import { applyAttendanceBalanceEffect } from "@/server/billing/billing-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { isLessonInChildPlan } from "@/server/children/attendance-plan";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import type {
@@ -37,6 +38,7 @@ const lessonDetailInclude = {
           coachComment: true,
           adminComment: true,
           admissionStatus: true,
+          attendancePlans: { select: { effectiveFrom: true, weekday: true } },
           parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } }
         }
       }
@@ -64,6 +66,9 @@ const lessonDetailInclude = {
 } satisfies Prisma.LessonInclude;
 
 type LessonDetailRecord = Prisma.LessonGetPayload<{ include: typeof lessonDetailInclude }>;
+function scheduledChildrenForLesson(lesson: LessonDetailRecord) {
+  return lesson.group.children.filter((child) => isLessonInChildPlan(child.attendancePlans, lesson.lessonDate));
+}
 type AttendanceRecordForUpdate = {
   id: string;
   lessonId: string;
@@ -115,7 +120,7 @@ export function serializeCoachLessonDetail(lesson: LessonDetailRecord) {
           status: lesson.substituteCoach.user.status
         }
       : null,
-    children: lesson.group.children.map((child) => {
+    children: scheduledChildrenForLesson(lesson).map((child) => {
       const record = recordsByChildId.get(child.id);
 
       return {
@@ -203,7 +208,7 @@ export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: st
     assertCanEditAttendance(currentUser, lesson);
     assertLessonCanReceiveAttendance(lesson);
 
-    const childIds = lesson.group.children.map((child) => child.id);
+    const childIds = scheduledChildrenForLesson(lesson).map((child) => child.id);
     const childIdSet = new Set(childIds);
     const seenChildIds = new Set<string>();
 
@@ -249,7 +254,8 @@ export async function updateAttendanceRecord(currentUser: CurrentUser, recordId:
     assertCanEditAttendance(currentUser, existing.lesson);
     assertLessonCanReceiveAttendance(existing.lesson);
 
-    const childIds = existing.lesson.group.children.map((child) => child.id);
+    const childIds = scheduledChildrenForLesson(existing.lesson).map((child) => child.id);
+    if (!childIds.includes(existing.childId)) throw new Error("Это занятие не входит в график ребёнка.");
 
     await updateAttendanceRecordInternal(tx, currentUser, existing.lesson, existing, {
       childId: existing.childId,
@@ -293,7 +299,7 @@ export async function runAttendanceNotFilledCheck(currentUser: CurrentUser, inpu
     let createdTaskCount = 0;
 
     for (const lesson of lessons) {
-      const childIds = lesson.group.children.map((child) => child.id);
+      const childIds = scheduledChildrenForLesson(lesson).map((child) => child.id);
       const markedCount = lesson.attendanceRecords.filter(
         (record) => childIds.includes(record.childId) && record.status !== "NOT_MARKED"
       ).length;

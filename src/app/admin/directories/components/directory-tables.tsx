@@ -3,7 +3,7 @@
 import { Loader2, Search, SlidersHorizontal } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
+import { ChildAttendancePlanForm, ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -35,6 +35,7 @@ type Child = {
   cachedMakeupBalance: number;
   parent: { fullName: string | null; phone: string | null } | null;
   currentGroup: { id: string; name: string; branch?: { address: string | null } } | null;
+  attendancePlans: Array<{ effectiveFrom: string; weekday: number | null }>;
 };
 
 type DirectoryTablesProps = {
@@ -227,6 +228,7 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                   <th>Статус</th>
                   <th>Допуск</th>
                   <th>Переносы</th>
+                  <th>Дни посещения</th>
                   <th>Перевод</th>
                 </tr>
               </thead>
@@ -247,11 +249,14 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                     </td>
                     <td className="font-semibold">{child.cachedMakeupBalance}</td>
                     <td>
+                      <ChildAttendancePlanForm childId={child.id} hasGroup={Boolean(child.currentGroup)} plans={child.attendancePlans} />
+                    </td>
+                    <td>
                       <ChildTransferForm childId={child.id} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
                     </td>
                   </tr>
                 ))}
-                {filteredChildren.length === 0 ? <EmptyTableRow colSpan={7} label="Дети по фильтрам не найдены." /> : null}
+                {filteredChildren.length === 0 ? <EmptyTableRow colSpan={8} label="Дети по фильтрам не найдены." /> : null}
               </tbody>
             </table>
           </div>

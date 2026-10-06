@@ -1,4 +1,5 @@
 import { hasRole } from "@/server/rbac/rbac";
+import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing-service";
@@ -6,9 +7,11 @@ import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { serializeParent } from "@/server/parents/parent-service";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
-import type { CreateChildEnrollmentInput, CreateChildInput, UpdateChildInput } from "./schemas";
+import { todayInMoscow, weekdayForDate } from "./attendance-plan";
+import type { CreateChildEnrollmentInput, CreateChildInput, SetChildAttendancePlanInput, UpdateChildInput } from "./schemas";
 
 const childInclude = {
+  attendancePlans: { orderBy: { effectiveFrom: "desc" as const } },
   parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } },
   currentGroup: {
     select: {
@@ -34,6 +37,7 @@ type ChildRecord = {
   cachedLessonBalance: number;
   cachedMakeupBalance: number;
   createdAt: Date;
+  attendancePlans: Array<{ effectiveFrom: Date; weekday: number | null }>;
   parent: {
     id: string;
     fullName: string | null;
@@ -68,6 +72,10 @@ export function serializeChild(child: ChildRecord) {
     admissionStatus: child.admissionStatus,
     cachedLessonBalance: child.cachedLessonBalance,
     cachedMakeupBalance: child.cachedMakeupBalance,
+    attendancePlans: child.attendancePlans.map((plan) => ({
+      effectiveFrom: plan.effectiveFrom.toISOString().slice(0, 10),
+      weekday: plan.weekday
+    })),
     parent: child.parent,
     currentGroup: child.currentGroup
       ? {
@@ -119,6 +127,11 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
       });
     }
 
+    if (input.attendanceWeekday != null) {
+      if (!input.currentGroupId) throw new Error("Для одного занятия в неделю сначала выберите группу.");
+      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, todayInMoscow());
+    }
+
     const child = await tx.child.create({
       data: {
         schoolId: currentUser.schoolId,
@@ -130,7 +143,10 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
         medicalNotes: input.medicalNotes,
         coachComment: input.coachComment,
         adminComment: input.adminComment,
-        admissionStatus: input.admissionStatus
+        admissionStatus: input.admissionStatus,
+        attendancePlans: input.attendanceWeekday == null ? undefined : {
+          create: { effectiveFrom: todayInMoscow(), weekday: input.attendanceWeekday }
+        }
       },
       include: childInclude
     });
@@ -220,6 +236,11 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
       });
     }
 
+    if (input.attendanceWeekday != null) {
+      if (!input.currentGroupId) throw new Error("Для одного занятия в неделю сначала выберите группу.");
+      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, todayInMoscow());
+    }
+
     const child = await tx.child.create({
       data: {
         schoolId: currentUser.schoolId,
@@ -231,7 +252,10 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
         medicalNotes: input.medicalNotes,
         coachComment: input.coachComment ?? sharedComment,
         adminComment: input.adminComment ?? sharedComment,
-        admissionStatus: input.admissionStatus
+        admissionStatus: input.admissionStatus,
+        attendancePlans: input.attendanceWeekday == null ? undefined : {
+          create: { effectiveFrom: todayInMoscow(), weekday: input.attendanceWeekday }
+        }
       },
       include: childInclude
     });
@@ -331,6 +355,19 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
           status: { not: "ARCHIVED" }
         }
       });
+    }
+
+    if (childUpdateData.currentGroupId && childUpdateData.currentGroupId !== existing.currentGroup?.id) {
+      const today = todayInMoscow();
+      const currentPlan = existing.attendancePlans.find((plan) => plan.effectiveFrom <= today);
+      const relevantPlans = [currentPlan, ...existing.attendancePlans.filter((plan) => plan.effectiveFrom > today)].filter(
+        (plan) => plan !== undefined
+      );
+      for (const plan of relevantPlans) {
+        if (plan.weekday != null) {
+          await assertGroupHasWeekday(tx, currentUser.schoolId, childUpdateData.currentGroupId, plan.weekday, plan.effectiveFrom);
+        }
+      }
     }
 
     const updated = await tx.child.update({
@@ -475,4 +512,70 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
 
     return serialized;
   });
+}
+
+export async function setChildAttendancePlan(currentUser: CurrentUser, childId: string, input: SetChildAttendancePlanInput) {
+  if (!hasRole(currentUser, ["SUPER_ADMIN", "ADMIN"])) {
+    throw new Error("Недостаточно прав для изменения дней посещения.");
+  }
+
+  return getPrisma().$transaction(async (tx) => {
+    const child = await tx.child.findFirstOrThrow({
+      where: { id: childId, schoolId: currentUser.schoolId },
+      select: { id: true, currentGroupId: true, attendancePlans: { orderBy: { effectiveFrom: "desc" } } }
+    });
+    if (!child.currentGroupId) throw new Error("Сначала назначьте ребёнку группу.");
+    if (input.effectiveFrom < todayInMoscow()) throw new Error("Новый график нельзя применять задним числом.");
+
+    const alreadyCreatedSubscription = await tx.subscription.findFirst({
+      where: { schoolId: currentUser.schoolId, childId, periodEnd: { gte: todayInMoscow() } },
+      orderBy: { periodEnd: "desc" },
+      select: { periodEnd: true }
+    });
+    if (alreadyCreatedSubscription && input.effectiveFrom.getUTCDate() !== 1) {
+      throw new Error("При уже созданном абонементе новый график начинается с первого числа следующего месяца.");
+    }
+    if (alreadyCreatedSubscription && input.effectiveFrom <= alreadyCreatedSubscription.periodEnd) {
+      throw new Error(`У ребёнка уже есть абонемент до ${alreadyCreatedSubscription.periodEnd.toISOString().slice(0, 10)}. Выберите дату после его окончания.`);
+    }
+
+    if (input.weekday != null) {
+      await assertGroupHasWeekday(tx, currentUser.schoolId, child.currentGroupId, input.weekday, input.effectiveFrom);
+    }
+
+    const existingForDate = child.attendancePlans.find((plan) => plan.effectiveFrom.getTime() === input.effectiveFrom.getTime());
+    const plan = await tx.childAttendancePlan.upsert({
+      where: { childId_effectiveFrom: { childId, effectiveFrom: input.effectiveFrom } },
+      create: { childId, effectiveFrom: input.effectiveFrom, weekday: input.weekday },
+      update: { weekday: input.weekday }
+    });
+    await writeAuditLog({
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "CHILD_ATTENDANCE_PLAN_UPDATED",
+      entityType: "Child",
+      entityId: childId,
+      oldValue: existingForDate ? { effectiveFrom: existingForDate.effectiveFrom, weekday: existingForDate.weekday } : null,
+      newValue: { effectiveFrom: plan.effectiveFrom, weekday: plan.weekday }
+    }, tx);
+    return { effectiveFrom: plan.effectiveFrom.toISOString().slice(0, 10), weekday: plan.weekday };
+  });
+}
+
+async function assertGroupHasWeekday(tx: Prisma.TransactionClient, schoolId: string, groupId: string, weekday: number, from: Date) {
+  const templates = await tx.scheduleTemplate.findMany({
+    where: { schoolId, groupId, status: "ACTIVE", weekday }, select: { id: true }
+  });
+  if (templates.length > 1) throw new Error("У группы несколько занятий в этот день. Нельзя настроить режим раз в неделю.");
+  const lessons = await tx.lesson.findMany({
+    where: { schoolId, groupId, lessonDate: { gte: from }, status: { not: "CANCELLED" } },
+    select: { lessonDate: true }
+  });
+  const matching = lessons.filter((lesson) => weekdayForDate(lesson.lessonDate) === weekday);
+  if (!matching.length && templates.length === 0) {
+    throw new Error("В выбранной группе нет занятий в этот день недели.");
+  }
+  if (new Set(matching.map((lesson) => lesson.lessonDate.toISOString().slice(0, 10))).size !== matching.length) {
+    throw new Error("У группы несколько занятий в этот день. Нельзя настроить режим раз в неделю.");
+  }
 }

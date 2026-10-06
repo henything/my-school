@@ -306,7 +306,8 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
         status: formData.get("status"),
         medicalNotes: nullable(formData.get("medicalNotes")),
         comment: nullable(formData.get("comment")),
-        admissionStatus: formData.get("admissionStatus")
+        admissionStatus: formData.get("admissionStatus"),
+        attendanceWeekday: nullable(formData.get("attendanceWeekday")) ? Number(formData.get("attendanceWeekday")) : null
       });
       form.reset();
       setSelectedParentId("");
@@ -388,6 +389,14 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
               }))}
             />
           </div>
+          <label className="label">
+            Дни посещения
+            <select className="field" name="attendanceWeekday" defaultValue="">
+              <option value="">Все занятия группы</option>
+              {weekdays.map(([value, label]) => <option key={value} value={value}>Один раз в неделю: {label}</option>)}
+            </select>
+            <span className="text-xs text-[var(--muted)]">Для одного занятия в неделю выберите день, который есть в расписании группы.</span>
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="label">
               Статус
@@ -464,6 +473,75 @@ export function ChildTransferForm({ childId, currentGroupId, groups }: { childId
       <Button type="submit" size="icon" variant="secondary" disabled={isSubmitting} title="Перевести">
         <ArrowRightLeft aria-hidden="true" size={15} />
       </Button>
+    </form>
+  );
+}
+
+const weekdays = [
+  ["1", "понедельник"], ["2", "вторник"], ["3", "среда"], ["4", "четверг"],
+  ["5", "пятница"], ["6", "суббота"], ["7", "воскресенье"]
+] as const;
+
+function nextMonthStart() {
+  const now = new Date();
+  return new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1)).toISOString().slice(0, 10);
+}
+
+export function ChildAttendancePlanForm({
+  childId, hasGroup, plans
+}: {
+  childId: string;
+  hasGroup: boolean;
+  plans: Array<{ effectiveFrom: string; weekday: number | null }>;
+}) {
+  const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+  const now = new Date();
+  const today = new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
+  const nextPlan = plans.filter((plan) => plan.effectiveFrom > today).at(-1);
+  const currentPlan = plans.find((plan) => plan.effectiveFrom <= today);
+  const [weekday, setWeekday] = useState((nextPlan ?? currentPlan)?.weekday?.toString() ?? "");
+  const [effectiveFrom, setEffectiveFrom] = useState(nextPlan?.effectiveFrom ?? nextMonthStart());
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/children/${childId}/attendance-plan`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ weekday: weekday ? Number(weekday) : null, effectiveFrom })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось сохранить график.");
+      setMessage("Сохранено");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить график.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (!hasGroup) return <span className="text-sm text-[var(--muted)]">Сначала назначьте группу</span>;
+
+  const currentDay = weekdays.find(([value]) => Number(value) === currentPlan?.weekday)?.[1];
+
+  return (
+    <form className="grid min-w-[235px] gap-2" onSubmit={onSubmit}>
+      <span className="text-xs text-[var(--muted)]">Сейчас: {currentDay ? `раз в неделю, ${currentDay}` : "все занятия группы"}</span>
+      {nextPlan ? <span className="text-xs text-[var(--muted)]">Изменение с {nextPlan.effectiveFrom}</span> : null}
+      <select className="field" aria-label="Дни посещения" value={weekday} onChange={(event) => setWeekday(event.target.value)}>
+        <option value="">Все занятия группы</option>
+        {weekdays.map(([value, label]) => <option key={value} value={value}>Раз в неделю: {label}</option>)}
+      </select>
+      <div className="flex gap-2">
+        <input className="field min-w-0" type="date" aria-label="Применять с даты" value={effectiveFrom} onChange={(event) => setEffectiveFrom(event.target.value)} required />
+        <Button type="submit" variant="secondary" disabled={isSubmitting}>Сохранить</Button>
+      </div>
+      {message ? <span className="text-xs text-[var(--muted)]" role="status">{message}</span> : null}
     </form>
   );
 }

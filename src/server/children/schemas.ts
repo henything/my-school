@@ -27,7 +27,8 @@ export const createChildSchema = z.object({
   medicalNotes: optionalTextSchema,
   coachComment: optionalTextSchema,
   adminComment: optionalTextSchema,
-  admissionStatus: admissionStatusSchema.default("ADMITTED")
+  admissionStatus: admissionStatusSchema.default("ADMITTED"),
+  attendanceWeekday: z.number().int().min(1).max(7).nullable().optional()
 });
 
 export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: true }).extend({
@@ -71,6 +72,17 @@ export const updateChildSchema = z.object({
   admissionStatus: admissionStatusSchema.optional()
 });
 
+export const setChildAttendancePlanSchema = z.object({
+  weekday: z.number().int().min(1, "Выберите день недели.").max(7, "Выберите день недели.").nullable(),
+  effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату начала.")
+    .refine((value) => {
+      const date = new Date(`${value}T00:00:00.000Z`);
+      return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+    }, "Некорректная дата начала.")
+    .transform((value) => new Date(`${value}T00:00:00.000Z`))
+});
+
 export type CreateChildInput = z.infer<typeof createChildSchema>;
 export type CreateChildEnrollmentInput = z.infer<typeof createChildEnrollmentSchema>;
 export type UpdateChildInput = z.infer<typeof updateChildSchema>;
+export type SetChildAttendancePlanInput = z.infer<typeof setChildAttendancePlanSchema>;

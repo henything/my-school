@@ -17,6 +17,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
+import { isLessonInChildPlan, type AttendancePlan } from "@/server/children/attendance-plan";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
@@ -589,7 +590,7 @@ export async function ensureCurrentMonthSubscriptionForChild(
       parentId: { not: null },
       currentGroupId: { not: null }
     },
-    select: { id: true, currentGroupId: true }
+    select: { id: true, currentGroupId: true, attendancePlans: { select: { effectiveFrom: true, weekday: true } } }
   });
 
   if (!child?.currentGroupId) {
@@ -610,7 +611,7 @@ export async function ensureCurrentMonthSubscriptionForChild(
     return null;
   }
 
-  const plannedLessonsCount = await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, periodStart, periodEnd);
+  const plannedLessonsCount = await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, periodStart, periodEnd, child.attendancePlans);
 
   if (plannedLessonsCount <= 0) {
     return null;
@@ -643,6 +644,7 @@ async function createSubscriptionInTransaction(
       parentId: true,
       parent: { select: { id: true, fullName: true, phone: true } },
       currentGroupId: true,
+      attendancePlans: { select: { effectiveFrom: true, weekday: true } },
       cachedLessonBalance: true,
       cachedMakeupBalance: true,
       admissionStatus: true
@@ -655,7 +657,7 @@ async function createSubscriptionInTransaction(
 
   const plannedLessonsCount =
     input.plannedLessonsCount ??
-    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, input.periodStart, input.periodEnd));
+    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, input.periodStart, input.periodEnd, child.attendancePlans));
 
   if (plannedLessonsCount <= 0) {
     throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
@@ -990,6 +992,7 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
         id: true,
         fullName: true,
         currentGroupId: true,
+        attendancePlans: { select: { effectiveFrom: true, weekday: true } },
         admissionStatus: true,
         cachedLessonBalance: true,
         currentGroup: { select: { id: true, name: true } }
@@ -1034,7 +1037,7 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
         continue;
       }
 
-      const nextLesson = await tx.lesson.findFirst({
+      const possibleLessons = await tx.lesson.findMany({
         where: {
           schoolId: currentUser.schoolId,
           groupId: child.currentGroupId,
@@ -1048,8 +1051,10 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
           ]
         },
         orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }],
-        select: { id: true, lessonDate: true, startTime: true }
+        select: { id: true, lessonDate: true, startTime: true },
+        take: 100
       });
+      const nextLesson = possibleLessons.find((lesson) => isLessonInChildPlan(child.attendancePlans, lesson.lessonDate));
 
       if (!nextLesson || dateToKey(nextLesson.lessonDate) > todayKey) {
         continue;
@@ -1141,13 +1146,14 @@ async function countRemainingLessonsForChild(
   schoolId: string,
   currentGroupId: string | null,
   periodStart: Date,
-  periodEnd: Date
+  periodEnd: Date,
+  plans: AttendancePlan[]
 ) {
   if (!currentGroupId) {
     return 0;
   }
 
-  return tx.lesson.count({
+  const lessons = await tx.lesson.findMany({
     where: {
       schoolId,
       groupId: currentGroupId,
@@ -1156,8 +1162,10 @@ async function countRemainingLessonsForChild(
         lte: periodEnd
       },
       status: { not: "CANCELLED" }
-    }
+    },
+    select: { lessonDate: true }
   });
+  return lessons.filter((lesson) => isLessonInChildPlan(plans, lesson.lessonDate)).length;
 }
 
 async function findApplicableMakeupCredits(

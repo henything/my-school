@@ -14,6 +14,7 @@ RUN_SYNC=1
 RUN_SERVER_BUILD=1
 RUN_BACKUP=1
 RUN_MIGRATE_RESTART=1
+RUN_SEED=1
 RUN_HEALTH=1
 STATUS_ONLY=0
 HEALTH_ONLY=0
@@ -28,6 +29,7 @@ Options:
   --skip-precheck      Skip local lint/typecheck/test/build.
   --skip-git-check     Allow deploy when local main is dirty or not pushed.
   --skip-backup        Skip the production database backup.
+  --skip-seed          Do not create or update seed accounts on production.
   --status-only        Only check the production systemd helper.
   --health-only        Only check the public health URL.
   --host HOST          SSH host alias. Default: azbuka-prod.
@@ -56,6 +58,9 @@ while [ "$#" -gt 0 ]; do
       ;;
     --skip-backup)
       RUN_BACKUP=0
+      ;;
+    --skip-seed)
+      RUN_SEED=0
       ;;
     --status-only)
       STATUS_ONLY=1
@@ -219,6 +224,7 @@ set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
 cd "$APP_DIR"
 sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm install --frozen-lockfile
+sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:generate
 sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm build
 REMOTE
 }
@@ -240,12 +246,14 @@ REMOTE
 
 migrate_and_restart() {
   log "Applying migrations and restarting service"
-  ssh_prod "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
+  ssh_prod "APP_DIR='$APP_DIR' RUN_SEED='$RUN_SEED' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
 cd "$APP_DIR"
 sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm exec prisma migrate deploy
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:seed
+if [ "$RUN_SEED" -eq 1 ]; then
+  sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:seed
+fi
 azbuka-dvizheniya-restart
 REMOTE
 }

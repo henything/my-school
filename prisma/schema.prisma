@@ -454,6 +454,7 @@ model Child {
   parent                    Parent?                    @relation(fields: [parentId], references: [id], onDelete: SetNull)
   currentGroup              TrainingGroup?             @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
   attendanceRecords         AttendanceRecord[]
+  attendancePlans           ChildAttendancePlan[]
   subscriptions             Subscription[]
   invoices                  Invoice[]
   payments                  Payment[]
@@ -471,6 +472,20 @@ model Child {
   @@index([admissionStatus])
   @@index([fullName])
   @@map("children")
+}
+
+model ChildAttendancePlan {
+  id            String   @id @default(uuid()) @db.Uuid
+  childId       String   @map("child_id") @db.Uuid
+  effectiveFrom DateTime @map("effective_from") @db.Date
+  weekday       Int?
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  child Child @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, effectiveFrom])
+  @@index([childId, effectiveFrom])
+  @@map("child_attendance_plans")
 }
 
 model TrainingGroup {
