@@ -17,6 +17,7 @@ const childInclude = {
     select: {
       id: true,
       name: true,
+      address: true,
       capacityLimit: true,
       branch: { select: { id: true, name: true, address: true } },
       mainCoach: { select: { id: true, userId: true, user: { select: { displayName: true } } } },
@@ -47,6 +48,7 @@ type ChildRecord = {
   currentGroup: {
     id: string;
     name: string;
+    address: string | null;
     capacityLimit: number;
     branch: { id: string; name: string; address: string | null };
     mainCoach: { id: string; userId: string; user: { displayName: string } };
@@ -81,6 +83,7 @@ export function serializeChild(child: ChildRecord) {
       ? {
           id: child.currentGroup.id,
           name: child.currentGroup.name,
+          address: child.currentGroup.address ?? child.currentGroup.branch.address,
           branch: child.currentGroup.branch,
           mainCoach: {
             id: child.currentGroup.mainCoach.id,

@@ -1,7 +1,7 @@
 "use client";
 
-import { Loader2, Search, SlidersHorizontal } from "lucide-react";
-import { type ReactNode, useMemo, useState } from "react";
+import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChildAttendancePlanForm, ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
@@ -12,6 +12,8 @@ import { labelForEnum, labelsForSearch } from "@/lib/labels";
 type Group = {
   id: string;
   name: string;
+  address: string | null;
+  addressOverride: string | null;
   status: string;
   capacityLimit: number;
   activeChildrenCount: number;
@@ -34,7 +36,7 @@ type Child = {
   admissionStatus: string;
   cachedMakeupBalance: number;
   parent: { fullName: string | null; phone: string | null } | null;
-  currentGroup: { id: string; name: string; branch?: { address: string | null } } | null;
+  currentGroup: { id: string; name: string; address: string | null; branch?: { address: string | null } } | null;
   attendancePlans: Array<{ effectiveFrom: string; weekday: number | null }>;
 };
 
@@ -56,7 +58,7 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
   const hasActiveFilters = normalizedQuery.length > 0 || statusFilter !== "ALL" || groupFilter !== "ALL" || addressFilter !== "ALL";
   const addressOptions = useMemo(
     () =>
-      Array.from(new Set(groups.map((group) => group.branch.address).filter((address): address is string => Boolean(address?.trim())))).sort((left, right) =>
+      Array.from(new Set(groups.map((group) => group.address).filter((address): address is string => Boolean(address?.trim())))).sort((left, right) =>
         left.localeCompare(right, "ru")
       ),
     [groups]
@@ -65,10 +67,10 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
     () =>
       groups.filter((group) => {
         const matchesStatus = statusFilter === "ALL" || group.status === statusFilter;
-        const matchesAddress = addressFilter === "ALL" || group.branch.address === addressFilter;
+        const matchesAddress = addressFilter === "ALL" || group.address === addressFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
-          toSearchText(`${group.name} ${group.branch.name} ${group.branch.address ?? ""} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
+          toSearchText(`${group.name} ${group.branch.name} ${group.address ?? ""} ${group.mainCoach.displayName} ${labelsForSearch(group.status)}`).includes(normalizedQuery);
 
         return matchesStatus && matchesAddress && matchesQuery;
       }),
@@ -80,7 +82,7 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
       childRows.filter((child) => {
         const matchesStatus = statusFilter === "ALL" || child.status === statusFilter || child.admissionStatus === statusFilter;
         const matchesGroup = groupFilter === "ALL" || child.currentGroup?.id === groupFilter;
-        const matchesAddress = addressFilter === "ALL" || child.currentGroup?.branch?.address === addressFilter;
+        const matchesAddress = addressFilter === "ALL" || child.currentGroup?.address === addressFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
           toSearchText(
@@ -193,7 +195,9 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                   <tr key={group.id} className={group.isOverCapacity ? "bg-[#fff9ec]" : undefined}>
                     <td className="font-semibold">{group.name}</td>
                     <td>{group.branch.name}</td>
-                    <td>{group.branch.address ?? "-"}</td>
+                    <td>
+                      <GroupAddressForm group={group} />
+                    </td>
                     <td>
                       <PermanentCoachForm group={group} coaches={activeCoaches} />
                     </td>
@@ -265,6 +269,98 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
 
       {children ? <div className="grid gap-4">{children}</div> : null}
     </section>
+  );
+}
+
+function GroupAddressForm({ group }: { group: Group }) {
+  const router = useRouter();
+  const [isEditing, setIsEditing] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [address, setAddress] = useState(group.addressOverride ?? "");
+  const [message, setMessage] = useState("");
+
+  function cancelEdit() {
+    setAddress(group.addressOverride ?? "");
+    setMessage("");
+    setIsConfirming(false);
+    setIsEditing(false);
+  }
+
+  function requestAddressChange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMessage("");
+    if ((address.trim() || null) !== group.addressOverride) {
+      setIsConfirming(true);
+    }
+  }
+
+  async function confirmAddressChange() {
+    setIsSubmitting(true);
+
+    try {
+      const response = await fetch(`/api/groups/${group.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ address: address.trim() || null })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Не удалось сохранить адрес.");
+      }
+
+      setIsEditing(false);
+      setIsConfirming(false);
+      router.refresh();
+    } catch (error) {
+      setIsConfirming(false);
+      setMessage(error instanceof Error ? error.message : "Не удалось сохранить адрес.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  if (!isEditing) {
+    return (
+      <div className="flex min-w-[210px] items-center gap-2">
+        <span>{group.address ?? "Адрес не указан"}</span>
+        <Button type="button" size="sm" variant="ghost" className="ml-auto" aria-label={`Изменить адрес группы ${group.name}`} onClick={() => { setAddress(group.addressOverride ?? ""); setIsEditing(true); }}>
+          <Pencil aria-hidden="true" size={15} />
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <form className="grid min-w-[250px] gap-2" onSubmit={requestAddressChange}>
+        <input className="field" aria-label={`Адрес группы ${group.name}`} value={address} onChange={(event) => setAddress(event.target.value)} placeholder={group.branch.address ?? "Введите адрес"} autoFocus />
+        <span className="text-xs text-[var(--muted)]">Пустое поле — адрес филиала</span>
+        <div className="flex gap-2">
+          <Button type="submit" size="sm" disabled={isSubmitting || (address.trim() || null) === group.addressOverride}>Сохранить</Button>
+          <Button type="button" size="sm" variant="secondary" onClick={cancelEdit} disabled={isSubmitting}>Отмена</Button>
+        </div>
+        {message ? <span role="alert" className="text-xs font-semibold text-[var(--danger)]">{message}</span> : null}
+      </form>
+      {isConfirming ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4" role="dialog" aria-modal="true" aria-label="Подтвердить изменение адреса группы">
+          <div className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-[0_18px_44px_rgba(31,37,35,0.22)]">
+            <h3 className="text-lg font-extrabold">Сменить адрес группы?</h3>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">
+              Вы точно хотите поменять адрес группы «{group.name}» с «{group.address ?? "не указан"}» на «{address.trim() || group.branch.address || "не указан"}»?
+            </p>
+            <div className="mt-4 flex flex-wrap justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setIsConfirming(false)} disabled={isSubmitting}>Отмена</Button>
+              <Button type="button" onClick={confirmAddressChange} disabled={isSubmitting}>
+                {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
+                Да
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

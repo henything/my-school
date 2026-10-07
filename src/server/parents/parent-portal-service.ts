@@ -14,6 +14,7 @@ const childSummaryInclude = {
     select: {
       id: true,
       name: true,
+      address: true,
       branch: { select: { id: true, name: true, address: true } },
       mainCoach: { select: { id: true, user: { select: { displayName: true } } } }
     }
@@ -274,7 +275,7 @@ async function listUpcomingLessonsForChild(
       endTime: true,
       status: true,
       branch: { select: { id: true, name: true, address: true } },
-      group: { select: { id: true, name: true } },
+      group: { select: { id: true, name: true, address: true } },
       coach: { select: { user: { select: { displayName: true } } } },
       substituteCoach: { select: { user: { select: { displayName: true } } } }
     },
@@ -289,7 +290,7 @@ async function listUpcomingLessonsForChild(
     endTime: lesson.endTime,
     status: lesson.status,
     branch: lesson.branch,
-    group: lesson.group,
+    group: { ...lesson.group, address: lesson.group.address ?? lesson.branch.address },
     coachName: lesson.substituteCoach?.user.displayName ?? lesson.coach.user.displayName
   }));
 }
@@ -310,6 +311,7 @@ function serializeParentChild(child: ParentChildSummary) {
       ? {
           id: child.currentGroup.id,
           name: child.currentGroup.name,
+          address: child.currentGroup.address ?? child.currentGroup.branch.address,
           branch: child.currentGroup.branch,
           coachName: child.currentGroup.mainCoach.user.displayName
         }

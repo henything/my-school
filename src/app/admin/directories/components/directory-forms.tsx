@@ -11,6 +11,7 @@ import { labelForEnum } from "@/lib/labels";
 type Branch = {
   id: string;
   name: string;
+  address: string | null;
   status: string;
 };
 
@@ -218,6 +219,7 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
     try {
       await submitJson("/api/groups", {
         name: formData.get("name"),
+        address: nullable(formData.get("address")),
         branchId: formData.get("branchId"),
         mainCoachId: formData.get("mainCoachId"),
         capacityLimit: formData.get("capacityLimit"),
@@ -242,6 +244,10 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
       <label className="label">
         Название
         <input className="field" name="name" minLength={2} required disabled={disabled} />
+      </label>
+      <label className="label">
+        Адрес группы
+        <input className="field" name="address" placeholder="Если отличается от адреса филиала" disabled={disabled} />
       </label>
       <div className="grid gap-4">
         <div className="label">

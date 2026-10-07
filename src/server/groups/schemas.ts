@@ -3,6 +3,7 @@ import { entityStatusSchema, optionalTextSchema, uuidSchema } from "@/server/sha
 
 export const createGroupSchema = z.object({
   name: z.string().trim().min(2, "Название группы обязательно."),
+  address: optionalTextSchema,
   branchId: uuidSchema,
   mainCoachId: uuidSchema,
   capacityLimit: z.coerce.number().int().min(1).max(50).default(15),

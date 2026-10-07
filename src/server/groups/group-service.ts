@@ -10,6 +10,7 @@ import type { AttachChildToGroupInput, CreateGroupInput, UpdateGroupInput } from
 type GroupRecord = {
   id: string;
   name: string;
+  address: string | null;
   status: string;
   capacityLimit: number;
   comment: string | null;
@@ -51,6 +52,8 @@ export function serializeGroup(group: GroupRecord) {
   return {
     id: group.id,
     name: group.name,
+    address: group.address ?? group.branch.address,
+    addressOverride: group.address,
     status: group.status,
     capacityLimit: group.capacityLimit,
     activeChildrenCount,
@@ -105,6 +108,7 @@ export async function createGroup(currentUser: CurrentUser, input: CreateGroupIn
         branchId: input.branchId,
         mainCoachId: input.mainCoachId,
         name: input.name,
+        address: input.address,
         capacityLimit: input.capacityLimit,
         comment: input.comment
       },
@@ -180,6 +184,7 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
         entityId: group.id,
         oldValue: {
           name: existing.name,
+          address: existing.address,
           status: existing.status,
           branchId: existing.branchId,
           mainCoachId: existing.mainCoachId,
@@ -187,6 +192,7 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
         },
         newValue: {
           name: group.name,
+          address: group.address,
           status: group.status,
           branchId: group.branch.id,
           mainCoachId: group.mainCoach.id,
