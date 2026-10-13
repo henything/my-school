@@ -8,10 +8,15 @@ import { countActiveChildren } from "@/server/groups/capacity";
 import { serializeParent } from "@/server/parents/parent-service";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
 import { todayInMoscow, weekdayForDate } from "./attendance-plan";
+import { setCurrentGroupMembership } from "./group-membership";
 import type { CreateChildEnrollmentInput, CreateChildInput, SetChildAttendancePlanInput, UpdateChildInput } from "./schemas";
 
 const childInclude = {
   attendancePlans: { orderBy: { effectiveFrom: "desc" as const } },
+  groupMemberships: {
+    orderBy: { startDate: "desc" as const },
+    include: { group: { select: { id: true, name: true, branch: { select: { name: true } } } } }
+  },
   parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } },
   currentGroup: {
     select: {
@@ -39,6 +44,11 @@ type ChildRecord = {
   cachedMakeupBalance: number;
   createdAt: Date;
   attendancePlans: Array<{ effectiveFrom: Date; weekday: number | null }>;
+  groupMemberships: Array<{
+    startDate: Date;
+    endDate: Date | null;
+    group: { id: string; name: string; branch: { name: string } };
+  }>;
   parent: {
     id: string;
     fullName: string | null;
@@ -77,6 +87,13 @@ export function serializeChild(child: ChildRecord) {
     attendancePlans: child.attendancePlans.map((plan) => ({
       effectiveFrom: plan.effectiveFrom.toISOString().slice(0, 10),
       weekday: plan.weekday
+    })),
+    groupMemberships: child.groupMemberships.map((membership) => ({
+      groupId: membership.group.id,
+      groupName: membership.group.name,
+      branchName: membership.group.branch.name,
+      startDate: membership.startDate.toISOString().slice(0, 10),
+      endDate: membership.endDate?.toISOString().slice(0, 10) ?? null
     })),
     parent: child.parent,
     currentGroup: child.currentGroup
@@ -153,6 +170,10 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
       },
       include: childInclude
     });
+
+    if (child.status === "ACTIVE" && child.currentGroupId) {
+      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, todayInMoscow());
+    }
 
     await writeAuditLog(
       {
@@ -262,6 +283,10 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
       },
       include: childInclude
     });
+
+    if (child.status === "ACTIVE" && child.currentGroupId) {
+      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, todayInMoscow());
+    }
 
     const serializedChild = serializeChild(child);
 
@@ -378,6 +403,15 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
       data: childUpdateData,
       include: childInclude
     });
+
+    if (existing.currentGroup?.id !== updated.currentGroup?.id || existing.status !== updated.status) {
+      await setCurrentGroupMembership(
+        tx,
+        updated.id,
+        updated.status === "ACTIVE" ? updated.currentGroupId : null,
+        todayInMoscow()
+      );
+    }
 
     if (existing.status !== updated.status) {
       await writeAuditLog(

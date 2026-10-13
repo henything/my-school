@@ -455,6 +455,7 @@ model Child {
   currentGroup              TrainingGroup?             @relation("CurrentGroup", fields: [currentGroupId], references: [id], onDelete: SetNull)
   attendanceRecords         AttendanceRecord[]
   attendancePlans           ChildAttendancePlan[]
+  groupMemberships          ChildGroupMembership[]
   subscriptions             Subscription[]
   invoices                  Invoice[]
   payments                  Payment[]
@@ -488,6 +489,22 @@ model ChildAttendancePlan {
   @@map("child_attendance_plans")
 }
 
+model ChildGroupMembership {
+  id        String    @id @default(uuid()) @db.Uuid
+  childId   String    @map("child_id") @db.Uuid
+  groupId   String    @map("group_id") @db.Uuid
+  startDate DateTime  @map("start_date") @db.Date
+  endDate   DateTime? @map("end_date") @db.Date
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  child Child         @relation(fields: [childId], references: [id], onDelete: Cascade)
+  group TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  @@index([childId, startDate, endDate])
+  @@index([groupId, startDate, endDate])
+  @@map("child_group_memberships")
+}
+
 model TrainingGroup {
   id            String       @id @default(uuid()) @db.Uuid
   schoolId      String       @map("school_id") @db.Uuid
@@ -505,6 +522,7 @@ model TrainingGroup {
   branch            Branch             @relation(fields: [branchId], references: [id], onDelete: Restrict)
   mainCoach         CoachProfile       @relation(fields: [mainCoachId], references: [id], onDelete: Restrict)
   children          Child[]            @relation("CurrentGroup")
+  childMemberships  ChildGroupMembership[]
   scheduleTemplates ScheduleTemplate[]
   lessons           Lesson[]
   tasks             Task[]

@@ -4,7 +4,7 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import { applyAttendanceBalanceEffect } from "@/server/billing/billing-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
-import { isLessonInChildPlan } from "@/server/children/attendance-plan";
+import { childrenScheduledForLesson } from "@/server/children/group-membership";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import type {
@@ -17,6 +17,18 @@ import type {
 const OPEN_TASK_STATUSES: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
 const ATTENDANCE_NOT_FILLED_CHECK_HOUR = 22;
 const trialParticipantOrderBy: Prisma.TrialParticipantOrderByWithRelationInput[] = [{ status: "asc" }, { createdAt: "asc" }];
+const lessonChildSelect = {
+  id: true,
+  fullName: true,
+  birthDate: true,
+  status: true,
+  medicalNotes: true,
+  coachComment: true,
+  adminComment: true,
+  admissionStatus: true,
+  attendancePlans: { select: { effectiveFrom: true, weekday: true } },
+  parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } }
+} as const;
 
 const lessonDetailInclude = {
   branch: { select: { id: true, name: true } },
@@ -26,20 +38,11 @@ const lessonDetailInclude = {
     select: {
       id: true,
       name: true,
-      children: {
-        where: { status: "ACTIVE" },
-        orderBy: { fullName: "asc" },
+      childMemberships: {
         select: {
-          id: true,
-          fullName: true,
-          birthDate: true,
-          status: true,
-          medicalNotes: true,
-          coachComment: true,
-          adminComment: true,
-          admissionStatus: true,
-          attendancePlans: { select: { effectiveFrom: true, weekday: true } },
-          parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } }
+          startDate: true,
+          endDate: true,
+          child: { select: lessonChildSelect }
         }
       }
     }
@@ -52,7 +55,8 @@ const lessonDetailInclude = {
       comment: true,
       markedAt: true,
       markedByUserId: true,
-      finalStatus: true
+      finalStatus: true,
+      child: { select: lessonChildSelect }
     }
   },
   trialParticipants: {
@@ -67,7 +71,7 @@ const lessonDetailInclude = {
 
 type LessonDetailRecord = Prisma.LessonGetPayload<{ include: typeof lessonDetailInclude }>;
 function scheduledChildrenForLesson(lesson: LessonDetailRecord) {
-  return lesson.group.children.filter((child) => isLessonInChildPlan(child.attendancePlans, lesson.lessonDate));
+  return childrenScheduledForLesson(lesson.group.childMemberships, lesson.attendanceRecords, lesson.lessonDate);
 }
 type AttendanceRecordForUpdate = {
   id: string;
@@ -102,7 +106,7 @@ export function serializeCoachLessonDetail(lesson: LessonDetailRecord) {
     startTime: lesson.startTime,
     endTime: lesson.endTime,
     status: lesson.status,
-    group: lesson.group,
+    group: { id: lesson.group.id, name: lesson.group.name },
     branch: lesson.branch,
     coach: {
       id: lesson.coach.id,
@@ -469,7 +473,7 @@ async function ensureCertificatePendingTask(
   childId: string,
   attendanceRecordId: string
 ) {
-  const child = lesson.group.children.find((item) => item.id === childId);
+  const child = scheduledChildrenForLesson(lesson).find((item) => item.id === childId);
   const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
 
   return ensureTask(tx, {
@@ -518,7 +522,7 @@ async function ensureConsecutiveUnexcusedTask(
     return null;
   }
 
-  const child = lesson.group.children.find((item) => item.id === childId);
+  const child = scheduledChildrenForLesson(lesson).find((item) => item.id === childId);
   const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
 
   return ensureTask(tx, {

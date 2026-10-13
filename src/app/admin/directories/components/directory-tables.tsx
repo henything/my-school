@@ -38,6 +38,7 @@ type Child = {
   parent: { fullName: string | null; phone: string | null } | null;
   currentGroup: { id: string; name: string; address: string | null; branch?: { address: string | null } } | null;
   attendancePlans: Array<{ effectiveFrom: string; weekday: number | null }>;
+  groupMemberships?: Array<{ groupId: string; groupName: string; branchName: string; startDate: string; endDate: string | null }>;
 };
 
 type DirectoryTablesProps = {
@@ -244,7 +245,22 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                       <div>{child.parent?.fullName ?? "-"}</div>
                       {child.parent?.phone ? <div className="text-xs text-[var(--muted)]">{child.parent.phone}</div> : null}
                     </td>
-                    <td>{child.currentGroup?.name ?? "-"}</td>
+                    <td>
+                      <div>{child.currentGroup?.name ?? "-"}</div>
+                      {child.groupMemberships?.length ? (
+                        <details className="mt-1 text-xs text-[var(--muted)]">
+                          <summary className="cursor-pointer">История групп</summary>
+                          <ul className="mt-1 space-y-1">
+                            {child.groupMemberships.map((membership, index) => (
+                              <li key={`${membership.groupId}-${membership.startDate}-${index}`}>
+                                {membership.groupName} · {membership.branchName}: с {formatMembershipDate(membership.startDate)}
+                                {membership.endDate ? `, выход ${formatMembershipDate(membership.endDate)}` : " по настоящее время"}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
+                    </td>
                     <td>
                       <StatusBadge status={child.status} />
                     </td>
@@ -478,6 +494,10 @@ function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function formatMembershipDate(value: string) {
+  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("ru-RU", { timeZone: "UTC" });
 }
 
 function toSearchText(value: string) {

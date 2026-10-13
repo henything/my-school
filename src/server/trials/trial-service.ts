@@ -2,6 +2,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { todayInMoscow } from "@/server/children/attendance-plan";
+import { setCurrentGroupMembership } from "@/server/children/group-membership";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
@@ -271,6 +273,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
         admissionStatus: "ADMITTED"
       }
     });
+
+    await setCurrentGroupMembership(tx, child.id, currentGroupId, todayInMoscow());
 
     const updated = await tx.trialParticipant.update({
       where: { id: existing.id },

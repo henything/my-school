@@ -133,7 +133,6 @@ type AttendanceBalanceLesson = {
   group: {
     id: string;
     name: string;
-    children: Array<{ id: string; fullName: string }>;
   };
 };
 
