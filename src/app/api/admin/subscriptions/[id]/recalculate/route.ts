@@ -7,8 +7,10 @@ import { requiredCommentSchema } from "@/server/shared/schemas";
 
 const applySchema = z.object({
   reason: requiredCommentSchema,
+  paidDifferenceAction: z.enum(["CREDIT", "REFUND_DUE"]).optional(),
   expectedSubscriptionUpdatedAt: z.string().datetime(),
-  expectedInvoiceUpdatedAt: z.string().datetime()
+  expectedInvoiceUpdatedAt: z.string().datetime(),
+  expectedLessonIds: z.array(z.string().uuid())
 });
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {

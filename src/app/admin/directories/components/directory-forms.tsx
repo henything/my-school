@@ -349,7 +349,8 @@ function CreateChildEnrollmentForm({ groups, parents, lessons, trials }: {
         attendanceWeekday: nullable(formData.get("attendanceWeekday")) ? Number(formData.get("attendanceWeekday")) : null,
         firstPaidLessonDate: nullable(formData.get("firstPaidLessonDate")),
         trialParticipantId: nullable(formData.get("trialParticipantId")),
-        trialLessonId: nullable(formData.get("trialLessonId"))
+        trialLessonId: nullable(formData.get("trialLessonId")),
+        trialAttended: formData.get("trialAttended") === "true" ? true : formData.get("trialAttended") === "false" ? false : null
       });
       form.reset();
       setSelectedParentId("");
@@ -469,6 +470,9 @@ function CreateChildEnrollmentForm({ groups, parents, lessons, trials }: {
             </select>
             <span className="text-xs text-[var(--muted)]">Пробное фиксируется отдельно и не входит в платный счёт.</span>
           </label>
+          {selectedTrialLessonId ? <label className="label">Результат пробного
+            <select className="field" name="trialAttended" required defaultValue=""><option value="">Выберите</option><option value="true">Был</option><option value="false">Не был</option></select>
+          </label> : null}
           <label className="label">
             Дни посещения
             <select className="field" name="attendanceWeekday" defaultValue="">
@@ -483,7 +487,6 @@ function CreateChildEnrollmentForm({ groups, parents, lessons, trials }: {
               <select className="field" name="status" defaultValue="ACTIVE">
                 <option value="ACTIVE">{labelForEnum("ACTIVE")}</option>
                 <option value="PAUSED">{labelForEnum("PAUSED")}</option>
-                <option value="LEFT">{labelForEnum("LEFT")}</option>
                 <option value="TRIAL">{labelForEnum("TRIAL")}</option>
                 <option value="ARCHIVED">{labelForEnum("ARCHIVED")}</option>
               </select>
@@ -591,6 +594,7 @@ export function ChildTransferForm({
   const [isOpen, setIsOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedGroupId, setSelectedGroupId] = useState(currentGroupId);
+  const [effectiveDate, setEffectiveDate] = useState(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" }));
   const [error, setError] = useState("");
 
   function close() {
@@ -609,7 +613,7 @@ export function ChildTransferForm({
       const response = await fetch(`/api/children/${childId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentGroupId: selectedGroupId || null })
+        body: JSON.stringify({ currentGroupId: selectedGroupId || null, effectiveDate })
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) throw new Error(payload.error ?? "Не удалось перевести ребёнка.");
@@ -651,6 +655,7 @@ export function ChildTransferForm({
                       }))}
                     />
                   </div>
+                  <label className="label">Дата перевода<input className="field" type="date" required value={effectiveDate} onChange={(event) => setEffectiveDate(event.target.value)} /></label>
                   <p className="text-sm leading-6 text-[var(--muted)]">Выставленные счета и оплаты останутся без изменений. При необходимости проверьте их после перевода.</p>
                   {error ? <p role="alert" className="text-sm font-semibold text-[var(--danger-strong)]">{error}</p> : null}
                   <div className="flex flex-wrap justify-end gap-2">

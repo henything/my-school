@@ -1,4 +1,5 @@
 import { AlertTriangle, BarChart3, ClipboardCheck, Coins, Percent, Receipt, TrendingUp, UserRoundX, UsersRound, WalletCards } from "lucide-react";
+import Link from "next/link";
 import { requireRole } from "@/server/auth/current-user";
 import { getAnalyticsDashboard } from "@/server/analytics/analytics-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
@@ -70,6 +71,8 @@ export default async function AnalyticsPage() {
         <MetricCard label="Общее кол-во человек" value={analytics.totals.totalActiveChildren.toString()} icon={UsersRound} tone="info" />
         <MetricCard label="Наполняемость групп" value={`${analytics.totals.fillPercent}%`} icon={Percent} tone="warning" />
       </section>
+      <Link href="/admin/attendance-report" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Отчёт по посещаемости и выгрузка Excel →</Link>
+      <Link href="/admin/discrepancies" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Расхождения, требующие проверки →</Link>
 
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
         {topMetrics.map((metric) => (

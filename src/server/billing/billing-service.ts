@@ -18,6 +18,8 @@ import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import { isLessonInChildPlan, todayInMoscow, type AttendancePlan } from "@/server/children/attendance-plan";
+import { isMemberOnDate } from "@/server/children/group-membership";
+import { applyAvailableCreditsToInvoice } from "./billing-adjustment-service";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
@@ -383,10 +385,13 @@ async function createInvoiceForSubscription(
   });
 
   await applyMakeupCreditsToInvoice(tx, currentUser, subscription.childId, subscription.id, invoice.id, invoice.number, appliedMakeupCredits);
+  const appliedCreditKopeks = await applyAvailableCreditsToInvoice(tx, invoice.id);
+  const finalInvoiceAmountKopeks = amountKopeks - appliedCreditKopeks;
 
   const paymentStatusComment = [
     `Создан счёт ${invoice.number}`,
     appliedMakeupCredits.length > 0 ? `зачтено переносов: ${appliedMakeupCredits.length}` : null,
+    appliedCreditKopeks > 0 ? `зачтена переплата: ${appliedCreditKopeks / 100} ₽` : null,
     `к оплате занятий: ${billableLessonsCount}`
   ]
     .filter(Boolean)
@@ -396,7 +401,7 @@ async function createInvoiceForSubscription(
     where: { id: subscription.id },
     data: {
       totalAmountKopeks: subscription.totalAmountKopeks,
-      paymentStatus: isFullyCoveredByMakeups ? "PAID" : "INVOICED",
+      paymentStatus: finalInvoiceAmountKopeks === 0 ? "PAID" : "INVOICED",
       paymentStatusChangedAt: issuedAt,
       paymentStatusComment
     }
@@ -611,7 +616,7 @@ export async function ensureCurrentMonthSubscriptionForChild(
     return null;
   }
 
-  const plannedLessonsCount = await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, periodStart, periodEnd, child.attendancePlans);
+  const plannedLessonsCount = await countRemainingLessonsForChild(tx, currentUser.schoolId, child.id, periodStart, periodEnd, child.attendancePlans);
 
   if (plannedLessonsCount <= 0) {
     return null;
@@ -657,7 +662,7 @@ async function createSubscriptionInTransaction(
 
   const plannedLessonsCount =
     input.plannedLessonsCount ??
-    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.currentGroupId, input.periodStart, input.periodEnd, child.attendancePlans));
+    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.id, input.periodStart, input.periodEnd, child.attendancePlans));
 
   if (plannedLessonsCount <= 0) {
     throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
@@ -669,6 +674,7 @@ async function createSubscriptionInTransaction(
     data: {
       schoolId: currentUser.schoolId,
       childId: child.id,
+      groupId: child.currentGroupId,
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       plannedLessonsCount,
@@ -679,6 +685,13 @@ async function createSubscriptionInTransaction(
     },
     include: subscriptionListInclude
   });
+
+  const snapshotLessons = await listRemainingLessonsForChild(tx, currentUser.schoolId, child.id, input.periodStart, input.periodEnd, child.attendancePlans);
+  if (snapshotLessons.length === plannedLessonsCount) {
+    await tx.subscriptionLesson.createMany({ data: snapshotLessons.map((lesson) => ({
+      subscriptionId: subscription.id, lessonId: lesson.id, groupId: lesson.groupId, lessonDate: lesson.lessonDate
+    })) });
+  }
 
   const transaction = await tx.lessonBalanceTransaction.create({
     data: {
@@ -1144,28 +1157,51 @@ const subscriptionListInclude = {
 async function countRemainingLessonsForChild(
   tx: Prisma.TransactionClient,
   schoolId: string,
-  currentGroupId: string | null,
+  childId: string,
   periodStart: Date,
   periodEnd: Date,
   plans: AttendancePlan[]
 ) {
-  if (!currentGroupId) {
-    return 0;
+  return (await listRemainingLessonsForChild(tx, schoolId, childId, periodStart, periodEnd, plans)).length;
+}
+
+async function listRemainingLessonsForChild(
+  tx: Prisma.TransactionClient,
+  schoolId: string,
+  childId: string,
+  periodStart: Date,
+  periodEnd: Date,
+  plans: AttendancePlan[]
+) {
+  const memberships = await tx.childGroupMembership.findMany({
+    where: { childId, startDate: { lte: periodEnd }, OR: [{ endDate: null }, { endDate: { gt: periodStart } }] },
+    select: { groupId: true, startDate: true, endDate: true }
+  });
+  if (memberships.length === 0) {
+    return [];
   }
+
+  const trialLessons = await tx.trialParticipant.findMany({
+    where: { schoolId, convertedChildId: childId },
+    select: { lessonId: true }
+  });
+  const trialLessonIds = new Set(trialLessons.map((trial) => trial.lessonId));
 
   const lessons = await tx.lesson.findMany({
     where: {
       schoolId,
-      groupId: currentGroupId,
+      groupId: { in: Array.from(new Set(memberships.map((membership) => membership.groupId))) },
       lessonDate: {
         gte: periodStart,
         lte: periodEnd
       },
       status: { not: "CANCELLED" }
     },
-    select: { lessonDate: true }
+    select: { id: true, groupId: true, lessonDate: true }
   });
-  return lessons.filter((lesson) => isLessonInChildPlan(plans, lesson.lessonDate)).length;
+  return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) &&
+    memberships.some((membership) => membership.groupId === lesson.groupId && isMemberOnDate(membership, lesson.lessonDate)) &&
+    isLessonInChildPlan(plans, lesson.lessonDate));
 }
 
 async function findApplicableMakeupCredits(

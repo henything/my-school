@@ -35,7 +35,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
   const prisma = getPrisma();
   const [groups, totalActiveChildren, payments, invoices, subscriptions, trialCount, convertedTrialCount, attendanceNotFilledCount] = await Promise.all([
     prisma.trainingGroup.findMany({
-      where: { schoolId: currentUser.schoolId, status: { not: "ARCHIVED" } },
+      where: { schoolId: currentUser.schoolId },
       include: {
         branch: { select: { name: true } },
         mainCoach: { select: { id: true, user: { select: { displayName: true } } } },
@@ -48,7 +48,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
       where: { schoolId: currentUser.schoolId, status: PAID_PAYMENT_STATUS },
       select: {
         amountKopeks: true,
-        child: { select: { currentGroupId: true } }
+        subscription: { select: { groupId: true, lessonSnapshots: { select: { groupId: true } } } }
       }
     }),
     prisma.invoice.findMany({
@@ -57,7 +57,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
         amountKopeks: true,
         paidAmountKopeks: true,
         parentId: true,
-        child: { select: { currentGroupId: true } }
+        subscription: { select: { groupId: true, lessonSnapshots: { select: { groupId: true } } } }
       }
     }),
     prisma.subscription.findMany({
@@ -65,7 +65,8 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
       select: {
         totalAmountKopeks: true,
         paymentStatus: true,
-        child: { select: { currentGroupId: true } }
+        groupId: true,
+        lessonSnapshots: { select: { groupId: true } }
       }
     }),
     prisma.trialParticipant.count({ where: { schoolId: currentUser.schoolId } }),
@@ -80,15 +81,16 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
   ]);
 
   const groupIndex = createGroupIndex(groups);
-  const receiptByGroup = createMoneyRows(groupIndex, payments, (payment) => payment.amountKopeks, (payment) => payment.child.currentGroupId);
+  const receiptByGroup = createMoneyRows(groupIndex, payments, (payment) => payment.amountKopeks, (payment) => payment.subscription);
   const debtByGroup = createMoneyRows(
     groupIndex,
     invoices,
     (invoice) => Math.max(0, invoice.amountKopeks - invoice.paidAmountKopeks),
-    (invoice) => invoice.child.currentGroupId
+    (invoice) => invoice.subscription
   );
 
-  const groupRows = groups.map((group) => {
+  const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
+  const groupRows = activeGroups.map((group) => {
     const activeChildrenCount = countActiveChildren(group.children);
     const receiptAmountKopeks = receiptByGroup.find((row) => row.groupId === group.id)?.amountKopeks ?? 0;
     const debtAmountKopeks = debtByGroup.find((row) => row.groupId === group.id)?.amountKopeks ?? 0;
@@ -108,18 +110,19 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
 
   const coachRows = Array.from(
     subscriptions.reduce((rows, subscription) => {
-      const group = groupIndex.get(subscription.child.currentGroupId ?? "");
-      const coachId = group?.mainCoach.id ?? "none";
-      const existing = rows.get(coachId) ?? {
-        coachId,
-        coachName: group?.mainCoach.user.displayName ?? "Без тренера",
-        subscriptionAmountKopeks: 0,
-        salaryAmountKopeks: 0
-      };
-
-      existing.subscriptionAmountKopeks += subscription.totalAmountKopeks;
-      existing.salaryAmountKopeks = Math.round(existing.subscriptionAmountKopeks * COACH_SALARY_RATE);
-      rows.set(coachId, existing);
+      for (const allocation of allocateByLessonGroup(subscription.totalAmountKopeks, subscription)) {
+        const group = groupIndex.get(allocation.groupId ?? "");
+        const coachId = group?.mainCoach.id ?? "none";
+        const existing = rows.get(coachId) ?? {
+          coachId,
+          coachName: group?.mainCoach.user.displayName ?? "Без тренера",
+          subscriptionAmountKopeks: 0,
+          salaryAmountKopeks: 0
+        };
+        existing.subscriptionAmountKopeks += allocation.amountKopeks;
+        existing.salaryAmountKopeks = Math.round(existing.subscriptionAmountKopeks * COACH_SALARY_RATE);
+        rows.set(coachId, existing);
+      }
       return rows;
     }, new Map<string, { coachId: string; coachName: string; subscriptionAmountKopeks: number; salaryAmountKopeks: number }>())
   )
@@ -128,7 +131,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
 
   const totalReceiptAmountKopeks = sum(payments, (payment) => payment.amountKopeks);
   const totalDebtAmountKopeks = sum(invoices, (invoice) => Math.max(0, invoice.amountKopeks - invoice.paidAmountKopeks));
-  const totalCapacity = sum(groups, (group) => group.capacityLimit);
+  const totalCapacity = sum(activeGroups, (group) => group.capacityLimit);
   const paidSubscriptionCount = subscriptions.filter((subscription) => subscription.paymentStatus === "PAID").length;
   const debtorCount = new Set(invoices.filter((invoice) => invoice.amountKopeks > invoice.paidAmountKopeks).map((invoice) => invoice.parentId)).size;
   const averageReceiptKopeks = payments.length > 0 ? Math.round(totalReceiptAmountKopeks / payments.length) : 0;
@@ -159,11 +162,26 @@ function createGroupIndex(groups: AnalyticsGroupRecord[]) {
   return new Map(groups.map((group) => [group.id, group]));
 }
 
-function createMoneyRows<T>(groups: Map<string, AnalyticsGroupRecord>, items: T[], amountFor: (item: T) => number, groupIdFor: (item: T) => string | null): MoneyByGroup[] {
+type SubscriptionAllocationSource = { groupId: string | null; lessonSnapshots: Array<{ groupId: string }> } | null;
+
+export function allocateByLessonGroup(amountKopeks: number, subscription: SubscriptionAllocationSource) {
+  const ids = subscription?.lessonSnapshots.map((snapshot) => snapshot.groupId) ?? [];
+  if (!ids.length) return [{ groupId: subscription?.groupId ?? null, amountKopeks }];
+  const counts = new Map<string, number>();
+  for (const id of ids) counts.set(id, (counts.get(id) ?? 0) + 1);
+  let allocated = 0;
+  return Array.from(counts, ([groupId, count], index) => {
+    const amount = index === counts.size - 1 ? amountKopeks - allocated : Math.round(amountKopeks * count / ids.length);
+    allocated += amount;
+    return { groupId, amountKopeks: amount };
+  });
+}
+
+function createMoneyRows<T>(groups: Map<string, AnalyticsGroupRecord>, items: T[], amountFor: (item: T) => number, subscriptionFor: (item: T) => SubscriptionAllocationSource): MoneyByGroup[] {
   const rows = new Map<string, MoneyByGroup>();
 
   for (const item of items) {
-    const groupId = groupIdFor(item);
+    for (const { groupId, amountKopeks } of allocateByLessonGroup(amountFor(item), subscriptionFor(item))) {
     const group = groupId ? groups.get(groupId) : null;
     const key = group?.id ?? "none";
     const row = rows.get(key) ?? {
@@ -173,8 +191,9 @@ function createMoneyRows<T>(groups: Map<string, AnalyticsGroupRecord>, items: T[
       amountKopeks: 0
     };
 
-    row.amountKopeks += amountFor(item);
+    row.amountKopeks += amountKopeks;
     rows.set(key, row);
+    }
   }
 
   return Array.from(rows.values()).sort((left, right) => right.amountKopeks - left.amountKopeks);

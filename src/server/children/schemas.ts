@@ -49,7 +49,8 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
   comment: optionalTextSchema,
   parentComment: optionalTextSchema,
   trialParticipantId: uuidSchema.optional().nullable(),
-  trialLessonId: uuidSchema.optional().nullable()
+  trialLessonId: uuidSchema.optional().nullable(),
+  trialAttended: z.boolean().optional().nullable()
 }).superRefine((input, context) => {
   const hasParentId = Boolean(input.parentId);
   const hasNewParentFields = Boolean(input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment);
@@ -85,6 +86,9 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
       path: ["firstPaidLessonDate"]
     });
   }
+  if (input.trialLessonId && input.trialAttended == null) {
+    context.addIssue({ code: "custom", message: "Укажите, был ли ребёнок на пробном занятии.", path: ["trialAttended"] });
+  }
 });
 
 export const updateChildSchema = z.object({
@@ -97,6 +101,7 @@ export const updateChildSchema = z.object({
   coachComment: optionalTextSchema,
   adminComment: optionalTextSchema,
   statusChangeComment: optionalTextSchema,
+  effectiveDate: firstPaidLessonDateSchema,
   admissionStatus: admissionStatusSchema.optional()
 });
 

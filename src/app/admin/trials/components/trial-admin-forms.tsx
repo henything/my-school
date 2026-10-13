@@ -40,6 +40,8 @@ type CreateTrialFormProps = {
 type ConvertTrialFormProps = {
   trial: Trial;
   groups: GroupOption[];
+  childRows: Array<{ id: string; fullName: string; status: string; currentGroup: { id: string; name: string } | null }>;
+  parents: Array<{ id: string; fullName: string | null; phone: string | null }>;
 };
 
 const sources = [
@@ -161,8 +163,10 @@ export function CreateTrialForm({ lessons }: CreateTrialFormProps) {
   );
 }
 
-export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
+export function ConvertTrialForm({ trial, groups, childRows, parents }: ConvertTrialFormProps) {
   const router = useRouter();
+  const [existingChildId, setExistingChildId] = useState("");
+  const [existingParentId, setExistingParentId] = useState("");
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const disabled = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE";
@@ -178,12 +182,16 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          existingChildId: nullable(formData.get("existingChildId")),
+          existingParentId: nullable(formData.get("existingParentId")),
           childFullName: nullable(formData.get("childFullName")),
           parentName: nullable(formData.get("parentName")),
           parentPhone: nullable(formData.get("parentPhone")),
           parentVkUrl: nullable(formData.get("parentVkUrl")),
           currentGroupId: formData.get("currentGroupId"),
           adminComment: nullable(formData.get("adminComment")),
+          attendanceWeekday: formData.get("attendanceWeekday") ? Number(formData.get("attendanceWeekday")) : null,
+          attendancePlanStartDate: nullable(formData.get("attendancePlanStartDate")),
           firstPaidLessonDate: formData.get("firstPaidLessonDate")
         })
       });
@@ -205,9 +213,23 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
   return (
     <form className="grid gap-3" onSubmit={onSubmit}>
       <div className="grid gap-3 sm:grid-cols-2">
+        <label className="label">Существующий ребёнок
+          <select className="field" name="existingChildId" value={existingChildId} onChange={(event) => { setExistingChildId(event.target.value); if (event.target.value) setExistingParentId(""); }} disabled={disabled}>
+            <option value="">Создать новую карточку</option>
+            {childRows.filter((child) => child.status !== "ARCHIVED").map((child) => <option key={child.id} value={child.id}>{child.fullName} · {child.currentGroup?.name ?? "без группы"}</option>)}
+          </select>
+        </label>
+        <label className="label">Существующий родитель
+          <select className="field" name="existingParentId" value={existingParentId} onChange={(event) => setExistingParentId(event.target.value)} disabled={disabled || Boolean(existingChildId)}>
+            <option value="">Создать или найти по телефону</option>
+            {parents.map((parent) => <option key={parent.id} value={parent.id}>{parent.fullName ?? "Без имени"} · {parent.phone ?? "без телефона"}</option>)}
+          </select>
+        </label>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
         <label className="label">
           Ребёнок
-          <input className="field" name="childFullName" defaultValue={trial.childName ?? ""} disabled={disabled} />
+          <input className="field" name="childFullName" defaultValue={trial.childName ?? ""} disabled={disabled || Boolean(existingChildId)} />
         </label>
         <label className="label">
           Группа
@@ -223,15 +245,15 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="label">
           Родитель
-          <input className="field" name="parentName" defaultValue={trial.parentName ?? ""} disabled={disabled} />
+          <input className="field" name="parentName" defaultValue={trial.parentName ?? ""} disabled={disabled || Boolean(existingChildId || existingParentId)} />
         </label>
         <label className="label">
           Телефон
-          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+7 999 123-45-67" pattern="[+0-9()\\s.-]{5,30}" defaultValue={trial.parentPhone ?? ""} disabled={disabled} />
+          <input className="field" name="parentPhone" type="tel" inputMode="tel" placeholder="+7 999 123-45-67" pattern="[+0-9()\\s.-]{5,30}" defaultValue={trial.parentPhone ?? ""} disabled={disabled || Boolean(existingChildId || existingParentId)} />
         </label>
         <label className="label">
           VK
-          <input className="field" name="parentVkUrl" defaultValue={trial.parentVkUrl ?? ""} disabled={disabled} />
+          <input className="field" name="parentVkUrl" defaultValue={trial.parentVkUrl ?? ""} disabled={disabled || Boolean(existingChildId || existingParentId)} />
         </label>
       </div>
       <label className="label">
@@ -239,6 +261,17 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
         <input className="field" name="firstPaidLessonDate" type="date" min={new Date(new Date(`${trial.lesson.lessonDate}T00:00:00.000Z`).getTime() + 86_400_000).toISOString().slice(0, 10)} required disabled={disabled} />
         <span className="text-xs text-[var(--muted)]">С этой даты ребёнок будет в табелях группы и получит счёт за платные занятия.</span>
       </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="label">График посещения
+          <select className="field" name="attendanceWeekday" disabled={disabled}>
+            <option value="">Все дни группы</option>
+            {[[1, "Понедельник"], [2, "Вторник"], [3, "Среда"], [4, "Четверг"], [5, "Пятница"], [6, "Суббота"], [7, "Воскресенье"]].map(([day, label]) => <option key={day} value={day}>{label}</option>)}
+          </select>
+        </label>
+        <label className="label">Дата начала графика
+          <input className="field" name="attendancePlanStartDate" type="date" disabled={disabled} />
+        </label>
+      </div>
       <label className="label">
         Комментарий админа
         <input className="field" name="adminComment" disabled={disabled} />
@@ -246,6 +279,35 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
       <FormFooter isSubmitting={isSubmitting} message={message} label="Конвертировать" disabled={disabled} />
     </form>
   );
+}
+
+export function TrialAttendanceButtons({ trialId, status }: { trialId: string; status: string }) {
+  const router = useRouter();
+  const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  if (["TRANSFERRED_TO_ADMIN", "CONVERTED_TO_ACTIVE"].includes(status)) return null;
+
+  async function mark(nextStatus: "TRIAL_ATTENDED" | "TRIAL_NO_SHOW") {
+    setLoading(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/trials/${trialId}/status`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: nextStatus })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось отметить пробное занятие.");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось отметить пробное занятие.");
+    } finally {
+      setLoading(false);
+    }
+  }
+  return <div className="mt-3 flex flex-wrap items-center gap-2">
+    <Button type="button" size="sm" variant={status === "TRIAL_ATTENDED" ? "primary" : "secondary"} disabled={loading} onClick={() => mark("TRIAL_ATTENDED")}>На пробном был</Button>
+    <Button type="button" size="sm" variant={status === "TRIAL_NO_SHOW" ? "primary" : "secondary"} disabled={loading} onClick={() => mark("TRIAL_NO_SHOW")}>На пробном не был</Button>
+    {message ? <span role="alert" className="text-sm text-[var(--danger-strong)]">{message}</span> : null}
+  </div>;
 }
 
 export function TransferTrialForm({ trialId, disabled }: { trialId: string; disabled: boolean }) {

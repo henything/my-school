@@ -2,7 +2,8 @@ import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
-import { ensureEnrollmentSubscriptions } from "@/server/children/child-service";
+import { assertGroupHasWeekday, ensureEnrollmentSubscriptions } from "@/server/children/child-service";
+import { normalizeOptionalPhone } from "@/server/parents/phone";
 import { resolveFirstPaidLessonDate } from "@/server/children/enrollment-dates";
 import { setCurrentGroupMembership } from "@/server/children/group-membership";
 import { countActiveChildren } from "@/server/groups/capacity";
@@ -60,6 +61,7 @@ export function serializeTrial(trial: TrialRecord) {
     parentVkUrl: trial.parentVkUrl,
     source: trial.source,
     status: trial.status,
+    trialAttended: trial.trialAttended,
     comment: trial.comment,
     convertedAt: trial.convertedAt?.toISOString() ?? null,
     createdAt: trial.createdAt.toISOString(),
@@ -187,6 +189,7 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
       where: { id: existing.id },
       data: {
         status: nextStatus,
+        trialAttended: input.status === "TRIAL_ATTENDED" ? true : input.status === "TRIAL_NO_SHOW" ? false : undefined,
         childName: input.childName !== undefined ? input.childName : undefined,
         childAge: input.childAge !== undefined ? input.childAge : undefined,
         parentName: input.parentName !== undefined ? input.parentName : undefined,
@@ -238,6 +241,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
     });
 
     assertTrialCanBeConverted(existing.status);
+    if (existing.trialAttended === null) throw new Error("Сначала отметьте, был ли ребёнок на пробном занятии.");
 
     const childFullName = input.childFullName ?? existing.childName;
 
@@ -254,35 +258,67 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       existing.lesson.lessonDate
     );
     const parentName = input.parentName ?? existing.parentName;
-    const parentPhone = input.parentPhone ?? existing.parentPhone;
+    const parentPhone = normalizeOptionalPhone(input.parentPhone ?? existing.parentPhone);
     const parentVkUrl = input.parentVkUrl ?? existing.parentVkUrl;
-    const hasParentData = Boolean(parentName || parentPhone || parentVkUrl);
-    const parent = hasParentData
-      ? await tx.parent.create({
-          data: {
-            schoolId: currentUser.schoolId,
-            fullName: parentName,
-            phone: parentPhone,
-            vkProfileUrl: parentVkUrl,
-            comment: `Создано из пробника ${existing.id}`
-          }
-        })
-      : null;
+    const planStartDate = input.attendancePlanStartDate ?? startDate;
+    if (planStartDate < startDate) throw new Error("График не может начаться до первого платного занятия.");
+    if (input.attendanceWeekday != null) {
+      await assertGroupHasWeekday(tx, currentUser.schoolId, currentGroupId, input.attendanceWeekday, planStartDate);
+    }
 
-    const child = await tx.child.create({
-      data: {
-        schoolId: currentUser.schoolId,
-        parentId: parent?.id ?? null,
-        currentGroupId,
-        fullName: childFullName,
-        status: "ACTIVE",
-        coachComment: existing.comment,
-        adminComment: input.adminComment ?? null,
-        admissionStatus: "ADMITTED"
+    const existingChild = input.existingChildId ? await tx.child.findFirstOrThrow({
+      where: { id: input.existingChildId, schoolId: currentUser.schoolId },
+      include: { groupMemberships: { where: { endDate: null }, orderBy: { startDate: "desc" }, take: 1 } }
+    }) : null;
+    if (existingChild && existingChild.status !== "ACTIVE") throw new Error("Существующий ребёнок должен быть активным.");
+    if (existingChild?.currentGroupId && existingChild.currentGroupId !== currentGroupId) {
+      throw new Error("Существующий ребёнок состоит в другой группе. Сначала исправьте историю перевода.");
+    }
+
+    let parent = existingChild?.parentId ? await tx.parent.findUniqueOrThrow({ where: { id: existingChild.parentId } }) : null;
+    if (!parent && input.existingParentId) {
+      parent = await tx.parent.findFirstOrThrow({ where: { id: input.existingParentId, schoolId: currentUser.schoolId, archivedAt: null } });
+    }
+    if (!parent && parentPhone) {
+      const matches = await tx.parent.findMany({ where: { schoolId: currentUser.schoolId, phone: parentPhone, archivedAt: null }, take: 2 });
+      if (matches.length > 1) throw new Error("По телефону найдено несколько родителей. Выберите нужную карточку вручную.");
+      parent = matches[0] ?? null;
+    }
+    if (!parent && (parentName || parentPhone || parentVkUrl)) {
+      parent = await tx.parent.create({ data: {
+        schoolId: currentUser.schoolId, fullName: parentName, phone: parentPhone,
+        vkProfileUrl: parentVkUrl, comment: `Создано из пробника ${existing.id}`
+      } });
+    }
+
+    const child = existingChild ? await tx.child.update({
+      where: { id: existingChild.id },
+      data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId }
+    }) : await tx.child.create({ data: {
+      schoolId: currentUser.schoolId, parentId: parent?.id ?? null, currentGroupId,
+      fullName: childFullName, status: "ACTIVE", coachComment: existing.comment,
+      adminComment: input.adminComment ?? null, admissionStatus: "ADMITTED"
+    } });
+
+    if (existingChild?.groupMemberships[0]?.groupId === currentGroupId) {
+      const open = existingChild.groupMemberships[0];
+      if (startDate < open.startDate) {
+        const prior = await tx.childGroupMembership.findFirst({
+          where: { childId: child.id, id: { not: open.id }, endDate: { gt: startDate } }, select: { id: true }
+        });
+        if (prior) throw new Error("Дата первого платного занятия пересекается с предыдущей группой.");
+        await tx.childGroupMembership.update({ where: { id: open.id }, data: { startDate } });
       }
-    });
-
-    await setCurrentGroupMembership(tx, child.id, currentGroupId, startDate);
+    } else {
+      await setCurrentGroupMembership(tx, child.id, currentGroupId, startDate);
+    }
+    if (input.attendanceWeekday != null) {
+      await tx.childAttendancePlan.upsert({
+        where: { childId_effectiveFrom: { childId: child.id, effectiveFrom: planStartDate } },
+        create: { childId: child.id, effectiveFrom: planStartDate, weekday: input.attendanceWeekday },
+        update: { weekday: input.attendanceWeekday }
+      });
+    }
 
     const updated = await tx.trialParticipant.update({
       where: { id: existing.id },

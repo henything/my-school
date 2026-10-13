@@ -1,4 +1,5 @@
 import { DirectoryForms } from "@/app/admin/directories/components/directory-forms";
+import Link from "next/link";
 import { DirectoryTables } from "@/app/admin/directories/components/directory-tables";
 import { ParentAccountPanel } from "@/app/admin/directories/components/parent-account-panel";
 import { WorkQueuePanel } from "@/components/work-queue-panel";
@@ -34,6 +35,8 @@ export default async function DirectoriesPage() {
     <div className="grid gap-6">
       <section>
         <h1 className="mt-2 text-2xl font-bold">Справочники школы</h1>
+        <Link href="/admin/parent-access" className="mt-2 inline-block text-sm font-bold text-[var(--accent-strong)]">Доступ родителей к ЛК →</Link>
+        <Link href="/admin/cleanup" className="ml-4 mt-2 inline-block text-sm font-bold text-[var(--accent-strong)]">Дубли и тестовые записи →</Link>
       </section>
 
       <WorkQueuePanel

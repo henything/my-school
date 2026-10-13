@@ -45,6 +45,10 @@ export async function setCurrentGroupMembership(
 
   if (current?.groupId === groupId) return;
 
+  if (current && dateToKey(effectiveDate) < dateToKey(current.startDate)) {
+    throw new Error("Дата изменения группы раньше начала текущего периода участия.");
+  }
+
   if (current) {
     await tx.childGroupMembership.update({
       where: { id: current.id },

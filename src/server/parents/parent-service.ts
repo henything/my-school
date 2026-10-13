@@ -25,7 +25,7 @@ export function serializeParent(parent: {
 
 export async function listParents(currentUser: CurrentUser) {
   const parents = await getPrisma().parent.findMany({
-    where: { schoolId: currentUser.schoolId },
+    where: { schoolId: currentUser.schoolId, archivedAt: null },
     include: { _count: { select: { children: true } } },
     orderBy: [{ fullName: "asc" }, { createdAt: "asc" }]
   });
@@ -67,7 +67,8 @@ export async function updateParent(currentUser: CurrentUser, parentId: string, i
     const existing = await tx.parent.findFirstOrThrow({
       where: {
         id: parentId,
-        schoolId: currentUser.schoolId
+        schoolId: currentUser.schoolId,
+        archivedAt: null
       }
     });
 

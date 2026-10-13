@@ -251,6 +251,7 @@ model School {
   scheduleTemplates         ScheduleTemplate[]
   lessons                   Lesson[]
   subscriptions             Subscription[]
+  billingAdjustments         BillingAdjustment[]
   invoices                  Invoice[]
   paymentAttempts           PaymentAttempt[]
   payments                  Payment[]
@@ -290,6 +291,7 @@ model User {
   markedAttendance            AttendanceRecord[]         @relation("AttendanceMarkedBy")
   finalizedAttendance         AttendanceRecord[]         @relation("AttendanceFinalizedBy")
   createdSubscriptions        Subscription[]             @relation("SubscriptionCreatedBy")
+  createdBillingAdjustments   BillingAdjustment[]
   createdInvoices             Invoice[]                  @relation("InvoiceCreatedBy")
   createdParentInvites        ParentInvite[]             @relation("ParentInviteCreatedBy")
   passwordResetTokens         PasswordResetToken[]       @relation("PasswordResetTokenUser")
@@ -378,6 +380,8 @@ model Parent {
   comment      String?
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
+  archivedAt   DateTime? @map("archived_at")
+  mergedIntoParentId String? @map("merged_into_parent_id") @db.Uuid
 
   school          School           @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   children        Child[]
@@ -386,9 +390,13 @@ model Parent {
   invoices        Invoice[]
   paymentAttempts PaymentAttempt[]
   payments        Payment[]
+  billingAdjustments BillingAdjustment[]
+  mergedInto Parent? @relation("ParentMerge", fields: [mergedIntoParentId], references: [id], onDelete: Restrict)
+  mergedSources Parent[] @relation("ParentMerge")
 
   @@index([schoolId])
   @@index([phone])
+  @@index([archivedAt])
   @@map("parents")
 }
 
@@ -457,6 +465,7 @@ model Child {
   attendancePlans           ChildAttendancePlan[]
   groupMemberships          ChildGroupMembership[]
   subscriptions             Subscription[]
+  billingAdjustments         BillingAdjustment[]
   invoices                  Invoice[]
   payments                  Payment[]
   lessonBalanceTransactions LessonBalanceTransaction[]
@@ -523,6 +532,8 @@ model TrainingGroup {
   mainCoach         CoachProfile       @relation(fields: [mainCoachId], references: [id], onDelete: Restrict)
   children          Child[]            @relation("CurrentGroup")
   childMemberships  ChildGroupMembership[]
+  subscriptions     Subscription[]
+  subscriptionLessons SubscriptionLesson[]
   scheduleTemplates ScheduleTemplate[]
   lessons           Lesson[]
   tasks             Task[]
@@ -594,6 +605,7 @@ model Lesson {
   sourceMakeupCredits       MakeupCredit[]             @relation("MakeupCreditSourceLesson")
   assignedMakeupCredits     MakeupCredit[]             @relation("MakeupCreditAssignedLesson")
   trialParticipants         TrialParticipant[]
+  subscriptionLessons       SubscriptionLesson[]
 
   @@unique([groupId, lessonDate, startTime])
   @@index([schoolId])
@@ -710,6 +722,7 @@ model Subscription {
   id                     String        @id @default(uuid()) @db.Uuid
   schoolId               String        @map("school_id") @db.Uuid
   childId                String        @map("child_id") @db.Uuid
+  groupId                String?       @map("group_id") @db.Uuid
   periodStart            DateTime      @map("period_start") @db.Date
   periodEnd              DateTime      @map("period_end") @db.Date
   plannedLessonsCount    Int           @map("planned_lessons_count")
@@ -724,17 +737,81 @@ model Subscription {
 
   school              School                     @relation(fields: [schoolId], references: [id], onDelete: Restrict)
   child               Child                      @relation(fields: [childId], references: [id], onDelete: Restrict)
+  group               TrainingGroup?             @relation(fields: [groupId], references: [id], onDelete: Restrict)
   createdBy           User                       @relation("SubscriptionCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   invoices            Invoice[]
   payments            Payment[]
   balanceTransactions LessonBalanceTransaction[]
+  lessonSnapshots     SubscriptionLesson[]
+  billingAdjustments  BillingAdjustment[]
 
   @@index([schoolId])
   @@index([childId])
+  @@index([groupId])
   @@index([createdByUserId])
   @@index([paymentStatus])
   @@index([periodStart, periodEnd])
   @@map("subscriptions")
+}
+
+model SubscriptionLesson {
+  id             String   @id @default(uuid()) @db.Uuid
+  subscriptionId String   @map("subscription_id") @db.Uuid
+  lessonId       String   @map("lesson_id") @db.Uuid
+  groupId        String   @map("group_id") @db.Uuid
+  lessonDate     DateTime @map("lesson_date") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  lesson       Lesson       @relation(fields: [lessonId], references: [id], onDelete: Restrict)
+  group        TrainingGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+
+  @@unique([subscriptionId, lessonId])
+  @@index([groupId, lessonDate])
+  @@map("subscription_lessons")
+}
+
+model BillingAdjustment {
+  id                     String   @id @default(uuid()) @db.Uuid
+  schoolId               String   @map("school_id") @db.Uuid
+  childId                String   @map("child_id") @db.Uuid
+  parentId               String   @map("parent_id") @db.Uuid
+  sourceSubscriptionId   String?  @map("source_subscription_id") @db.Uuid
+  sourceInvoiceId        String?  @map("source_invoice_id") @db.Uuid
+  kind                   String
+  amountKopeks           Int      @map("amount_kopeks")
+  appliedAmountKopeks    Int      @default(0) @map("applied_amount_kopeks")
+  reason                 String
+  createdByUserId        String   @map("created_by_user_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at")
+  refundedAt             DateTime? @map("refunded_at")
+  applications           BillingAdjustmentApplication[]
+
+  school             School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  child              Child @relation(fields: [childId], references: [id], onDelete: Restrict)
+  parent             Parent @relation(fields: [parentId], references: [id], onDelete: Restrict)
+  sourceSubscription Subscription? @relation(fields: [sourceSubscriptionId], references: [id], onDelete: Restrict)
+  sourceInvoice      Invoice? @relation(fields: [sourceInvoiceId], references: [id], onDelete: Restrict)
+  createdBy          User @relation(fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([schoolId, childId, kind])
+  @@index([parentId])
+  @@map("billing_adjustments")
+}
+
+model BillingAdjustmentApplication {
+  id           String @id @default(uuid()) @db.Uuid
+  adjustmentId String @map("adjustment_id") @db.Uuid
+  invoiceId    String @map("invoice_id") @db.Uuid
+  amountKopeks Int    @map("amount_kopeks")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  adjustment BillingAdjustment @relation(fields: [adjustmentId], references: [id], onDelete: Restrict)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+
+  @@unique([adjustmentId, invoiceId])
+  @@index([invoiceId])
+  @@map("billing_adjustment_applications")
 }
 
 model MakeupCredit {
@@ -908,6 +985,8 @@ model Invoice {
   createdBy    User             @relation("InvoiceCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
   attempts     PaymentAttempt[]
   payments     Payment[]
+  sourceBillingAdjustments BillingAdjustment[]
+  billingAdjustmentApplications BillingAdjustmentApplication[]
 
   @@unique([schoolId, number])
   @@index([schoolId])
@@ -1060,6 +1139,7 @@ model TrialParticipant {
   parentVkUrl      String?     @map("parent_vk_url")
   source           TrialSource @default(UNKNOWN)
   status           TrialStatus @default(TRIAL_BOOKED)
+  trialAttended    Boolean?    @map("trial_attended")
   comment          String?
   createdByUserId  String?     @map("created_by_user_id") @db.Uuid
   convertedAt      DateTime?   @map("converted_at")

@@ -80,6 +80,7 @@ describe("child schemas", () => {
       fullName: "Иван Петров",
       currentGroupId: "11111111-1111-4111-8111-111111111111",
       trialLessonId: "22222222-2222-4222-8222-222222222222",
+      trialAttended: true,
       firstPaidLessonDate: "2026-10-08"
     });
     expect(enrollment.firstPaidLessonDate?.toISOString().slice(0, 10)).toBe("2026-10-08");

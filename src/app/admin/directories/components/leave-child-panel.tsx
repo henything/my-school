@@ -20,7 +20,9 @@ type Period = {
 };
 
 type Settlement = {
+  revision: string;
   childName: string;
+  lastDate: string;
   status: string;
   currentGroup: { name: string } | null;
   trialDates: string[];
@@ -34,6 +36,7 @@ type Settlement = {
   hasRefundedPayment: boolean;
   hasInvoiceAnomaly: boolean;
   hasOverlappingSubscriptions: boolean;
+  hasExistingAdjustments: boolean;
   hasStandaloneInvoices: boolean;
   note: string;
 };
@@ -47,6 +50,7 @@ export function LeaveChildPanel({ childId, status }: { childId: string; status: 
   const [loading, setLoading] = useState(false);
   const [settlement, setSettlement] = useState<Settlement | null>(null);
   const [reason, setReason] = useState("");
+  const [lastDate, setLastDate] = useState(new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" }));
   const [error, setError] = useState("");
 
   async function show() {
@@ -54,7 +58,7 @@ export function LeaveChildPanel({ childId, status }: { childId: string; status: 
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/admin/children/${childId}/exit`);
+      const response = await fetch(`/api/admin/children/${childId}/exit?lastDate=${encodeURIComponent(lastDate)}`);
       const payload = (await response.json()) as { settlement?: Settlement; error?: string };
       if (!response.ok || !payload.settlement) throw new Error(payload.error ?? "Не удалось получить расчёт.");
       setSettlement(payload.settlement);
@@ -73,7 +77,7 @@ export function LeaveChildPanel({ childId, status }: { childId: string; status: 
       const response = await fetch(`/api/admin/children/${childId}/exit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason: reason.trim() })
+        body: JSON.stringify({ reason: reason.trim(), lastDate, expectedRevision: settlement?.revision })
       });
       const payload = (await response.json()) as { settlement?: Settlement; error?: string };
       if (!response.ok || !payload.settlement) throw new Error(payload.error ?? "Не удалось вывести ребёнка.");
@@ -104,6 +108,9 @@ export function LeaveChildPanel({ childId, status }: { childId: string; status: 
             {error ? <p role="alert" className="mt-4 text-sm font-semibold text-[var(--danger-strong)]">{error}</p> : null}
             {settlement ? (
               <div className="mt-4 grid gap-4 text-sm">
+                <label className="label">Последний день посещения<input className="field" type="date" max={new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Moscow" })} value={lastDate} onChange={(event) => setLastDate(event.target.value)} /></label>
+                <Button type="button" variant="secondary" onClick={show}>Обновить расчёт</Button>
+                {settlement.lastDate !== lastDate ? <p className="font-semibold text-[var(--warning-strong)]">Дата изменена. Обновите расчёт перед подтверждением.</p> : null}
                 <div className="grid gap-1 rounded-lg bg-[var(--panel-soft)] p-4">
                   <div>Оплачено: <strong>{amount(settlement.totalPaidKopeks)}</strong></div>
                   <div>Стоимость учтённых занятий: <strong>{amount(settlement.totalEarnedKopeks)}</strong></div>
@@ -126,15 +133,15 @@ export function LeaveChildPanel({ childId, status }: { childId: string; status: 
                 ))}
                 {settlement.missingAttendanceDates.length ? <p className="font-semibold text-[var(--warning-strong)]">Не заполнены табели: {settlement.missingAttendanceDates.join(", ")}</p> : null}
                 {settlement.attendanceWithoutSubscription.length ? <p className="font-semibold text-[var(--warning-strong)]">Есть занятия без абонемента: {settlement.attendanceWithoutSubscription.map((record) => record.date).join(", ")}</p> : null}
-                {settlement.hasRefundedPayment || settlement.hasStandaloneInvoices || settlement.hasInvoiceAnomaly || settlement.hasOverlappingSubscriptions
+                {settlement.hasRefundedPayment || settlement.hasExistingAdjustments || settlement.hasStandaloneInvoices || settlement.hasInvoiceAnomaly || settlement.hasOverlappingSubscriptions
                   ? <p className="font-semibold text-[var(--warning-strong)]">Есть возврат, отдельный или нестандартный счёт либо пересекающиеся абонементы — проверьте расчёт вручную.</p>
                   : null}
                 <p className="text-[var(--muted)]">{settlement.note}</p>
                 {["ACTIVE", "PAUSED"].includes(status) && ["ACTIVE", "PAUSED"].includes(settlement.status) ? (
                   <div className="grid gap-2 border-t border-[var(--line)] pt-4">
                     <label className="label">Причина ухода<input className="field" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например, больше не ходит" /></label>
-                    <p>Действие изменит статус на «Ушёл» и уберёт ребёнка из группы. Счета и оплаты сохранятся; неоплаченные счета пересчитываются отдельно.</p>
-                    <Button type="button" disabled={loading || !reason.trim()} onClick={leave}>Подтвердить уход</Button>
+                    <p>Действие изменит статус на «Ушёл», завершит участие после выбранной даты, пересчитает неоплаченные счета и зафиксирует сумму к возврату по оплаченным. Перевод денег выполняется отдельно.</p>
+                    <Button type="button" disabled={loading || !reason.trim() || settlement.lastDate !== lastDate || settlement.missingAttendanceDates.length > 0} onClick={leave}>Подтвердить уход</Button>
                   </div>
                 ) : null}
               </div>

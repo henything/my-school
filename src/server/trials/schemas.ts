@@ -49,16 +49,23 @@ export const updateTrialStatusSchema = z.object({
 });
 
 export const convertTrialSchema = z.object({
+  existingChildId: uuidSchema.optional().nullable(),
+  existingParentId: uuidSchema.optional().nullable(),
   childFullName: optionalTextSchema,
   parentName: optionalTextSchema,
   parentPhone: optionalPhoneSchema,
   parentVkUrl: optionalTextSchema,
   currentGroupId: uuidSchema.optional().nullable(),
   adminComment: optionalTextSchema,
+  attendanceWeekday: z.number().int().min(1).max(7).nullable().optional(),
+  attendancePlanStartDate: firstPaidLessonDateSchema,
   firstPaidLessonDate: firstPaidLessonDateSchema
 }).refine((input) => Boolean(input.firstPaidLessonDate), {
   message: "Укажите дату первого платного занятия после пробного.",
   path: ["firstPaidLessonDate"]
+}).refine((input) => !input.existingChildId || !input.existingParentId, {
+  message: "Для существующего ребёнка родитель берётся из его карточки.",
+  path: ["existingParentId"]
 });
 
 export type CreateTrialInput = z.infer<typeof createTrialSchema>;

@@ -13,6 +13,10 @@ type Preview = {
   childName: string;
   previousLessonsCount: number;
   nextLessonsCount: number;
+  nextLessons: Array<{ id: string; date: string }>;
+  previousLessonDates: string[] | null;
+  addedLessonDates: string[] | null;
+  removedLessonDates: string[] | null;
   previousInvoiceAmountKopeks: number | null;
   nextInvoiceAmountKopeks: number;
   paidAmountKopeks: number;
@@ -20,6 +24,8 @@ type Preview = {
   currentBalance: number;
   nextBalance: number;
   canApply: boolean;
+  canApplyPaid: boolean;
+  paidDifferenceKopeks: number;
   blockReason: string | null;
   historyWarning: string | null;
 };
@@ -31,6 +37,7 @@ export function InvoiceRecalculationPanel({ subscriptions }: { subscriptions: Su
   const [subscriptionId, setSubscriptionId] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [reason, setReason] = useState("");
+  const [paidDifferenceAction, setPaidDifferenceAction] = useState<"CREDIT" | "REFUND_DUE">("CREDIT");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -52,7 +59,7 @@ export function InvoiceRecalculationPanel({ subscriptions }: { subscriptions: Su
   }
 
   async function apply() {
-    if (!preview?.canApply || !preview.invoiceUpdatedAt || !reason.trim()) return;
+    if ((!preview?.canApply && !preview?.canApplyPaid) || !preview.invoiceUpdatedAt || !reason.trim()) return;
     setLoading(true);
     setMessage("");
     try {
@@ -61,15 +68,17 @@ export function InvoiceRecalculationPanel({ subscriptions }: { subscriptions: Su
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           reason: reason.trim(),
+          paidDifferenceAction: preview.canApplyPaid ? paidDifferenceAction : undefined,
           expectedSubscriptionUpdatedAt: preview.subscriptionUpdatedAt,
-          expectedInvoiceUpdatedAt: preview.invoiceUpdatedAt
+          expectedInvoiceUpdatedAt: preview.invoiceUpdatedAt,
+          expectedLessonIds: preview.nextLessons.map((lesson) => lesson.id)
         })
       });
       const payload = (await response.json()) as { preview?: Preview; error?: string };
       if (!response.ok || !payload.preview) throw new Error(payload.error ?? "Не удалось пересчитать счёт.");
       setPreview(payload.preview);
       setReason("");
-      setMessage("Абонемент, баланс и неоплаченный счёт пересчитаны.");
+      setMessage(preview.canApplyPaid ? "Абонемент пересчитан. Оплаченный счёт сохранён, разница зафиксирована отдельно." : "Абонемент, баланс и неоплаченный счёт пересчитаны.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось пересчитать счёт.");
@@ -105,10 +114,16 @@ export function InvoiceRecalculationPanel({ subscriptions }: { subscriptions: Su
           <div>Сумма: {money.format((preview.previousInvoiceAmountKopeks ?? 0) / 100)} → {money.format(preview.nextInvoiceAmountKopeks / 100)}</div>
           <div>Оплачено: {money.format(preview.paidAmountKopeks / 100)} · зачтено переносов: {preview.appliedMakeupCount}</div>
           <div>Баланс занятий: {preview.currentBalance} → {preview.nextBalance}</div>
+          <div>Новые платные даты: {preview.nextLessons.map((lesson) => lesson.date).join(", ") || "нет"}</div>
+          {preview.previousLessonDates ? <div>Ранее учтённые даты: {preview.previousLessonDates.join(", ") || "нет"}</div> : <div className="text-[var(--warning-strong)]">Для старого абонемента даты исходного расчёта не сохранены; сравните число занятий с табелем.</div>}
+          {preview.addedLessonDates?.length ? <div>Добавятся: {preview.addedLessonDates.join(", ")}</div> : null}
+          {preview.removedLessonDates?.length ? <div>Исключатся: {preview.removedLessonDates.join(", ")}</div> : null}
+          {preview.canApplyPaid ? <div className="font-bold">Разница по оплаченному счёту: {money.format(preview.paidDifferenceKopeks / 100)}. Сам счёт останется без изменений.</div> : null}
           {preview.historyWarning ? <p className="font-semibold text-[var(--warning-strong)]">{preview.historyWarning}</p> : null}
           {preview.blockReason ? <p className="font-semibold text-[var(--danger-strong)]">{preview.blockReason}</p> : null}
-          {preview.canApply ? (
+          {preview.canApply || preview.canApplyPaid ? (
             <div className="flex flex-wrap items-end gap-3">
+              {preview.canApplyPaid ? <label className="label min-w-[280px]">Как учесть разницу<select className="field" value={paidDifferenceAction} onChange={(event) => setPaidDifferenceAction(event.target.value as "CREDIT" | "REFUND_DUE")}><option value="CREDIT">Зачесть в следующем месяце</option><option value="REFUND_DUE">Сумма к возврату (без перевода денег)</option></select></label> : null}
               <label className="label min-w-[280px] flex-1">
                 Причина пересчёта
                 <input className="field" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Исправлен табель за 8 октября" required />

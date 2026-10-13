@@ -133,7 +133,8 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
       await tx.parent.findFirstOrThrow({
         where: {
           id: input.parentId,
-          schoolId: currentUser.schoolId
+          schoolId: currentUser.schoolId,
+          archivedAt: null
         }
       });
     }
@@ -222,7 +223,8 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
       await tx.parent.findFirstOrThrow({
         where: {
           id: parentId,
-          schoolId: currentUser.schoolId
+          schoolId: currentUser.schoolId,
+          archivedAt: null
         }
       });
     } else if (input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment) {
@@ -343,7 +345,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
     if (existingTrial) {
       await tx.trialParticipant.update({
         where: { id: existingTrial.id },
-        data: { convertedChildId: child.id, status: "CONVERTED_TO_ACTIVE", convertedAt: new Date() }
+        data: { convertedChildId: child.id, status: "CONVERTED_TO_ACTIVE", trialAttended: true, convertedAt: new Date() }
       });
       linkedTrialId = existingTrial.id;
       await closeTasksByCondition(tx, {
@@ -365,6 +367,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
           parentPhone: child.parent?.phone ?? null,
           parentVkUrl: child.parent?.vkProfileUrl ?? null,
           status: "CONVERTED_TO_ACTIVE",
+          trialAttended: input.trialAttended,
           convertedAt: new Date(),
           createdByUserId: currentUser.id
         }
@@ -424,7 +427,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
 
 export async function updateChild(currentUser: CurrentUser, childId: string, input: UpdateChildInput) {
   return getPrisma().$transaction(async (tx) => {
-    const { statusChangeComment, ...childUpdateData } = input;
+    const { statusChangeComment, effectiveDate, ...childUpdateData } = input;
     const existing = await tx.child.findFirstOrThrow({
       where: {
         id: childId,
@@ -436,6 +439,10 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
     const isAdmin = hasRole(currentUser, ["SUPER_ADMIN", "ADMIN"]);
     const isCoach = currentUser.role === "COACH";
 
+    if (effectiveDate && effectiveDate > todayInMoscow()) {
+      throw new Error("Дата перевода или ухода не может быть в будущем.");
+    }
+
     if (isCoach) {
       const coachCanAccess = existing.currentGroup?.mainCoach.userId === currentUser.id;
       const attemptedAdminOnlyChange =
@@ -446,7 +453,8 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
         childUpdateData.status !== undefined ||
         childUpdateData.adminComment !== undefined ||
         childUpdateData.admissionStatus !== undefined ||
-        statusChangeComment !== undefined;
+        statusChangeComment !== undefined ||
+        effectiveDate !== undefined;
 
       if (!coachCanAccess || attemptedAdminOnlyChange) {
         throw new Error("Недостаточно прав для изменения карточки ребёнка.");
@@ -455,6 +463,14 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
 
     if (!isAdmin && !isCoach) {
       throw new Error("Недостаточно прав для изменения карточки ребёнка.");
+    }
+
+    if (childUpdateData.status === "LEFT" && existing.status !== "LEFT") {
+      throw new Error("Для статуса «Ушёл» используйте действие «Расчёт ухода» в карточке ребёнка: оно проверит табели и счета.");
+    }
+    if (childUpdateData.status === "ARCHIVED" && existing.status === "ACTIVE") {
+      const financialRecords = await tx.invoice.count({ where: { childId } });
+      if (financialRecords > 0) throw new Error("У ребёнка есть счета. Сначала оформите уход и расчёт, затем архивируйте карточку.");
     }
 
     if (requiresChildStatusChangeComment(existing.status, childUpdateData.status) && !statusChangeComment) {
@@ -504,7 +520,7 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
         tx,
         updated.id,
         updated.status === "ACTIVE" ? updated.currentGroupId : null,
-        todayInMoscow()
+        effectiveDate ?? todayInMoscow()
       );
     }
 
@@ -517,7 +533,7 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
           entityType: "Child",
           entityId: updated.id,
           oldValue: { status: existing.status },
-          newValue: { status: updated.status },
+          newValue: { status: updated.status, effectiveDate: (effectiveDate ?? todayInMoscow()).toISOString().slice(0, 10) },
           comment: statusChangeComment
         },
         tx
@@ -538,7 +554,8 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
           },
           newValue: {
             currentGroupId: updated.currentGroup?.id ?? null,
-            currentGroupName: updated.currentGroup?.name ?? null
+            currentGroupName: updated.currentGroup?.name ?? null,
+            effectiveDate: (effectiveDate ?? todayInMoscow()).toISOString().slice(0, 10)
           }
         },
         tx
@@ -709,7 +726,7 @@ export async function setChildAttendancePlan(currentUser: CurrentUser, childId: 
   });
 }
 
-async function assertGroupHasWeekday(tx: Prisma.TransactionClient, schoolId: string, groupId: string, weekday: number, from: Date) {
+export async function assertGroupHasWeekday(tx: Prisma.TransactionClient, schoolId: string, groupId: string, weekday: number, from: Date) {
   const templates = await tx.scheduleTemplate.findMany({
     where: { schoolId, groupId, status: "ACTIVE", weekday }, select: { id: true }
   });

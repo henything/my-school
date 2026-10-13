@@ -35,6 +35,17 @@ type AttendanceFormProps = {
   extraChildren?: Child[];
 };
 
+type CorrectionPreview = {
+  revision: string;
+  changes: Array<{ subscriptionId: string; childName: string; period: string; invoiceNumber: string | null; invoiceStatus: string | null;
+    previousLessonsCount: number; nextLessonsCount: number; previousInvoiceAmountKopeks: number | null; nextInvoiceAmountKopeks: number;
+    addedLessonDates: string[] | null; removedLessonDates: string[] | null; canApply: boolean; canApplyPaid: boolean;
+    blockReason: string | null; paidDifferenceKopeks: number }>;
+  childrenWithoutSubscription: string[];
+};
+
+const money = (kopeks: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(kopeks / 100);
+
 const statusOptions: Array<{ value: AttendanceStatus; label: string; icon: typeof UserRoundCheck; tone: string }> = [
   { value: "PRESENT", label: "Был", icon: UserRoundCheck, tone: "border-[var(--brand-green)] bg-[var(--green-soft)] text-[var(--success-strong)]" },
   { value: "ABSENT_UNEXCUSED", label: "Пропуск", icon: UserRoundX, tone: "border-[var(--danger)] bg-[var(--red-soft)] text-[var(--danger-strong)]" },
@@ -47,6 +58,9 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
+  const [correctionPreview, setCorrectionPreview] = useState<CorrectionPreview | null>(null);
+  const [paidDifferenceAction, setPaidDifferenceAction] = useState<"CREDIT" | "REFUND_DUE">("CREDIT");
+  const [saving, setSaving] = useState(false);
   const [addedChildIds, setAddedChildIds] = useState<string[]>([]);
   const [records, setRecords] = useState(() =>
     Object.fromEntries(
@@ -70,11 +84,13 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
 
   function addChild(childId: string) {
     if (!childId || addedChildIds.includes(childId)) return;
+    setCorrectionPreview(null);
     setAddedChildIds((current) => [...current, childId]);
     setRecords((current) => ({ ...current, [childId]: { status: "NOT_MARKED", comment: "" } }));
   }
 
   function setStatus(childId: string, status: AttendanceStatus) {
+    setCorrectionPreview(null);
     setRecords((current) => ({
       ...current,
       [childId]: {
@@ -85,6 +101,7 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
   }
 
   function setComment(childId: string, comment: string) {
+    setCorrectionPreview(null);
     setRecords((current) => ({
       ...current,
       [childId]: {
@@ -94,17 +111,28 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
     }));
   }
 
+  function markRemainingAbsent() {
+    setCorrectionPreview(null);
+    setRecords((current) => Object.fromEntries(Object.entries(current).map(([childId, record]) => [
+      childId,
+      record.status === "NOT_MARKED" ? { ...record, status: "ABSENT_UNEXCUSED" as const } : record
+    ])));
+  }
+
   async function onSubmit() {
     setMessage("");
     if (adminMode && !correctionReason.trim()) {
       setMessage("Укажите причину исправления табеля.");
       return;
     }
+    setSaving(true);
     const response = await fetch(adminMode ? `/api/admin/lessons/${lessonId}/attendance` : `/api/coach/lessons/${lessonId}/attendance`, {
-      method: "POST",
+      method: adminMode && !correctionPreview ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         correctionReason: adminMode ? correctionReason.trim() : undefined,
+        expectedRevision: correctionPreview?.revision,
+        paidDifferenceAction: correctionPreview?.changes.some((change) => change.canApplyPaid) ? paidDifferenceAction : undefined,
         records: displayedChildren.map((child) => ({
           childId: child.id,
           status: records[child.id]?.status ?? "NOT_MARKED",
@@ -112,14 +140,21 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
         }))
       })
     });
-    const payload = (await response.json().catch(() => ({}))) as { error?: string };
+    const payload = (await response.json().catch(() => ({}))) as { error?: string; preview?: CorrectionPreview; financialChanges?: number; childrenWithoutSubscription?: string[] };
+    setSaving(false);
 
     if (!response.ok) {
       setMessage(payload.error ?? "Не удалось сохранить табель.");
       return;
     }
 
-    setMessage(adminMode ? "Исправление сохранено. Проверьте счёт и баланс ребёнка." : "Табель сохранён.");
+    if (adminMode && !correctionPreview) {
+      setCorrectionPreview(payload.preview ?? null);
+      setMessage("Проверьте изменения табеля и сумм перед сохранением.");
+      return;
+    }
+    setCorrectionPreview(null);
+    setMessage(adminMode ? `Табель сохранён. Пересчитано счетов: ${payload.financialChanges ?? 0}.${payload.childrenWithoutSubscription?.length ? " Нет абонемента: " + payload.childrenWithoutSubscription.join(", ") + "." : ""}` : "Табель сохранён.");
     startTransition(() => router.refresh());
   }
 
@@ -136,16 +171,16 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
             {markedCount}/{displayedChildren.length}
           </div>
         </div>
-        <Button type="button" onClick={onSubmit} disabled={isPending}>
-          {isPending ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
-          Сохранить табель
+        <Button type="button" onClick={onSubmit} disabled={isPending || saving || Boolean(correctionPreview?.changes.some((change) => !change.canApply && !change.canApplyPaid))}>
+          {isPending || saving ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
+          {adminMode && !correctionPreview ? "Проверить исправление" : "Сохранить табель"}
         </Button>
         {message ? <div className="w-full text-sm font-semibold text-[var(--muted)]">{message}</div> : null}
         {adminMode ? (
           <div className="grid w-full gap-3 sm:grid-cols-2">
             <label className="label">
               Причина исправления
-              <input className="field" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} required placeholder="Например, уточнили посещение у тренера" />
+              <input className="field" value={correctionReason} onChange={(event) => { setCorrectionReason(event.target.value); setCorrectionPreview(null); }} required placeholder="Например, уточнили посещение у тренера" />
             </label>
             <label className="label">
               Добавить ребёнка из группы
@@ -156,8 +191,25 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
                 ))}
               </select>
             </label>
+            <div className="sm:col-span-2">
+              <Button type="button" variant="secondary" onClick={markRemainingAbsent}>Остальные отсутствовали</Button>
+              <p className="mt-1 text-xs text-[var(--muted)]">Только дети из состава группы на дату занятия. Уже отмеченные дети не изменятся.</p>
+            </div>
           </div>
         ) : null}
+        {adminMode && correctionPreview ? <div className="w-full rounded-lg border border-[var(--line)] bg-[var(--panel-soft)] p-4 text-sm">
+          <div className="font-bold">Предварительный расчёт</div>
+          {correctionPreview.changes.length === 0 ? <p>Суммы счетов и число занятий не меняются.</p> : correctionPreview.changes.map((change) => <div key={change.subscriptionId} className="mt-2 border-t border-[var(--line)] pt-2">
+            <div className="font-bold">{change.childName} · {change.period} · счёт {change.invoiceNumber ?? "не выставлен"}</div>
+            <div>Занятий: {change.previousLessonsCount} → {change.nextLessonsCount}. Счёт: {money(change.previousInvoiceAmountKopeks ?? 0)} → {money(change.nextInvoiceAmountKopeks)}.</div>
+            {change.addedLessonDates?.length ? <div>Добавлены: {change.addedLessonDates.join(", ")}</div> : null}
+            {change.removedLessonDates?.length ? <div>Исключены: {change.removedLessonDates.join(", ")}</div> : null}
+            {change.canApplyPaid ? <div>Оплаченный счёт остаётся прежним. Разница {money(change.paidDifferenceKopeks)} оформится отдельным зачётом или суммой к возврату.</div> : null}
+            {!change.canApply && !change.canApplyPaid ? <div className="font-semibold text-[var(--danger-strong)]">{change.blockReason ?? "Нужна ручная проверка счёта."}</div> : null}
+          </div>)}
+          {correctionPreview.changes.some((change) => change.canApplyPaid) ? <label className="label mt-3">Разница по оплаченному счёту<select className="field" value={paidDifferenceAction} onChange={(event) => setPaidDifferenceAction(event.target.value as "CREDIT" | "REFUND_DUE")}><option value="CREDIT">Зачесть в следующем месяце</option><option value="REFUND_DUE">Зафиксировать сумму к возврату</option></select></label> : null}
+          {correctionPreview.childrenWithoutSubscription.length ? <p className="mt-2 font-semibold text-[var(--warning-strong)]">Нет абонемента за дату занятия: {correctionPreview.childrenWithoutSubscription.join(", ")}. После сохранения проверьте выставление счёта.</p> : null}
+        </div> : null}
       </div>
 
       {displayedChildren.map((child) => {

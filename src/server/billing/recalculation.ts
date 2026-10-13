@@ -2,7 +2,7 @@ import { calculateSubscriptionInvoiceAmount } from "./calculations";
 import { isLessonInChildPlan, type AttendancePlan } from "@/server/children/attendance-plan";
 import { isMemberOnDate, type MembershipPeriod } from "@/server/children/group-membership";
 
-export function countPlannedLessonsFromHistory(input: {
+export function plannedLessonIdsFromHistory(input: {
   lessons: Array<{ id: string; groupId: string; lessonDate: Date }>;
   memberships: Array<MembershipPeriod & { groupId: string }>;
   attendancePlans: AttendancePlan[];
@@ -19,7 +19,11 @@ export function countPlannedLessonsFromHistory(input: {
       ids.add(record.lessonId);
     }
   }
-  return ids.size;
+  return ids;
+}
+
+export function countPlannedLessonsFromHistory(input: Parameters<typeof plannedLessonIdsFromHistory>[0]) {
+  return plannedLessonIdsFromHistory(input).size;
 }
 
 export function recalculationBlockReason(input: {
@@ -39,11 +43,8 @@ export function recalculationBlockReason(input: {
   if (input.paidAmountKopeks > 0 || input.invoiceStatus === "PAID" || input.paymentCount > 0) {
     return "По счёту уже была оплата. Разницу нужно учесть возвратом или зачётом; счёт автоматически не меняется.";
   }
-  if (input.attemptCount > 0 || !["DRAFT", "ISSUED", "OVERDUE"].includes(input.invoiceStatus ?? "")) {
+  if (input.attemptCount > 0 || !["DRAFT", "ISSUED", "OVERDUE", "CANCELLED"].includes(input.invoiceStatus ?? "")) {
     return "По счёту уже начата оплата или его статус не допускает автоматическое изменение.";
-  }
-  if (input.nextLessonsCount === 0 || input.nextInvoiceAmountKopeks === 0) {
-    return "Нулевой счёт требует отдельной отмены или зачёта.";
   }
   if (input.nextBalance < -1) return "После пересчёта баланс занятий станет ниже −1; проверьте отметки посещаемости.";
   if (input.unchanged) return "Абонемент и счёт уже соответствуют расписанию.";
@@ -53,12 +54,13 @@ export function recalculationBlockReason(input: {
 export function calculateRecalculatedAmounts(input: {
   previousLessonsCount: number;
   previousTotalKopeks: number;
+  unitPriceKopeks?: number;
   nextLessonsCount: number;
   appliedMakeupCount: number;
 }) {
   const unitPriceKopeks = input.previousLessonsCount > 0
     ? input.previousTotalKopeks / input.previousLessonsCount
-    : 0;
+    : input.unitPriceKopeks ?? 0;
   const nextTotalKopeks = Math.round(unitPriceKopeks * input.nextLessonsCount);
   const nextInvoiceAmountKopeks = calculateSubscriptionInvoiceAmount(
     nextTotalKopeks,

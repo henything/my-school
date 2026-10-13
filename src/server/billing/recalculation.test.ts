@@ -30,6 +30,8 @@ describe("subscription recalculation", () => {
       nextLessonsCount: 7,
       appliedMakeupCount: 1
     })).toEqual({ nextTotalKopeks: 315000, nextInvoiceAmountKopeks: 270000 });
+    expect(calculateRecalculatedAmounts({ previousLessonsCount: 0, previousTotalKopeks: 0, unitPriceKopeks: 45000,
+      nextLessonsCount: 2, appliedMakeupCount: 0 })).toEqual({ nextTotalKopeks: 90000, nextInvoiceAmountKopeks: 90000 });
   });
 
   it("blocks automatic changes after payment or checkout starts", () => {
@@ -46,6 +48,7 @@ describe("subscription recalculation", () => {
       unchanged: false
     };
     expect(recalculationBlockReason(base)).toBeNull();
+    expect(recalculationBlockReason({ ...base, nextLessonsCount: 0, nextInvoiceAmountKopeks: 0 })).toBeNull();
     expect(recalculationBlockReason({ ...base, paidAmountKopeks: 5000 })).toContain("оплата");
     expect(recalculationBlockReason({ ...base, attemptCount: 1 })).toContain("начата оплата");
   });

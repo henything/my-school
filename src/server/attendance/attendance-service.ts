@@ -243,8 +243,10 @@ export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: st
 
 export async function correctAttendance(currentUser: CurrentUser, lessonId: string, input: CorrectAttendanceInput) {
   assertAdmin(currentUser);
+  return getPrisma().$transaction((tx) => correctAttendanceInTransaction(tx, currentUser, lessonId, input));
+}
 
-  return getPrisma().$transaction(async (tx) => {
+export async function correctAttendanceInTransaction(tx: Prisma.TransactionClient, currentUser: CurrentUser, lessonId: string, input: CorrectAttendanceInput) {
     const lesson = await tx.lesson.findFirstOrThrow({
       where: { id: lessonId, schoolId: currentUser.schoolId },
       include: lessonDetailInclude
@@ -252,11 +254,15 @@ export async function correctAttendance(currentUser: CurrentUser, lessonId: stri
     assertLessonCanReceiveAttendance(lesson);
 
     const rosterIds = new Set(scheduledChildrenForLesson(lesson).map((child) => child.id));
+    const trialChildIds = new Set(lesson.trialParticipants.map((trial) => trial.convertedChildId).filter((id): id is string => Boolean(id)));
     const affectedIds = new Set<string>();
 
     for (const recordInput of input.records) {
       if (affectedIds.has(recordInput.childId)) throw new Error("Один ребёнок не может быть передан в табеле дважды.");
       affectedIds.add(recordInput.childId);
+      if (trialChildIds.has(recordInput.childId) && recordInput.status !== "NOT_MARKED") {
+        throw new Error("Это пробное занятие. Отметьте его в разделе «Пробники», чтобы оно не списало платное занятие.");
+      }
 
       if (!rosterIds.has(recordInput.childId)) {
         if (recordInput.status === "NOT_MARKED") throw new Error("Добавленному ребёнку нужно указать посещение или пропуск.");
@@ -292,7 +298,6 @@ export async function correctAttendance(currentUser: CurrentUser, lessonId: stri
 
     const updated = await tx.lesson.findUniqueOrThrow({ where: { id: lesson.id }, include: lessonDetailInclude });
     return serializeCoachLessonDetail(updated);
-  });
 }
 
 export async function updateAttendanceRecord(currentUser: CurrentUser, recordId: string, input: UpdateAttendanceRecordInput) {

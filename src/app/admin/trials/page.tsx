@@ -1,16 +1,18 @@
 import { UserRoundPlus } from "lucide-react";
-import { CreateTrialForm, ConvertTrialForm, TransferTrialForm } from "@/app/admin/trials/components/trial-admin-forms";
+import { CreateTrialForm, ConvertTrialForm, TransferTrialForm, TrialAttendanceButtons } from "@/app/admin/trials/components/trial-admin-forms";
 import { StatusBadge } from "@/components/badges";
 import { formatLessonDateTime } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { listGroups } from "@/server/groups/group-service";
+import { listChildren } from "@/server/children/child-service";
+import { listParents } from "@/server/parents/parent-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTrials } from "@/server/trials/trial-service";
 
 export default async function TrialsPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [trials, lessons, groups] = await Promise.all([listTrials(currentUser), listLessons(currentUser), listGroups(currentUser)]);
+  const [trials, lessons, groups, children, parents] = await Promise.all([listTrials(currentUser), listLessons(currentUser), listGroups(currentUser), listChildren(currentUser), listParents(currentUser)]);
   const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
   const pendingCount = trials.filter((trial) => trial.status === "TRIAL_ATTENDED" || trial.status === "TRIAL_NO_SHOW").length;
 
@@ -60,8 +62,9 @@ export default async function TrialsPage() {
                     </div>
                     <StatusBadge status={trial.status} />
                   </div>
+                  <TrialAttendanceButtons trialId={trial.id} status={trial.status} />
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
-                    <ConvertTrialForm trial={trial} groups={activeGroups} />
+                    <ConvertTrialForm trial={trial} groups={activeGroups} childRows={children} parents={parents} />
                     <TransferTrialForm trialId={trial.id} disabled={isClosed} />
                   </div>
                 </article>

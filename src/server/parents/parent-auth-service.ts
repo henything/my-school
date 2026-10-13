@@ -55,7 +55,8 @@ export async function createParentInvite(currentUser: CurrentUser, input: Create
     const parent = await tx.parent.findFirstOrThrow({
       where: {
         id: input.parentId,
-        schoolId: currentUser.schoolId
+        schoolId: currentUser.schoolId,
+        archivedAt: null
       },
       include: {
         account: { include: { user: true } },
