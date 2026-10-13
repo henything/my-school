@@ -17,11 +17,12 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
-import { isLessonInChildPlan, type AttendancePlan } from "@/server/children/attendance-plan";
+import { isLessonInChildPlan, todayInMoscow, type AttendancePlan } from "@/server/children/attendance-plan";
 import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
   calculateCurrentMonthSubscriptionPeriod,
+  calculateDefaultInvoiceDueDate,
   calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
@@ -1276,7 +1277,7 @@ async function applyMakeupCreditsToInvoice(
 }
 
 function defaultInvoiceDueDate(periodStart: Date) {
-  return new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 10));
+  return calculateDefaultInvoiceDueDate(periodStart, todayInMoscow());
 }
 
 function attendanceTransactionType(status: CoachAttendanceStatus, delta: number, isCreditLesson: boolean): BalanceTransactionType {

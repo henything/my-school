@@ -30,6 +30,7 @@ type Trial = {
   parentVkUrl: string | null;
   status: string;
   groupId: string;
+  lesson: { lessonDate: string };
 };
 
 type CreateTrialFormProps = {
@@ -182,7 +183,8 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
           parentPhone: nullable(formData.get("parentPhone")),
           parentVkUrl: nullable(formData.get("parentVkUrl")),
           currentGroupId: formData.get("currentGroupId"),
-          adminComment: nullable(formData.get("adminComment"))
+          adminComment: nullable(formData.get("adminComment")),
+          firstPaidLessonDate: formData.get("firstPaidLessonDate")
         })
       });
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
@@ -191,7 +193,7 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
         throw new Error(payload.error ?? "Не удалось конвертировать пробника.");
       }
 
-      setMessage("Пробник конвертирован.");
+      setMessage("Пробник конвертирован. Проверьте счёт и отметьте платные занятия в табелях.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось конвертировать пробника.");
@@ -232,6 +234,11 @@ export function ConvertTrialForm({ trial, groups }: ConvertTrialFormProps) {
           <input className="field" name="parentVkUrl" defaultValue={trial.parentVkUrl ?? ""} disabled={disabled} />
         </label>
       </div>
+      <label className="label">
+        Первое платное занятие после пробного
+        <input className="field" name="firstPaidLessonDate" type="date" min={new Date(new Date(`${trial.lesson.lessonDate}T00:00:00.000Z`).getTime() + 86_400_000).toISOString().slice(0, 10)} required disabled={disabled} />
+        <span className="text-xs text-[var(--muted)]">С этой даты ребёнок будет в табелях группы и получит счёт за платные занятия.</span>
+      </label>
       <label className="label">
         Комментарий админа
         <input className="field" name="adminComment" disabled={disabled} />

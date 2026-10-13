@@ -55,12 +55,14 @@ describe("trial schemas", () => {
       childFullName: " Новый ребёнок ",
       currentGroupId: groupId,
       parentName: "",
-      adminComment: "ок"
+      adminComment: "ок",
+      firstPaidLessonDate: "2026-10-08"
     });
 
     expect(input.childFullName).toBe("Новый ребёнок");
     expect(input.currentGroupId).toBe(groupId);
     expect(input.parentName).toBeNull();
     expect(input.adminComment).toBe("ок");
+    expect(input.firstPaidLessonDate?.toISOString().slice(0, 10)).toBe("2026-10-08");
   });
 });

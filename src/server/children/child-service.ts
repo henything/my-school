@@ -6,8 +6,9 @@ import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing
 import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { serializeParent } from "@/server/parents/parent-service";
-import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
+import { closeTasksByCondition, ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
 import { todayInMoscow, weekdayForDate } from "./attendance-plan";
+import { resolveFirstPaidLessonDate } from "./enrollment-dates";
 import { setCurrentGroupMembership } from "./group-membership";
 import type { CreateChildEnrollmentInput, CreateChildInput, SetChildAttendancePlanInput, UpdateChildInput } from "./schemas";
 
@@ -149,8 +150,10 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
 
     if (input.attendanceWeekday != null) {
       if (!input.currentGroupId) throw new Error("Для одного занятия в неделю сначала выберите группу.");
-      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, todayInMoscow());
+      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, input.firstPaidLessonDate ?? todayInMoscow());
     }
+
+    const startDate = await resolveFirstPaidLessonDate(tx, currentUser.schoolId, input.currentGroupId, input.firstPaidLessonDate);
 
     const child = await tx.child.create({
       data: {
@@ -165,14 +168,14 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
         adminComment: input.adminComment,
         admissionStatus: input.admissionStatus,
         attendancePlans: input.attendanceWeekday == null ? undefined : {
-          create: { effectiveFrom: todayInMoscow(), weekday: input.attendanceWeekday }
+          create: { effectiveFrom: startDate, weekday: input.attendanceWeekday }
         }
       },
       include: childInclude
     });
 
     if (child.status === "ACTIVE" && child.currentGroupId) {
-      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, todayInMoscow());
+      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, startDate);
     }
 
     await writeAuditLog(
@@ -198,7 +201,7 @@ export async function createChild(currentUser: CurrentUser, input: CreateChildIn
       });
     }
 
-    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id, child.createdAt);
+    await ensureEnrollmentSubscriptions(tx, currentUser, child.id, startDate);
 
     const refreshedChild = await tx.child.findUniqueOrThrow({
       where: { id: child.id },
@@ -262,8 +265,56 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
 
     if (input.attendanceWeekday != null) {
       if (!input.currentGroupId) throw new Error("Для одного занятия в неделю сначала выберите группу.");
-      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, todayInMoscow());
+      await assertGroupHasWeekday(tx, currentUser.schoolId, input.currentGroupId, input.attendanceWeekday, input.firstPaidLessonDate ?? todayInMoscow());
     }
+
+    const existingTrial = input.trialParticipantId
+      ? await tx.trialParticipant.findFirstOrThrow({
+          where: { id: input.trialParticipantId, schoolId: currentUser.schoolId },
+          include: { lesson: { select: { lessonDate: true } } }
+        })
+      : null;
+    if (existingTrial && (existingTrial.groupId !== input.currentGroupId || existingTrial.status !== "TRIAL_ATTENDED" || existingTrial.convertedChildId)) {
+      throw new Error("Выберите посещённый пробник этой группы, который ещё не связан с ребёнком.");
+    }
+    if (existingTrial?.childName) {
+      const trialName = existingTrial.childName.trim().toLocaleLowerCase("ru");
+      const childName = input.fullName.trim().toLocaleLowerCase("ru");
+      if (!childName.includes(trialName) && !trialName.includes(childName)) {
+        throw new Error("Имя выбранного пробника не совпадает с именем ребёнка.");
+      }
+    }
+    if (existingTrial && existingTrial.lesson.lessonDate > todayInMoscow()) {
+      throw new Error("Будущее занятие нельзя отметить как уже пройденное пробное.");
+    }
+
+    const trialLesson = input.trialLessonId
+      ? await tx.lesson.findFirstOrThrow({
+          where: { id: input.trialLessonId, schoolId: currentUser.schoolId, groupId: input.currentGroupId ?? undefined, status: { not: "CANCELLED" } },
+          select: { id: true, groupId: true, coachId: true, substituteCoachId: true, lessonDate: true }
+        })
+      : null;
+    if (trialLesson && trialLesson.groupId !== input.currentGroupId) {
+      throw new Error("Пробное занятие должно быть в выбранной группе.");
+    }
+    if (trialLesson && trialLesson.lessonDate > todayInMoscow()) {
+      throw new Error("Будущее занятие нельзя отметить как уже пройденное пробное.");
+    }
+    if (trialLesson) {
+      const duplicate = await tx.trialParticipant.findFirst({
+        where: { schoolId: currentUser.schoolId, lessonId: trialLesson.id, childName: input.fullName },
+        select: { id: true }
+      });
+      if (duplicate) throw new Error("На этом занятии уже есть пробник с таким именем. Выберите существующего пробника.");
+    }
+
+    const startDate = await resolveFirstPaidLessonDate(
+      tx,
+      currentUser.schoolId,
+      input.currentGroupId,
+      input.firstPaidLessonDate,
+      existingTrial?.lesson.lessonDate ?? trialLesson?.lessonDate
+    );
 
     const child = await tx.child.create({
       data: {
@@ -278,14 +329,58 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
         adminComment: input.adminComment ?? sharedComment,
         admissionStatus: input.admissionStatus,
         attendancePlans: input.attendanceWeekday == null ? undefined : {
-          create: { effectiveFrom: todayInMoscow(), weekday: input.attendanceWeekday }
+          create: { effectiveFrom: startDate, weekday: input.attendanceWeekday }
         }
       },
       include: childInclude
     });
 
     if (child.status === "ACTIVE" && child.currentGroupId) {
-      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, todayInMoscow());
+      await setCurrentGroupMembership(tx, child.id, child.currentGroupId, startDate);
+    }
+
+    let linkedTrialId: string | null = null;
+    if (existingTrial) {
+      await tx.trialParticipant.update({
+        where: { id: existingTrial.id },
+        data: { convertedChildId: child.id, status: "CONVERTED_TO_ACTIVE", convertedAt: new Date() }
+      });
+      linkedTrialId = existingTrial.id;
+      await closeTasksByCondition(tx, {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        where: { type: "TRIAL_NEEDS_PROCESSING", relatedEntityType: "TrialParticipant", relatedEntityId: existingTrial.id },
+        comment: "Пробник связан с ребёнком при зачислении."
+      });
+    } else if (trialLesson) {
+      const trial = await tx.trialParticipant.create({
+        data: {
+          schoolId: currentUser.schoolId,
+          lessonId: trialLesson.id,
+          groupId: trialLesson.groupId,
+          coachId: trialLesson.substituteCoachId ?? trialLesson.coachId,
+          convertedChildId: child.id,
+          childName: child.fullName,
+          parentName: child.parent?.fullName ?? null,
+          parentPhone: child.parent?.phone ?? null,
+          parentVkUrl: child.parent?.vkProfileUrl ?? null,
+          status: "CONVERTED_TO_ACTIVE",
+          convertedAt: new Date(),
+          createdByUserId: currentUser.id
+        }
+      });
+      linkedTrialId = trial.id;
+    }
+
+    if (linkedTrialId) {
+      await writeAuditLog({
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        action: "TRIAL_CONVERTED_TO_CHILD",
+        entityType: "TrialParticipant",
+        entityId: linkedTrialId,
+        newValue: { childId: child.id, firstPaidLessonDate: startDate.toISOString().slice(0, 10) }
+      }, tx);
     }
 
     const serializedChild = serializeChild(child);
@@ -313,7 +408,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
       });
     }
 
-    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id, child.createdAt);
+    await ensureEnrollmentSubscriptions(tx, currentUser, child.id, startDate);
 
     const refreshedChild = await tx.child.findUniqueOrThrow({
       where: { id: child.id },
@@ -549,6 +644,21 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
 
     return serialized;
   });
+}
+
+export async function ensureEnrollmentSubscriptions(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  childId: string,
+  startDate: Date
+) {
+  await ensureCurrentMonthSubscriptionForChild(tx, currentUser, childId, startDate);
+
+  const today = todayInMoscow();
+  const currentMonthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  if (startDate < currentMonthStart) {
+    await ensureCurrentMonthSubscriptionForChild(tx, currentUser, childId, today);
+  }
 }
 
 export async function setChildAttendancePlan(currentUser: CurrentUser, childId: string, input: SetChildAttendancePlanInput) {

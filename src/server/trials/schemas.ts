@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { firstPaidLessonDateSchema } from "@/server/children/schemas";
 import { optionalPhoneSchema } from "@/server/shared/phone-schema";
 import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
 
@@ -53,7 +54,11 @@ export const convertTrialSchema = z.object({
   parentPhone: optionalPhoneSchema,
   parentVkUrl: optionalTextSchema,
   currentGroupId: uuidSchema.optional().nullable(),
-  adminComment: optionalTextSchema
+  adminComment: optionalTextSchema,
+  firstPaidLessonDate: firstPaidLessonDateSchema
+}).refine((input) => Boolean(input.firstPaidLessonDate), {
+  message: "Укажите дату первого платного занятия после пробного.",
+  path: ["firstPaidLessonDate"]
 });
 
 export type CreateTrialInput = z.infer<typeof createTrialSchema>;
