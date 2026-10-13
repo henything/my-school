@@ -192,7 +192,7 @@ sync_source() {
   while [ "$attempt" -le "$SSH_ATTEMPTS" ]; do
     ensure_control_connection
     if rsync -az --delete \
-      --exclude='.git/' \
+      --exclude='.git' \
       --exclude='node_modules/' \
       --exclude='.next/' \
       --exclude='.env' \

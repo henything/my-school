@@ -3,6 +3,7 @@ import {
   admissionStatusAfterLessonBalance,
   calculateBillableLessons,
   calculateCurrentMonthSubscriptionPeriod,
+  calculateDefaultInvoiceDueDate,
   calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
@@ -32,6 +33,14 @@ describe("billing calculations", () => {
 
     expect(period.periodStart.toISOString()).toBe("2026-12-01T00:00:00.000Z");
     expect(period.periodEnd.toISOString()).toBe("2026-12-31T00:00:00.000Z");
+  });
+
+  it("gives a newly created retrospective invoice time to be paid", () => {
+    const dueDate = calculateDefaultInvoiceDueDate(
+      new Date("2026-09-08T00:00:00.000Z"),
+      new Date("2026-10-13T00:00:00.000Z")
+    );
+    expect(dueDate.toISOString()).toBe("2026-10-20T00:00:00.000Z");
   });
 
   it("reduces future invoices by available makeup credits", () => {

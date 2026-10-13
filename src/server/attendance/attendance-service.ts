@@ -4,12 +4,13 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import { applyAttendanceBalanceEffect } from "@/server/billing/billing-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
-import { isLessonInChildPlan } from "@/server/children/attendance-plan";
+import { childrenScheduledForLesson } from "@/server/children/group-membership";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import type {
   AttendanceNotFilledJobInput,
   AttendanceRecordInput,
+  CorrectAttendanceInput,
   SaveAttendanceInput,
   UpdateAttendanceRecordInput
 } from "./schemas";
@@ -17,6 +18,18 @@ import type {
 const OPEN_TASK_STATUSES: TaskStatus[] = ["OPEN", "IN_PROGRESS"];
 const ATTENDANCE_NOT_FILLED_CHECK_HOUR = 22;
 const trialParticipantOrderBy: Prisma.TrialParticipantOrderByWithRelationInput[] = [{ status: "asc" }, { createdAt: "asc" }];
+const lessonChildSelect = {
+  id: true,
+  fullName: true,
+  birthDate: true,
+  status: true,
+  medicalNotes: true,
+  coachComment: true,
+  adminComment: true,
+  admissionStatus: true,
+  attendancePlans: { select: { effectiveFrom: true, weekday: true } },
+  parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } }
+} as const;
 
 const lessonDetailInclude = {
   branch: { select: { id: true, name: true } },
@@ -26,20 +39,11 @@ const lessonDetailInclude = {
     select: {
       id: true,
       name: true,
-      children: {
-        where: { status: "ACTIVE" },
-        orderBy: { fullName: "asc" },
+      childMemberships: {
         select: {
-          id: true,
-          fullName: true,
-          birthDate: true,
-          status: true,
-          medicalNotes: true,
-          coachComment: true,
-          adminComment: true,
-          admissionStatus: true,
-          attendancePlans: { select: { effectiveFrom: true, weekday: true } },
-          parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true } }
+          startDate: true,
+          endDate: true,
+          child: { select: lessonChildSelect }
         }
       }
     }
@@ -52,7 +56,8 @@ const lessonDetailInclude = {
       comment: true,
       markedAt: true,
       markedByUserId: true,
-      finalStatus: true
+      finalStatus: true,
+      child: { select: lessonChildSelect }
     }
   },
   trialParticipants: {
@@ -67,7 +72,7 @@ const lessonDetailInclude = {
 
 type LessonDetailRecord = Prisma.LessonGetPayload<{ include: typeof lessonDetailInclude }>;
 function scheduledChildrenForLesson(lesson: LessonDetailRecord) {
-  return lesson.group.children.filter((child) => isLessonInChildPlan(child.attendancePlans, lesson.lessonDate));
+  return childrenScheduledForLesson(lesson.group.childMemberships, lesson.attendanceRecords, lesson.lessonDate);
 }
 type AttendanceRecordForUpdate = {
   id: string;
@@ -102,7 +107,7 @@ export function serializeCoachLessonDetail(lesson: LessonDetailRecord) {
     startTime: lesson.startTime,
     endTime: lesson.endTime,
     status: lesson.status,
-    group: lesson.group,
+    group: { id: lesson.group.id, name: lesson.group.name },
     branch: lesson.branch,
     coach: {
       id: lesson.coach.id,
@@ -236,6 +241,60 @@ export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: st
   });
 }
 
+export async function correctAttendance(currentUser: CurrentUser, lessonId: string, input: CorrectAttendanceInput) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const lesson = await tx.lesson.findFirstOrThrow({
+      where: { id: lessonId, schoolId: currentUser.schoolId },
+      include: lessonDetailInclude
+    });
+    assertLessonCanReceiveAttendance(lesson);
+
+    const rosterIds = new Set(scheduledChildrenForLesson(lesson).map((child) => child.id));
+    const affectedIds = new Set<string>();
+
+    for (const recordInput of input.records) {
+      if (affectedIds.has(recordInput.childId)) throw new Error("Один ребёнок не может быть передан в табеле дважды.");
+      affectedIds.add(recordInput.childId);
+
+      if (!rosterIds.has(recordInput.childId)) {
+        if (recordInput.status === "NOT_MARKED") throw new Error("Добавленному ребёнку нужно указать посещение или пропуск.");
+        const child = await tx.child.findFirst({
+          where: {
+            id: recordInput.childId,
+            schoolId: currentUser.schoolId,
+            OR: [
+              { currentGroupId: lesson.groupId },
+              { groupMemberships: { some: { groupId: lesson.groupId } } }
+            ]
+          },
+          select: { id: true }
+        });
+        if (!child) throw new Error("Ребёнок не относится к группе этого занятия.");
+      }
+
+      await upsertAttendanceRecord(tx, currentUser, lesson, recordInput, input.correctionReason);
+    }
+
+    const allChildIds = Array.from(new Set([...rosterIds, ...affectedIds]));
+    await refreshLessonAttendanceStatus(tx, lesson.id, allChildIds);
+
+    await writeAuditLog({
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "ATTENDANCE_ADMIN_CORRECTION",
+      entityType: "Lesson",
+      entityId: lesson.id,
+      newValue: { childIds: Array.from(affectedIds), lessonDate: dateToKey(lesson.lessonDate) },
+      comment: input.correctionReason
+    }, tx);
+
+    const updated = await tx.lesson.findUniqueOrThrow({ where: { id: lesson.id }, include: lessonDetailInclude });
+    return serializeCoachLessonDetail(updated);
+  });
+}
+
 export async function updateAttendanceRecord(currentUser: CurrentUser, recordId: string, input: UpdateAttendanceRecordInput) {
   return getPrisma().$transaction(async (tx) => {
     const existing = await tx.attendanceRecord.findFirstOrThrow({
@@ -365,7 +424,8 @@ async function upsertAttendanceRecord(
   tx: Prisma.TransactionClient,
   currentUser: CurrentUser,
   lesson: LessonDetailRecord,
-  input: AttendanceRecordInput
+  input: AttendanceRecordInput,
+  correctionReason?: string
 ) {
   const existing = await tx.attendanceRecord.findUnique({
     where: {
@@ -388,12 +448,12 @@ async function upsertAttendanceRecord(
       }
     });
 
-    await auditAttendanceChange(tx, currentUser, record.id, null, record);
+    await auditAttendanceChange(tx, currentUser, record.id, null, record, correctionReason);
     await applyAttendanceSideEffects(tx, currentUser, lesson, record);
     return record;
   }
 
-  return updateAttendanceRecordInternal(tx, currentUser, lesson, existing, input);
+  return updateAttendanceRecordInternal(tx, currentUser, lesson, existing, input, correctionReason);
 }
 
 async function updateAttendanceRecordInternal(
@@ -401,7 +461,8 @@ async function updateAttendanceRecordInternal(
   currentUser: CurrentUser,
   lesson: LessonDetailRecord,
   existing: AttendanceRecordForUpdate,
-  input: AttendanceRecordInput | UpdateAttendanceRecordInput & { childId: string }
+  input: AttendanceRecordInput | UpdateAttendanceRecordInput & { childId: string },
+  correctionReason?: string
 ) {
   const nextComment = input.comment ?? null;
   const changed = existing.status !== input.status || existing.comment !== nextComment;
@@ -417,7 +478,7 @@ async function updateAttendanceRecordInternal(
   });
 
   if (changed) {
-    await auditAttendanceChange(tx, currentUser, record.id, existing, record);
+    await auditAttendanceChange(tx, currentUser, record.id, existing, record, correctionReason);
   }
 
   await applyAttendanceSideEffects(tx, currentUser, lesson, record);
@@ -469,7 +530,7 @@ async function ensureCertificatePendingTask(
   childId: string,
   attendanceRecordId: string
 ) {
-  const child = lesson.group.children.find((item) => item.id === childId);
+  const child = scheduledChildrenForLesson(lesson).find((item) => item.id === childId);
   const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
 
   return ensureTask(tx, {
@@ -518,7 +579,7 @@ async function ensureConsecutiveUnexcusedTask(
     return null;
   }
 
-  const child = lesson.group.children.find((item) => item.id === childId);
+  const child = scheduledChildrenForLesson(lesson).find((item) => item.id === childId);
   const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
 
   return ensureTask(tx, {
@@ -540,7 +601,8 @@ async function auditAttendanceChange(
   currentUser: CurrentUser,
   recordId: string,
   oldRecord: AttendanceRecordForUpdate | null,
-  newRecord: AttendanceRecordForUpdate
+  newRecord: AttendanceRecordForUpdate,
+  correctionReason?: string
 ) {
   return writeAuditLog(
     {
@@ -555,6 +617,7 @@ async function auditAttendanceChange(
             comment: oldRecord.comment
           }
         : null,
+      comment: correctionReason,
       newValue: {
         status: newRecord.status,
         comment: newRecord.comment,

@@ -3,7 +3,8 @@
 import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChildAttendancePlanForm, ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
+import { ChildAttendancePlanForm, ChildTransferForm, MembershipStartForm } from "@/app/admin/directories/components/directory-forms";
+import { LeaveChildPanel } from "@/app/admin/directories/components/leave-child-panel";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -38,6 +39,7 @@ type Child = {
   parent: { fullName: string | null; phone: string | null } | null;
   currentGroup: { id: string; name: string; address: string | null; branch?: { address: string | null } } | null;
   attendancePlans: Array<{ effectiveFrom: string; weekday: number | null }>;
+  groupMemberships?: Array<{ groupId: string; groupName: string; branchName: string; startDate: string; endDate: string | null }>;
 };
 
 type DirectoryTablesProps = {
@@ -244,7 +246,30 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                       <div>{child.parent?.fullName ?? "-"}</div>
                       {child.parent?.phone ? <div className="text-xs text-[var(--muted)]">{child.parent.phone}</div> : null}
                     </td>
-                    <td>{child.currentGroup?.name ?? "-"}</td>
+                    <td>
+                      <div>{child.currentGroup?.name ?? "-"}</div>
+                      {child.groupMemberships?.length ? (
+                        <details className="mt-1 text-xs text-[var(--muted)]">
+                          <summary className="cursor-pointer">История групп</summary>
+                          <ul className="mt-1 space-y-1">
+                            {child.groupMemberships.map((membership, index) => (
+                              <li key={`${membership.groupId}-${membership.startDate}-${index}`}>
+                                {membership.groupName} · {membership.branchName}: с {formatMembershipDate(membership.startDate)}
+                                {membership.endDate ? `, выход ${formatMembershipDate(membership.endDate)}` : " по настоящее время"}
+                              </li>
+                            ))}
+                          </ul>
+                          {child.status === "ACTIVE" && child.currentGroup ? (
+                            child.groupMemberships.find((membership) => membership.groupId === child.currentGroup?.id && membership.endDate === null)
+                              ? <MembershipStartForm
+                                  childId={child.id}
+                                  startDate={child.groupMemberships.find((membership) => membership.groupId === child.currentGroup?.id && membership.endDate === null)!.startDate}
+                                />
+                              : null
+                          ) : null}
+                        </details>
+                      ) : null}
+                    </td>
                     <td>
                       <StatusBadge status={child.status} />
                     </td>
@@ -256,7 +281,10 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                       <ChildAttendancePlanForm childId={child.id} hasGroup={Boolean(child.currentGroup)} plans={child.attendancePlans} />
                     </td>
                     <td className={child.admissionStatus !== "ADMITTED" ? "sticky right-0 z-10 border-l border-[var(--line)] bg-[var(--red-soft)]" : "sticky right-0 z-10 border-l border-[var(--line)] bg-white"}>
-                      <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
+                      <div className="grid gap-2">
+                        <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
+                        <LeaveChildPanel childId={child.id} status={child.status} />
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -478,6 +506,10 @@ function EmptyTableRow({ colSpan, label }: { colSpan: number; label: string }) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
+}
+
+function formatMembershipDate(value: string) {
+  return new Date(`${value}T00:00:00.000Z`).toLocaleDateString("ru-RU", { timeZone: "UTC" });
 }
 
 function toSearchText(value: string) {

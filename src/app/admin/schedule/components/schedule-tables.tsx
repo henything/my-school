@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Search, Trash2 } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
@@ -226,6 +227,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                 <th>Тренер</th>
                 <th>Статус</th>
                 <th>Причина</th>
+                <th>Табель</th>
               </tr>
             </thead>
             <tbody>
@@ -244,9 +246,10 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                     <StatusBadge status={lesson.status} />
                   </td>
                   <td>{lesson.changeReason ? labelForEnum(lesson.changeReason) : "-"}</td>
+                  <td><Link href={`/admin/attendance/${lesson.id}`} className="font-bold text-[var(--accent-strong)]">Открыть</Link></td>
                 </tr>
               ))}
-              {filteredLessons.length === 0 ? <EmptyTableRow colSpan={6} label="Занятия по фильтрам не найдены." /> : null}
+              {filteredLessons.length === 0 ? <EmptyTableRow colSpan={7} label="Занятия по фильтрам не найдены." /> : null}
             </tbody>
           </table>
         </div>

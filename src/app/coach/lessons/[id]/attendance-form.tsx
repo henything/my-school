@@ -31,6 +31,8 @@ type Child = {
 type AttendanceFormProps = {
   lessonId: string;
   lessonChildren: Child[];
+  adminMode?: boolean;
+  extraChildren?: Child[];
 };
 
 const statusOptions: Array<{ value: AttendanceStatus; label: string; icon: typeof UserRoundCheck; tone: string }> = [
@@ -40,10 +42,12 @@ const statusOptions: Array<{ value: AttendanceStatus; label: string; icon: typeo
   { value: "NOT_MARKED", label: "Не отмечен", icon: MessageSquare, tone: "border-[var(--line)] bg-white text-[var(--muted)]" }
 ];
 
-export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps) {
+export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, extraChildren = [] }: AttendanceFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const [correctionReason, setCorrectionReason] = useState("");
+  const [addedChildIds, setAddedChildIds] = useState<string[]>([]);
   const [records, setRecords] = useState(() =>
     Object.fromEntries(
       lessonChildren.map((child) => [
@@ -59,6 +63,16 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
     () => Object.values(records).filter((record) => record.status !== "NOT_MARKED").length,
     [records]
   );
+  const displayedChildren = useMemo(
+    () => [...lessonChildren, ...extraChildren.filter((child) => addedChildIds.includes(child.id))],
+    [lessonChildren, extraChildren, addedChildIds]
+  );
+
+  function addChild(childId: string) {
+    if (!childId || addedChildIds.includes(childId)) return;
+    setAddedChildIds((current) => [...current, childId]);
+    setRecords((current) => ({ ...current, [childId]: { status: "NOT_MARKED", comment: "" } }));
+  }
 
   function setStatus(childId: string, status: AttendanceStatus) {
     setRecords((current) => ({
@@ -82,11 +96,16 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
 
   async function onSubmit() {
     setMessage("");
-    const response = await fetch(`/api/coach/lessons/${lessonId}/attendance`, {
+    if (adminMode && !correctionReason.trim()) {
+      setMessage("Укажите причину исправления табеля.");
+      return;
+    }
+    const response = await fetch(adminMode ? `/api/admin/lessons/${lessonId}/attendance` : `/api/coach/lessons/${lessonId}/attendance`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        records: lessonChildren.map((child) => ({
+        correctionReason: adminMode ? correctionReason.trim() : undefined,
+        records: displayedChildren.map((child) => ({
           childId: child.id,
           status: records[child.id]?.status ?? "NOT_MARKED",
           comment: records[child.id]?.comment ?? ""
@@ -100,11 +119,11 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
       return;
     }
 
-    setMessage("Табель сохранён.");
+    setMessage(adminMode ? "Исправление сохранено. Проверьте счёт и баланс ребёнка." : "Табель сохранён.");
     startTransition(() => router.refresh());
   }
 
-  if (lessonChildren.length === 0) {
+  if (lessonChildren.length === 0 && !adminMode) {
     return <p className="panel p-5 text-sm text-[var(--muted)]">В группе нет активных детей.</p>;
   }
 
@@ -114,7 +133,7 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
         <div>
           <div className="text-sm font-semibold text-[var(--muted)]">Отмечено</div>
           <div className="text-xl font-extrabold">
-            {markedCount}/{lessonChildren.length}
+            {markedCount}/{displayedChildren.length}
           </div>
         </div>
         <Button type="button" onClick={onSubmit} disabled={isPending}>
@@ -122,9 +141,26 @@ export function AttendanceForm({ lessonId, lessonChildren }: AttendanceFormProps
           Сохранить табель
         </Button>
         {message ? <div className="w-full text-sm font-semibold text-[var(--muted)]">{message}</div> : null}
+        {adminMode ? (
+          <div className="grid w-full gap-3 sm:grid-cols-2">
+            <label className="label">
+              Причина исправления
+              <input className="field" value={correctionReason} onChange={(event) => setCorrectionReason(event.target.value)} required placeholder="Например, уточнили посещение у тренера" />
+            </label>
+            <label className="label">
+              Добавить ребёнка из группы
+              <select className="field" value="" onChange={(event) => addChild(event.target.value)}>
+                <option value="">Выбрать ребёнка</option>
+                {extraChildren.filter((child) => !addedChildIds.includes(child.id)).map((child) => (
+                  <option key={child.id} value={child.id}>{child.fullName}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : null}
       </div>
 
-      {lessonChildren.map((child) => {
+      {displayedChildren.map((child) => {
         const record = records[child.id] ?? { status: "NOT_MARKED", comment: "" };
         const isNotAdmitted = child.admissionStatus === "NOT_ADMITTED";
 

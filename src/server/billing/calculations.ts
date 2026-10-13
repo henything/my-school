@@ -17,6 +17,12 @@ export function calculateCurrentMonthSubscriptionPeriod(anchorDate: Date) {
   };
 }
 
+export function calculateDefaultInvoiceDueDate(periodStart: Date, today: Date) {
+  const regularDueDate = new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth(), 10));
+  if (regularDueDate >= today) return regularDueDate;
+  return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 7));
+}
+
 export function calculateBillableLessons(plannedLessonsCount: number, makeupCreditsToApply = 0) {
   return Math.max(plannedLessonsCount - Math.max(makeupCreditsToApply, 0), 0);
 }

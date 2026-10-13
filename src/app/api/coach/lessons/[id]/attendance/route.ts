@@ -6,7 +6,7 @@ import { requireApiUser } from "@/server/auth/api-user";
 import { assertNoCoachForbiddenFinancialFields } from "@/server/rbac/rbac";
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const currentUser = await requireApiUser(["SUPER_ADMIN", "ADMIN", "COACH"]);
+  const currentUser = await requireApiUser(["COACH"]);
 
   if (!currentUser.ok) {
     return jsonError(currentUser.error, currentUser.status);

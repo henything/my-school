@@ -4,6 +4,8 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { hashPassword } from "@/server/auth/password";
 import { getPrisma } from "@/server/db/prisma";
+import { todayInMoscow } from "@/server/children/attendance-plan";
+import { setCurrentGroupMembership } from "@/server/children/group-membership";
 import {
   buildChildNameBirthDateKey,
   buildExcelImportDraft,
@@ -574,8 +576,12 @@ async function createImportedRecords(
         adminComment: child.adminComment,
         admissionStatus: "ADMITTED"
       },
-      select: { id: true }
+      select: { id: true, currentGroupId: true, status: true }
     });
+
+    if (created.status === "ACTIVE" && created.currentGroupId) {
+      await setCurrentGroupMembership(tx, created.id, created.currentGroupId, todayInMoscow());
+    }
 
     createdIds.children.push(created.id);
   }

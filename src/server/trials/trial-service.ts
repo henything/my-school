@@ -2,6 +2,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { ensureEnrollmentSubscriptions } from "@/server/children/child-service";
+import { resolveFirstPaidLessonDate } from "@/server/children/enrollment-dates";
+import { setCurrentGroupMembership } from "@/server/children/group-membership";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
@@ -243,6 +246,13 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
     }
 
     const currentGroupId = input.currentGroupId ?? existing.groupId;
+    const startDate = await resolveFirstPaidLessonDate(
+      tx,
+      currentUser.schoolId,
+      currentGroupId,
+      input.firstPaidLessonDate,
+      existing.lesson.lessonDate
+    );
     const parentName = input.parentName ?? existing.parentName;
     const parentPhone = input.parentPhone ?? existing.parentPhone;
     const parentVkUrl = input.parentVkUrl ?? existing.parentVkUrl;
@@ -272,6 +282,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       }
     });
 
+    await setCurrentGroupMembership(tx, child.id, currentGroupId, startDate);
+
     const updated = await tx.trialParticipant.update({
       where: { id: existing.id },
       data: {
@@ -300,6 +312,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       });
     }
 
+    await ensureEnrollmentSubscriptions(tx, currentUser, child.id, startDate);
+
     await writeAuditLog(
       {
         schoolId: currentUser.schoolId,
@@ -308,7 +322,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
         entityType: "TrialParticipant",
         entityId: updated.id,
         oldValue: { status: existing.status },
-        newValue: { status: updated.status, childId: child.id, parentId: parent?.id ?? null }
+        newValue: { status: updated.status, childId: child.id, parentId: parent?.id ?? null, firstPaidLessonDate: dateToKey(startDate) }
       },
       tx
     );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { optionalTextSchema, uuidSchema } from "@/server/shared/schemas";
+import { optionalTextSchema, requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 
 export const coachAttendanceStatusSchema = z.enum(["NOT_MARKED", "PRESENT", "ABSENT_UNEXCUSED", "ABSENT_SICK_PENDING"]);
 
@@ -11,6 +11,10 @@ export const attendanceRecordInputSchema = z.object({
 
 export const saveAttendanceSchema = z.object({
   records: z.array(attendanceRecordInputSchema).min(1, "Нужно передать хотя бы одну отметку.")
+});
+
+export const correctAttendanceSchema = saveAttendanceSchema.extend({
+  correctionReason: requiredCommentSchema
 });
 
 export const updateAttendanceRecordSchema = z.object({
@@ -25,5 +29,6 @@ export const attendanceNotFilledJobSchema = z.object({
 export type CoachAttendanceStatusInput = z.infer<typeof coachAttendanceStatusSchema>;
 export type AttendanceRecordInput = z.infer<typeof attendanceRecordInputSchema>;
 export type SaveAttendanceInput = z.infer<typeof saveAttendanceSchema>;
+export type CorrectAttendanceInput = z.infer<typeof correctAttendanceSchema>;
 export type UpdateAttendanceRecordInput = z.infer<typeof updateAttendanceRecordSchema>;
 export type AttendanceNotFilledJobInput = z.infer<typeof attendanceNotFilledJobSchema>;

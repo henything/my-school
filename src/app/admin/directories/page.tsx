@@ -11,17 +11,21 @@ import { listParentAccounts } from "@/server/parents/parent-auth-service";
 import { listParents } from "@/server/parents/parent-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listTasks } from "@/server/tasks/task-service";
+import { listLessons } from "@/server/schedule/lesson-service";
+import { listTrials } from "@/server/trials/trial-service";
 
 export default async function DirectoriesPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const [branches, coaches, groups, parents, parentAccounts, children, tasks] = await Promise.all([
+  const [branches, coaches, groups, parents, parentAccounts, children, tasks, lessons, trials] = await Promise.all([
     listBranches(currentUser),
     listCoaches(currentUser),
     listGroups(currentUser),
     listParents(currentUser),
     listParentAccounts(currentUser),
     listChildren(currentUser),
-    listTasks(currentUser)
+    listTasks(currentUser),
+    listLessons(currentUser),
+    listTrials(currentUser)
   ]);
 
   const overCapacityTasks = tasks.filter((task) => task.type === "GROUP_OVER_CAPACITY");
@@ -46,6 +50,8 @@ export default async function DirectoriesPage() {
           coaches={coaches}
           groups={groups}
           parents={parents}
+          lessons={lessons}
+          trials={trials}
         />
         <ParentAccountPanel parents={parents} accounts={parentAccounts} />
       </DirectoryTables>

@@ -7,6 +7,7 @@ import { ArrowRightLeft, Baby, Building2, GraduationCap, Loader2, UserRoundPlus,
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { labelForEnum } from "@/lib/labels";
+import { formatLessonDateTime } from "@/lib/date-format";
 
 type Branch = {
   id: string;
@@ -37,12 +38,32 @@ type Parent = {
   phone: string | null;
 };
 
+type EnrollmentLesson = {
+  id: string;
+  lessonDate: string;
+  startTime: string;
+  endTime: string;
+  status: string;
+  group: { id: string; name: string };
+};
+
+type EnrollmentTrial = {
+  id: string;
+  groupId: string;
+  childName: string | null;
+  parentPhone: string | null;
+  status: string;
+  lesson: { lessonDate: string; startTime: string; endTime: string };
+};
+
 type DirectoryFormsProps = {
   canCreateCoach: boolean;
   branches: Branch[];
   coaches: Coach[];
   groups: Group[];
   parents: Parent[];
+  lessons: EnrollmentLesson[];
+  trials: EnrollmentTrial[];
 };
 
 function nullable(value: FormDataEntryValue | null) {
@@ -64,7 +85,7 @@ async function submitJson(path: string, body: unknown) {
   }
 }
 
-export function DirectoryForms({ canCreateCoach, branches, coaches, groups, parents }: DirectoryFormsProps) {
+export function DirectoryForms({ canCreateCoach, branches, coaches, groups, parents, lessons, trials }: DirectoryFormsProps) {
   const activeBranches = branches.filter((branch) => branch.status !== "ARCHIVED");
   const activeCoaches = coaches.filter((coach) => coach.status === "ACTIVE");
   const activeGroups = groups.filter((group) => group.status !== "ARCHIVED");
@@ -76,7 +97,7 @@ export function DirectoryForms({ canCreateCoach, branches, coaches, groups, pare
         {canCreateCoach ? <CreateCoachForm /> : null}
         <CreateGroupForm branches={activeBranches} coaches={activeCoaches} />
       </div>
-      <CreateChildEnrollmentForm groups={activeGroups} parents={parents} />
+      <CreateChildEnrollmentForm groups={activeGroups} parents={parents} lessons={lessons} trials={trials} />
     </section>
   );
 }
@@ -284,14 +305,25 @@ function CreateGroupForm({ branches, coaches }: { branches: Branch[]; coaches: C
   );
 }
 
-function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; parents: Parent[] }) {
+function CreateChildEnrollmentForm({ groups, parents, lessons, trials }: {
+  groups: Group[];
+  parents: Parent[];
+  lessons: EnrollmentLesson[];
+  trials: EnrollmentTrial[];
+}) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedParentId, setSelectedParentId] = useState("");
   const [newParentFullName, setNewParentFullName] = useState("");
   const [newParentVkProfileUrl, setNewParentVkProfileUrl] = useState("");
+  const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [selectedTrialParticipantId, setSelectedTrialParticipantId] = useState("");
+  const [selectedTrialLessonId, setSelectedTrialLessonId] = useState("");
   const isNewParentPhoneRequired = !selectedParentId && Boolean(newParentFullName.trim() || newParentVkProfileUrl.trim());
+  const todayInMoscow = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Moscow" });
+  const pastGroupLessons = lessons.filter((lesson) => lesson.group.id === selectedGroupId && lesson.status !== "CANCELLED" && lesson.lessonDate <= todayInMoscow);
+  const availableTrials = trials.filter((trial) => trial.groupId === selectedGroupId && trial.status === "TRIAL_ATTENDED");
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -314,13 +346,19 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
         medicalNotes: nullable(formData.get("medicalNotes")),
         comment: nullable(formData.get("comment")),
         admissionStatus: formData.get("admissionStatus"),
-        attendanceWeekday: nullable(formData.get("attendanceWeekday")) ? Number(formData.get("attendanceWeekday")) : null
+        attendanceWeekday: nullable(formData.get("attendanceWeekday")) ? Number(formData.get("attendanceWeekday")) : null,
+        firstPaidLessonDate: nullable(formData.get("firstPaidLessonDate")),
+        trialParticipantId: nullable(formData.get("trialParticipantId")),
+        trialLessonId: nullable(formData.get("trialLessonId"))
       });
       form.reset();
       setSelectedParentId("");
       setNewParentFullName("");
       setNewParentVkProfileUrl("");
-      setMessage("Ребёнок заведён.");
+      setSelectedGroupId("");
+      setSelectedTrialParticipantId("");
+      setSelectedTrialLessonId("");
+      setMessage("Ребёнок заведён. Проверьте счёт и отметьте прошедшие занятия в табелях.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
@@ -389,6 +427,11 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
               name="currentGroupId"
               placeholder="Найти группу"
               emptyValueLabel="Без группы"
+              onValueChange={(value) => {
+                setSelectedGroupId(value);
+                setSelectedTrialParticipantId("");
+                setSelectedTrialLessonId("");
+              }}
               options={groups.map((group) => ({
                 value: group.id,
                 label: group.name,
@@ -396,6 +439,36 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
               }))}
             />
           </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="label">
+              Первое платное занятие
+              <input className="field" name="firstPaidLessonDate" type="date" required={Boolean(selectedTrialParticipantId || selectedTrialLessonId)} />
+              <span className="text-xs text-[var(--muted)]">Для зачисления задним числом укажите фактическую дату. Счёт начнётся с неё.</span>
+            </label>
+            <label className="label">
+              Существующее пробное
+              <select className="field" name="trialParticipantId" value={selectedTrialParticipantId} disabled={Boolean(selectedTrialLessonId)} onChange={(event) => setSelectedTrialParticipantId(event.target.value)}>
+                <option value="">Не выбирать</option>
+                {availableTrials.map((trial) => (
+                  <option key={trial.id} value={trial.id}>
+                    {trial.childName ?? "Пробник"} · {trial.lesson.lessonDate} · {trial.parentPhone ?? "без телефона"}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="label">
+            Пробное не заведено в систему
+            <select className="field" name="trialLessonId" value={selectedTrialLessonId} disabled={Boolean(selectedTrialParticipantId)} onChange={(event) => setSelectedTrialLessonId(event.target.value)}>
+              <option value="">Не было / уже выбрано выше</option>
+              {pastGroupLessons.map((lesson) => (
+                <option key={lesson.id} value={lesson.id}>
+                  {formatLessonDateTime(lesson.lessonDate, lesson.startTime, lesson.endTime)} · {lesson.group.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-xs text-[var(--muted)]">Пробное фиксируется отдельно и не входит в платный счёт.</span>
+          </label>
           <label className="label">
             Дни посещения
             <select className="field" name="attendanceWeekday" defaultValue="">
@@ -438,6 +511,68 @@ function CreateChildEnrollmentForm({ groups, parents }: { groups: Group[]; paren
       </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" />
     </form>
+  );
+}
+
+export function MembershipStartForm({ childId, startDate }: { childId: string; startDate: string }) {
+  const router = useRouter();
+  const [nextDate, setNextDate] = useState(startDate);
+  const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function save() {
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/children/${childId}/membership-start`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: nextDate, reason: reason.trim() })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось изменить дату.");
+      setConfirming(false);
+      setReason("");
+      setMessage("Дата изменена. Проверьте табели и пересчитайте счёт в разделе «Оплата».");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось изменить дату.");
+      setConfirming(false);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 grid gap-2 border-t border-[var(--line)] pt-2" onClick={(event) => event.stopPropagation()}>
+      <label className="label text-xs">
+        Начало в текущей группе
+        <input className="field" type="date" value={nextDate} onChange={(event) => setNextDate(event.target.value)} />
+      </label>
+      <label className="label text-xs">
+        Причина исправления
+        <input className="field" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например, поздно завели карточку" />
+      </label>
+      <Button type="button" variant="secondary" disabled={!nextDate || nextDate === startDate || !reason.trim() || submitting} onClick={() => setConfirming(true)}>
+        Изменить дату
+      </Button>
+      {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
+      {confirming ? createPortal(
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4">
+          <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-lg">
+            <h3 className="text-lg font-bold">Изменить дату начала?</h3>
+            <p className="mt-2 text-sm">{startDate} → {nextDate}. Состав старых табелей изменится. Счёт нужно будет проверить и пересчитать отдельно.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" disabled={submitting} onClick={() => setConfirming(false)}>Отмена</Button>
+              <Button type="button" disabled={submitting} onClick={save}>Подтвердить</Button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      ) : null}
+    </div>
   );
 }
 

@@ -1,6 +1,7 @@
 import { BillingForms } from "@/app/admin/billing/components/billing-forms";
 import { BillingTables } from "@/app/admin/billing/components/billing-tables";
 import { InvoiceForms } from "@/app/admin/billing/components/invoice-forms";
+import { InvoiceRecalculationPanel } from "@/app/admin/billing/components/invoice-recalculation-panel";
 import { WorkQueuePanel } from "@/components/work-queue-panel";
 import { requireRole } from "@/server/auth/current-user";
 import { listBalanceTransactions, listInvoices, listPayments, listSubscriptions } from "@/server/billing/billing-service";
@@ -32,6 +33,8 @@ export default async function BillingPage() {
         tasks={billingTasks}
         tone="critical"
       />
+
+      <InvoiceRecalculationPanel subscriptions={subscriptions} />
 
       <BillingTables childRows={children} subscriptions={subscriptions} invoices={invoices} payments={payments} transactions={transactions}>
         <BillingForms childOptions={children} />

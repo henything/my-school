@@ -5,6 +5,8 @@ import { getPrisma } from "@/server/db/prisma";
 import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
 import type { Prisma } from "@/generated/prisma/client";
 import { countActiveChildren } from "./capacity";
+import { todayInMoscow } from "@/server/children/attendance-plan";
+import { setCurrentGroupMembership } from "@/server/children/group-membership";
 import type { AttachChildToGroupInput, CreateGroupInput, UpdateGroupInput } from "./schemas";
 
 type GroupRecord = {
@@ -276,6 +278,10 @@ export async function attachChildToGroup(currentUser: CurrentUser, groupId: stri
       where: { id: child.id },
       data: { currentGroupId: group.id }
     });
+
+    if (child.status === "ACTIVE") {
+      await setCurrentGroupMembership(tx, child.id, group.id, todayInMoscow());
+    }
 
     const updatedGroup = await tx.trainingGroup.findUniqueOrThrow({
       where: { id: group.id },

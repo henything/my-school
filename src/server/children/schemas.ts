@@ -18,6 +18,15 @@ const patchDateSchema = z
   ])
   .optional();
 
+export const firstPaidLessonDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Укажите дату первого платного занятия.")
+  .refine((value) => {
+    const date = new Date(`${value}T00:00:00.000Z`);
+    return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+  }, "Некорректная дата первого платного занятия.")
+  .transform((value) => new Date(`${value}T00:00:00.000Z`))
+  .optional()
+  .nullable();
+
 export const createChildSchema = z.object({
   fullName: z.string().trim().min(2, "ФИО ребёнка обязательно."),
   parentId: uuidSchema.optional().nullable(),
@@ -28,7 +37,8 @@ export const createChildSchema = z.object({
   coachComment: optionalTextSchema,
   adminComment: optionalTextSchema,
   admissionStatus: admissionStatusSchema.default("ADMITTED"),
-  attendanceWeekday: z.number().int().min(1).max(7).nullable().optional()
+  attendanceWeekday: z.number().int().min(1).max(7).nullable().optional(),
+  firstPaidLessonDate: firstPaidLessonDateSchema
 });
 
 export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: true }).extend({
@@ -37,7 +47,9 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
   parentPhone: optionalParentPhoneSchema,
   parentVkProfileUrl: optionalTextSchema,
   comment: optionalTextSchema,
-  parentComment: optionalTextSchema
+  parentComment: optionalTextSchema,
+  trialParticipantId: uuidSchema.optional().nullable(),
+  trialLessonId: uuidSchema.optional().nullable()
 }).superRefine((input, context) => {
   const hasParentId = Boolean(input.parentId);
   const hasNewParentFields = Boolean(input.parentFullName || input.parentPhone || input.parentVkProfileUrl || input.parentComment);
@@ -55,6 +67,22 @@ export const createChildEnrollmentSchema = createChildSchema.omit({ parentId: tr
       code: "custom",
       message: "Для нового родителя нужно указать телефон.",
       path: ["parentPhone"]
+    });
+  }
+
+  if (input.trialParticipantId && input.trialLessonId) {
+    context.addIssue({
+      code: "custom",
+      message: "Выберите существующий пробник или дату пробного занятия.",
+      path: ["trialParticipantId"]
+    });
+  }
+
+  if ((input.trialParticipantId || input.trialLessonId) && !input.firstPaidLessonDate) {
+    context.addIssue({
+      code: "custom",
+      message: "Укажите дату первого платного занятия после пробного.",
+      path: ["firstPaidLessonDate"]
     });
   }
 });
