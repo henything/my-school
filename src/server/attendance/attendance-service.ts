@@ -10,6 +10,7 @@ import { dateToKey } from "@/server/schedule/generation";
 import type {
   AttendanceNotFilledJobInput,
   AttendanceRecordInput,
+  CorrectAttendanceInput,
   SaveAttendanceInput,
   UpdateAttendanceRecordInput
 } from "./schemas";
@@ -240,6 +241,60 @@ export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: st
   });
 }
 
+export async function correctAttendance(currentUser: CurrentUser, lessonId: string, input: CorrectAttendanceInput) {
+  assertAdmin(currentUser);
+
+  return getPrisma().$transaction(async (tx) => {
+    const lesson = await tx.lesson.findFirstOrThrow({
+      where: { id: lessonId, schoolId: currentUser.schoolId },
+      include: lessonDetailInclude
+    });
+    assertLessonCanReceiveAttendance(lesson);
+
+    const rosterIds = new Set(scheduledChildrenForLesson(lesson).map((child) => child.id));
+    const affectedIds = new Set<string>();
+
+    for (const recordInput of input.records) {
+      if (affectedIds.has(recordInput.childId)) throw new Error("Один ребёнок не может быть передан в табеле дважды.");
+      affectedIds.add(recordInput.childId);
+
+      if (!rosterIds.has(recordInput.childId)) {
+        if (recordInput.status === "NOT_MARKED") throw new Error("Добавленному ребёнку нужно указать посещение или пропуск.");
+        const child = await tx.child.findFirst({
+          where: {
+            id: recordInput.childId,
+            schoolId: currentUser.schoolId,
+            OR: [
+              { currentGroupId: lesson.groupId },
+              { groupMemberships: { some: { groupId: lesson.groupId } } }
+            ]
+          },
+          select: { id: true }
+        });
+        if (!child) throw new Error("Ребёнок не относится к группе этого занятия.");
+      }
+
+      await upsertAttendanceRecord(tx, currentUser, lesson, recordInput, input.correctionReason);
+    }
+
+    const allChildIds = Array.from(new Set([...rosterIds, ...affectedIds]));
+    await refreshLessonAttendanceStatus(tx, lesson.id, allChildIds);
+
+    await writeAuditLog({
+      schoolId: currentUser.schoolId,
+      actorUserId: currentUser.id,
+      action: "ATTENDANCE_ADMIN_CORRECTION",
+      entityType: "Lesson",
+      entityId: lesson.id,
+      newValue: { childIds: Array.from(affectedIds), lessonDate: dateToKey(lesson.lessonDate) },
+      comment: input.correctionReason
+    }, tx);
+
+    const updated = await tx.lesson.findUniqueOrThrow({ where: { id: lesson.id }, include: lessonDetailInclude });
+    return serializeCoachLessonDetail(updated);
+  });
+}
+
 export async function updateAttendanceRecord(currentUser: CurrentUser, recordId: string, input: UpdateAttendanceRecordInput) {
   return getPrisma().$transaction(async (tx) => {
     const existing = await tx.attendanceRecord.findFirstOrThrow({
@@ -369,7 +424,8 @@ async function upsertAttendanceRecord(
   tx: Prisma.TransactionClient,
   currentUser: CurrentUser,
   lesson: LessonDetailRecord,
-  input: AttendanceRecordInput
+  input: AttendanceRecordInput,
+  correctionReason?: string
 ) {
   const existing = await tx.attendanceRecord.findUnique({
     where: {
@@ -392,12 +448,12 @@ async function upsertAttendanceRecord(
       }
     });
 
-    await auditAttendanceChange(tx, currentUser, record.id, null, record);
+    await auditAttendanceChange(tx, currentUser, record.id, null, record, correctionReason);
     await applyAttendanceSideEffects(tx, currentUser, lesson, record);
     return record;
   }
 
-  return updateAttendanceRecordInternal(tx, currentUser, lesson, existing, input);
+  return updateAttendanceRecordInternal(tx, currentUser, lesson, existing, input, correctionReason);
 }
 
 async function updateAttendanceRecordInternal(
@@ -405,7 +461,8 @@ async function updateAttendanceRecordInternal(
   currentUser: CurrentUser,
   lesson: LessonDetailRecord,
   existing: AttendanceRecordForUpdate,
-  input: AttendanceRecordInput | UpdateAttendanceRecordInput & { childId: string }
+  input: AttendanceRecordInput | UpdateAttendanceRecordInput & { childId: string },
+  correctionReason?: string
 ) {
   const nextComment = input.comment ?? null;
   const changed = existing.status !== input.status || existing.comment !== nextComment;
@@ -421,7 +478,7 @@ async function updateAttendanceRecordInternal(
   });
 
   if (changed) {
-    await auditAttendanceChange(tx, currentUser, record.id, existing, record);
+    await auditAttendanceChange(tx, currentUser, record.id, existing, record, correctionReason);
   }
 
   await applyAttendanceSideEffects(tx, currentUser, lesson, record);
@@ -544,7 +601,8 @@ async function auditAttendanceChange(
   currentUser: CurrentUser,
   recordId: string,
   oldRecord: AttendanceRecordForUpdate | null,
-  newRecord: AttendanceRecordForUpdate
+  newRecord: AttendanceRecordForUpdate,
+  correctionReason?: string
 ) {
   return writeAuditLog(
     {
@@ -559,6 +617,7 @@ async function auditAttendanceChange(
             comment: oldRecord.comment
           }
         : null,
+      comment: correctionReason,
       newValue: {
         status: newRecord.status,
         comment: newRecord.comment,

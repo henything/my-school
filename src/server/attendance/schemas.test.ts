@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { attendanceNotFilledJobSchema, saveAttendanceSchema, updateAttendanceRecordSchema } from "./schemas";
+import { attendanceNotFilledJobSchema, correctAttendanceSchema, saveAttendanceSchema, updateAttendanceRecordSchema } from "./schemas";
 
 describe("attendance schemas", () => {
   it("accepts coach attendance records", () => {
@@ -18,6 +18,13 @@ describe("attendance schemas", () => {
 
   it("rejects an empty attendance sheet", () => {
     expect(() => saveAttendanceSchema.parse({ records: [] })).toThrow();
+  });
+
+  it("requires a reason for an administrative correction", () => {
+    const records = [{ childId: "11111111-1111-4111-8111-111111111111", status: "PRESENT" }];
+    expect(() => correctAttendanceSchema.parse({ records, correctionReason: "" })).toThrow();
+    expect(correctAttendanceSchema.parse({ records, correctionReason: "Уточнили у тренера" }).correctionReason)
+      .toBe("Уточнили у тренера");
   });
 
   it("requires a valid attendance status on patch", () => {
