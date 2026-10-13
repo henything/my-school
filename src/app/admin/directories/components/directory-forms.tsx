@@ -514,6 +514,67 @@ function CreateChildEnrollmentForm({ groups, parents, lessons, trials }: {
   );
 }
 
+export function MembershipStartForm({ childId, startDate }: { childId: string; startDate: string }) {
+  const router = useRouter();
+  const [nextDate, setNextDate] = useState(startDate);
+  const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function save() {
+    setSubmitting(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/children/${childId}/membership-start`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startDate: nextDate, reason: reason.trim() })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось изменить дату.");
+      setConfirming(false);
+      setReason("");
+      setMessage("Дата изменена. Проверьте табели и пересчитайте счёт в разделе «Оплата».");
+      router.refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Не удалось изменить дату.");
+      setConfirming(false);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mt-2 grid gap-2 border-t border-[var(--line)] pt-2" onClick={(event) => event.stopPropagation()}>
+      <label className="label text-xs">
+        Начало в текущей группе
+        <input className="field" type="date" value={nextDate} onChange={(event) => setNextDate(event.target.value)} />
+      </label>
+      <label className="label text-xs">
+        Причина исправления
+        <input className="field" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например, поздно завели карточку" />
+      </label>
+      <Button type="button" variant="secondary" disabled={!nextDate || nextDate === startDate || !reason.trim() || submitting} onClick={() => setConfirming(true)}>
+        Изменить дату
+      </Button>
+      {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
+      {confirming ? (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4">
+          <div className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-lg">
+            <h3 className="text-lg font-bold">Изменить дату начала?</h3>
+            <p className="mt-2 text-sm">{startDate} → {nextDate}. Состав старых табелей изменится. Счёт нужно будет проверить и пересчитать отдельно.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <Button type="button" variant="secondary" disabled={submitting} onClick={() => setConfirming(false)}>Отмена</Button>
+              <Button type="button" disabled={submitting} onClick={save}>Подтвердить</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ChildTransferForm({
   childId,
   childName,

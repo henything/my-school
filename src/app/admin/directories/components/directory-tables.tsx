@@ -3,7 +3,7 @@
 import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChildAttendancePlanForm, ChildTransferForm } from "@/app/admin/directories/components/directory-forms";
+import { ChildAttendancePlanForm, ChildTransferForm, MembershipStartForm } from "@/app/admin/directories/components/directory-forms";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -258,6 +258,14 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                               </li>
                             ))}
                           </ul>
+                          {child.status === "ACTIVE" && child.currentGroup ? (
+                            child.groupMemberships.find((membership) => membership.groupId === child.currentGroup?.id && membership.endDate === null)
+                              ? <MembershipStartForm
+                                  childId={child.id}
+                                  startDate={child.groupMemberships.find((membership) => membership.groupId === child.currentGroup?.id && membership.endDate === null)!.startDate}
+                                />
+                              : null
+                          ) : null}
                         </details>
                       ) : null}
                     </td>
