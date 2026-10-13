@@ -4,6 +4,7 @@ import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChildAttendancePlanForm, ChildTransferForm, MembershipStartForm } from "@/app/admin/directories/components/directory-forms";
+import { LeaveChildPanel } from "@/app/admin/directories/components/leave-child-panel";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
@@ -280,7 +281,10 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                       <ChildAttendancePlanForm childId={child.id} hasGroup={Boolean(child.currentGroup)} plans={child.attendancePlans} />
                     </td>
                     <td className={child.admissionStatus !== "ADMITTED" ? "sticky right-0 z-10 border-l border-[var(--line)] bg-[var(--red-soft)]" : "sticky right-0 z-10 border-l border-[var(--line)] bg-white"}>
-                      <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
+                      <div className="grid gap-2">
+                        <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
+                        <LeaveChildPanel childId={child.id} status={child.status} />
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -559,9 +559,9 @@ export function MembershipStartForm({ childId, startDate }: { childId: string; s
         Изменить дату
       </Button>
       {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
-      {confirming ? (
+      {confirming ? createPortal(
         <div className="fixed inset-0 z-50 grid place-items-center bg-[rgba(22,34,30,0.32)] p-4">
-          <div className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-lg">
+          <div role="dialog" aria-modal="true" className="w-full max-w-md rounded-lg border border-[var(--line)] bg-white p-5 shadow-lg">
             <h3 className="text-lg font-bold">Изменить дату начала?</h3>
             <p className="mt-2 text-sm">{startDate} → {nextDate}. Состав старых табелей изменится. Счёт нужно будет проверить и пересчитать отдельно.</p>
             <div className="mt-4 flex justify-end gap-2">
@@ -569,7 +569,8 @@ export function MembershipStartForm({ childId, startDate }: { childId: string; s
               <Button type="button" disabled={submitting} onClick={save}>Подтвердить</Button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       ) : null}
     </div>
   );
