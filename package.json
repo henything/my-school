@@ -20,6 +20,7 @@
     "deploy:prod:fast": "scripts/deploy-prod.sh --skip-precheck",
     "prod:status": "scripts/deploy-prod.sh --status-only",
     "prod:health": "scripts/deploy-prod.sh --health-only",
+    "monthly:prepare": "tsx scripts/run-monthly-cycle.ts",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "prisma db seed",

@@ -182,20 +182,23 @@ function CreateTemplateForm({ groups }: { groups: Group[] }) {
 function GenerateMonthForm({ groups }: { groups: Group[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
+  const [billingIssues, setBillingIssues] = useState<Array<{ childName: string; reason: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    setBillingIssues([]);
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
 
     try {
-      const payload = await submitJson<{ result: { createdCount: number; skippedDuplicateCount: number } }>("/api/lessons/generate-month", {
+      const payload = await submitJson<{ result: { createdCount: number; skippedDuplicateCount: number; billing: { createdCount: number; existingCount: number; issues: Array<{ childName: string; reason: string }> } | null } }>("/api/lessons/generate-month", {
         month: formData.get("month"),
         groupId: nullable(formData.get("groupId"))
       });
-      setMessage(`Создано: ${payload.result.createdCount}. Дубли: ${payload.result.skippedDuplicateCount}.`);
+      setMessage(`Занятий создано: ${payload.result.createdCount}, уже были: ${payload.result.skippedDuplicateCount}. ${payload.result.billing ? `Новых счетов: ${payload.result.billing.createdCount}, уже были: ${payload.result.billing.existingCount}.` : "Счета за будущий месяц создадутся в начале этого месяца."}`);
+      setBillingIssues(payload.result.billing?.issues ?? []);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
@@ -210,6 +213,7 @@ function GenerateMonthForm({ groups }: { groups: Group[] }) {
         <WandSparkles aria-hidden="true" size={18} />
         Генерация месяца
       </h2>
+      <p className="text-sm text-[var(--muted)]">Создаёт занятия и выставляет недостающие счета за текущий или прошедший месяц. Счета за будущий месяц формируются в его начале. Повторный запуск не дублирует записи.</p>
       <label className="label">
         Месяц
         <input className="field" name="month" type="month" required />
@@ -228,6 +232,10 @@ function GenerateMonthForm({ groups }: { groups: Group[] }) {
         />
       </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Сгенерировать" />
+      {billingIssues.length > 0 ? <div className="rounded-lg border border-[var(--warning)] p-3 text-sm" role="alert">
+        <p className="font-semibold">Счета требуют проверки: {billingIssues.length}</p>
+        <ul className="mt-2 list-disc pl-5">{billingIssues.map((issue, index) => <li key={`${issue.childName}-${index}`}>{issue.childName}: {issue.reason}</li>)}</ul>
+      </div> : null}
     </form>
   );
 }

@@ -253,6 +253,22 @@ azbuka-dvizheniya-restart
 REMOTE
 }
 
+install_monthly_timer() {
+  log "Installing monthly billing timer"
+  ssh_prod "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
+set -Eeuo pipefail
+APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
+sed -e "s|@APP_USER@|$APP_USER|g" -e "s|@APP_DIR@|$APP_DIR|g" \
+  "$APP_DIR/scripts/systemd/azbuka-monthly-cycle.service" \
+  > /etc/systemd/system/azbuka-monthly-cycle.service
+install -m 0644 "$APP_DIR/scripts/systemd/azbuka-monthly-cycle.timer" \
+  /etc/systemd/system/azbuka-monthly-cycle.timer
+systemctl daemon-reload
+systemctl enable --now azbuka-monthly-cycle.timer
+systemctl is-active --quiet azbuka-monthly-cycle.timer
+REMOTE
+}
+
 status_check() {
   log "Checking production service status"
   ssh_prod 'azbuka-dvizheniya-status'
@@ -309,6 +325,7 @@ fi
 
 if [ "$RUN_MIGRATE_RESTART" -eq 1 ]; then
   migrate_and_restart
+  install_monthly_timer
 fi
 
 status_check

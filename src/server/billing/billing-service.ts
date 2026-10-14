@@ -622,14 +622,107 @@ export async function ensureCurrentMonthSubscriptionForChild(
     return null;
   }
 
+  const previousSubscription = await tx.subscription.findFirst({
+    where: { schoolId: currentUser.schoolId, childId, periodEnd: { lt: periodStart } },
+    orderBy: { periodEnd: "desc" },
+    select: { lessonPriceKopeks: true }
+  });
+
   return createSubscriptionInTransaction(tx, currentUser, {
     childId,
     periodStart,
     periodEnd,
     plannedLessonsCount,
-    lessonPriceKopeks: DEFAULT_LESSON_PRICE_KOPEKS,
+    lessonPriceKopeks: previousSubscription?.lessonPriceKopeks ?? DEFAULT_LESSON_PRICE_KOPEKS,
     paymentStatus: "NOT_INVOICED"
   });
+}
+
+/** Reconcile bills after the month's lessons have been generated. Safe to run again. */
+export async function ensureMonthlySubscriptionsForGroup(
+  currentUser: CurrentUser,
+  month: string,
+  groupId?: string | null
+) {
+  assertAdmin(currentUser);
+  const monthStart = new Date(`${month}-01T00:00:00.000Z`);
+  const monthEnd = new Date(Date.UTC(monthStart.getUTCFullYear(), monthStart.getUTCMonth() + 1, 0));
+  const prisma = getPrisma();
+  const children = await prisma.child.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      status: "ACTIVE",
+      currentGroupId: groupId ?? { not: null }
+    },
+    select: { id: true, fullName: true, parentId: true, currentGroupId: true },
+    orderBy: { fullName: "asc" }
+  });
+  let createdCount = 0;
+  let existingCount = 0;
+  let noLessonsCount = 0;
+  const issues: Array<{ childId: string; childName: string; reason: string }> = [];
+
+  for (const child of children) {
+    if (!child.parentId) {
+      issues.push({ childId: child.id, childName: child.fullName, reason: "Нет карточки родителя — счёт не создан." });
+      continue;
+    }
+
+    try {
+      const outcome = await prisma.$transaction(async (tx) => {
+        // Serialize repeated generation, including two administrators clicking at once.
+        await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${child.id}::uuid FOR UPDATE`;
+        const existing = await tx.subscription.findFirst({
+          where: { schoolId: currentUser.schoolId, childId: child.id, periodStart: { lte: monthEnd }, periodEnd: { gte: monthStart } },
+          select: { id: true, paymentStatus: true, periodStart: true, periodEnd: true, invoices: { select: { id: true, status: true } } }
+        });
+        if (existing) {
+          if (existing.invoices.length > 1 || existing.invoices.some((invoice) => invoice.status === "CANCELLED")) {
+            return "invoiceAnomaly" as const;
+          }
+          if (existing.invoices.length === 1) return "existing" as const;
+        }
+
+        const pendingSickness = await tx.attendanceRecord.findFirst({
+          where: {
+            childId: child.id,
+            status: "ABSENT_SICK_PENDING",
+            finalStatus: null,
+            lesson: { lessonDate: { lt: monthStart } }
+          },
+          select: { id: true }
+        });
+        if (pendingSickness) return "pendingSickness" as const;
+
+        if (existing) {
+          if (existing.periodStart.getTime() !== monthStart.getTime() || existing.periodEnd.getTime() !== monthEnd.getTime() || existing.paymentStatus === "PAID") {
+            return "partialSubscription" as const;
+          }
+          await createInvoiceForSubscription(tx, currentUser, existing.id, defaultInvoiceDueDate(existing.periodStart));
+          return "created" as const;
+        }
+
+        const subscription = await ensureCurrentMonthSubscriptionForChild(tx, currentUser, child.id, monthStart);
+        return subscription ? "created" as const : "noLessons" as const;
+      }, { timeout: 20_000 });
+      if (outcome === "created") createdCount += 1;
+      if (outcome === "existing") existingCount += 1;
+      if (outcome === "noLessons") noLessonsCount += 1;
+      if (outcome === "pendingSickness") {
+        issues.push({ childId: child.id, childName: child.fullName, reason: "Есть неподтверждённая болезнь за прошлый месяц — проверьте перенос перед выставлением счёта." });
+      }
+      if (outcome === "partialSubscription") {
+        issues.push({ childId: child.id, childName: child.fullName, reason: "Есть нестандартный абонемент без счёта — проверьте его вручную." });
+      }
+      if (outcome === "invoiceAnomaly") {
+        issues.push({ childId: child.id, childName: child.fullName, reason: "У абонемента отменённый или повторный счёт — проверьте его вручную." });
+      }
+    } catch (error) {
+      issues.push({ childId: child.id, childName: child.fullName, reason: error instanceof Error ? error.message : "Не удалось создать счёт." });
+    }
+  }
+
+  return { createdCount, existingCount, noLessonsCount, issues };
 }
 
 async function createSubscriptionInTransaction(
@@ -637,6 +730,18 @@ async function createSubscriptionInTransaction(
   currentUser: CurrentUser,
   input: SubscriptionCreationInput
 ) {
+  await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${input.childId}::uuid FOR UPDATE`;
+  const overlapping = await tx.subscription.findFirst({
+    where: {
+      schoolId: currentUser.schoolId,
+      childId: input.childId,
+      periodStart: { lte: input.periodEnd },
+      periodEnd: { gte: input.periodStart }
+    },
+    select: { id: true }
+  });
+  if (overlapping) throw new Error("У ребёнка уже есть абонемент за выбранный период.");
+
   const child = await tx.child.findFirstOrThrow({
     where: {
       id: input.childId,

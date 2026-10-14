@@ -1,0 +1,13 @@
+[Unit]
+Description=Azbuka monthly lessons and billing reconciliation
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+TimeoutStartSec=10min
+User=@APP_USER@
+WorkingDirectory=@APP_DIR@
+Environment=NODE_ENV=production
+Environment=PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=/opt/node-v24/bin/pnpm monthly:prepare

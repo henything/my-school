@@ -1,6 +1,8 @@
 import type { LessonChangeReason, LessonStatus } from "@/generated/prisma/enums";
 import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
+import { ensureMonthlySubscriptionsForGroup } from "@/server/billing/billing-service";
+import { todayInMoscow } from "@/server/children/attendance-plan";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
@@ -270,7 +272,7 @@ export async function createLesson(currentUser: CurrentUser, input: CreateLesson
 export async function generateLessonsForMonth(currentUser: CurrentUser, input: GenerateMonthInput) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => {
+  const generation = await getPrisma().$transaction(async (tx) => {
     const templates = await findTemplatesForGeneration(tx, currentUser.schoolId, input.groupId);
     const candidates = buildLessonCandidates(templates, input.month);
     const { createdIds, duplicateKeys } = await createLessonsFromCandidates(tx, currentUser.schoolId, candidates);
@@ -301,7 +303,13 @@ export async function generateLessonsForMonth(currentUser: CurrentUser, input: G
       skippedDuplicateCount: duplicateKeys.length,
       duplicateKeys
     };
-  });
+  }, { timeout: 20_000 });
+
+  // This also repairs a month whose lessons were generated before billing was enabled.
+  const billing = input.month <= dateToKey(todayInMoscow()).slice(0, 7)
+    ? await ensureMonthlySubscriptionsForGroup(currentUser, input.month, input.groupId)
+    : null;
+  return { ...generation, billing };
 }
 
 export async function generateLessonsForAcademicYear(currentUser: CurrentUser, input: GenerateAcademicYearInput) {
