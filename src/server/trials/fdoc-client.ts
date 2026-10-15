@@ -13,8 +13,8 @@ function config() {
   const base = process.env.FDOC_BASE_URL ?? "https://demo.fdoc.ru";
   if (new URL(base).hostname !== "demo.fdoc.ru") throw new Error("MVP разрешён только в тестовом контуре F.Doc.");
   const required = [
-    "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_TECH_LOGIN", "FDOC_TECH_PASSWORD",
-    "FDOC_EMPLOYEE_ID", "FDOC_CONTRACT_TEMPLATE_ID", "FDOC_CONSENT_TEMPLATE_ID",
+    "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_EMPLOYEE_LOGIN", "FDOC_EMPLOYEE_PASSWORD",
+    "FDOC_CONTRACT_TEMPLATE_ID", "FDOC_CONSENT_TEMPLATE_ID",
     "FDOC_CONTRACT_PARENT_NAME_PARAM_ID", "FDOC_CONTRACT_PARENT_PHONE_PARAM_ID", "FDOC_CONTRACT_CHILD_NAME_PARAM_ID",
     "FDOC_CONSENT_PARENT_NAME_PARAM_ID", "FDOC_CONSENT_PARENT_PHONE_PARAM_ID"
   ] as const;
@@ -26,10 +26,10 @@ function config() {
     base,
     apiKey: process.env.FDOC_API_KEY!,
     corpId: process.env.FDOC_CORP_ID!,
-    login: process.env.FDOC_TECH_LOGIN!,
-    password: process.env.FDOC_TECH_PASSWORD!,
-    employeeId: process.env.FDOC_EMPLOYEE_ID!,
-    app: process.env.FDOC_APP_CODE ?? "API",
+    login: process.env.FDOC_EMPLOYEE_LOGIN!,
+    password: process.env.FDOC_EMPLOYEE_PASSWORD!,
+    employeeId: process.env.FDOC_EMPLOYEE_ID,
+    app: process.env.FDOC_APP_CODE ?? "532110981120",
     contractTemplateId: process.env.FDOC_CONTRACT_TEMPLATE_ID!,
     consentTemplateId: process.env.FDOC_CONSENT_TEMPLATE_ID!
   };
@@ -45,9 +45,8 @@ async function accessToken() {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      apiKey: c.apiKey, corpId: c.corpId, app: c.app, grantType: "techAccount",
-      grant: Buffer.from(`${c.login}:${c.password}`).toString("base64"),
-      employeeInitiator: { id: c.employeeId }
+      apiKey: c.apiKey, corpId: c.corpId, app: c.app, grantType: "password",
+      grant: Buffer.from(`${c.login}:${c.password}`).toString("base64")
     }),
     cache: "no-store",
     signal: AbortSignal.timeout(15_000)
@@ -86,7 +85,7 @@ export async function sendFdocPackage(packageId: string, names: SigningNames) {
         name: `Договор и согласие — ${names.childName}`,
         signers: [
           { id: `${packageId}-parent`, name: names.parentName, phone: names.parentPhone, type: "client", priority: 1 },
-          { id: c.employeeId, type: "corp", priority: 2, operatorAutoSign: true }
+          ...(c.employeeId ? [{ id: c.employeeId, type: "corp", priority: 2, operatorAutoSign: true }] : [])
         ]
       }
     }),

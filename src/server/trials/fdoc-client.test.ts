@@ -2,8 +2,8 @@ import { afterEach, expect, it, vi } from "vitest";
 import { sendFdocPackage } from "./fdoc-client";
 
 const keys = [
-  "FDOC_MVP_ENABLED", "FDOC_BASE_URL", "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_TECH_LOGIN",
-  "FDOC_TECH_PASSWORD", "FDOC_EMPLOYEE_ID", "FDOC_CONTRACT_TEMPLATE_ID", "FDOC_CONSENT_TEMPLATE_ID",
+  "FDOC_MVP_ENABLED", "FDOC_BASE_URL", "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_EMPLOYEE_LOGIN",
+  "FDOC_EMPLOYEE_PASSWORD", "FDOC_EMPLOYEE_ID", "FDOC_APP_CODE", "FDOC_CONTRACT_TEMPLATE_ID", "FDOC_CONSENT_TEMPLATE_ID",
   "FDOC_CONTRACT_PARENT_NAME_PARAM_ID", "FDOC_CONTRACT_PARENT_PHONE_PARAM_ID", "FDOC_CONTRACT_CHILD_NAME_PARAM_ID",
   "FDOC_CONSENT_PARENT_NAME_PARAM_ID", "FDOC_CONSENT_PARENT_PHONE_PARAM_ID"
 ] as const;
@@ -20,7 +20,7 @@ afterEach(() => {
 it("sends both templates with known family data and leaves passport for parent", async () => {
   Object.assign(process.env, {
     FDOC_MVP_ENABLED: "true", FDOC_API_KEY: "test-key", FDOC_CORP_ID: "test-corp",
-    FDOC_TECH_LOGIN: "test-login", FDOC_TECH_PASSWORD: "test-password", FDOC_EMPLOYEE_ID: "test-employee",
+    FDOC_EMPLOYEE_LOGIN: "test-login", FDOC_EMPLOYEE_PASSWORD: "test-password", FDOC_APP_CODE: "532110981120",
     FDOC_CONTRACT_TEMPLATE_ID: "contract-template", FDOC_CONSENT_TEMPLATE_ID: "consent-template",
     FDOC_CONTRACT_PARENT_NAME_PARAM_ID: "11", FDOC_CONTRACT_PARENT_PHONE_PARAM_ID: "12", FDOC_CONTRACT_CHILD_NAME_PARAM_ID: "13",
     FDOC_CONSENT_PARENT_NAME_PARAM_ID: "21", FDOC_CONSENT_PARENT_PHONE_PARAM_ID: "22"
@@ -42,7 +42,9 @@ it("sends both templates with known family data and leaves passport for parent",
   expect(ids).toEqual({ contractDocumentId: "contract-doc", consentDocumentId: "consent-doc" });
   expect(requests).toHaveLength(2);
   expect(requests[0].url).toContain("demo.fdoc.ru");
+  expect(requests[0].body).toMatchObject({ grantType: "password", app: "532110981120" });
   const body = requests[1].body;
+  expect((body.package as { signers: unknown[] }).signers).toHaveLength(1);
   expect((body.documentTemplates as Array<{ templateParams: Array<{ id: number; value: string }> }>)[0].templateParams)
     .toEqual(expect.arrayContaining([{ id: 11, value: "Родитель Пример", isNotEditableByClient: true }, { id: 13, value: "Ребёнок Пример", isNotEditableByClient: true }]));
   expect(JSON.stringify(body)).not.toContain("passport");

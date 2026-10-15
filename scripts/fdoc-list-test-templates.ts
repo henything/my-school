@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-const keys = ["FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_TECH_LOGIN", "FDOC_TECH_PASSWORD", "FDOC_EMPLOYEE_ID"] as const;
+const keys = ["FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_EMPLOYEE_LOGIN", "FDOC_EMPLOYEE_PASSWORD"] as const;
 for (const key of keys) if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
 
 const base = "https://demo.fdoc.ru/paperless-gateway/api/v1";
@@ -10,10 +10,9 @@ const auth = await fetch(`${base}/operator/accessToken`, {
   body: JSON.stringify({
     apiKey: process.env.FDOC_API_KEY,
     corpId: process.env.FDOC_CORP_ID,
-    app: process.env.FDOC_APP_CODE ?? "API",
-    grantType: "techAccount",
-    grant: Buffer.from(`${process.env.FDOC_TECH_LOGIN}:${process.env.FDOC_TECH_PASSWORD}`).toString("base64"),
-    employeeInitiator: { id: process.env.FDOC_EMPLOYEE_ID }
+    app: process.env.FDOC_APP_CODE ?? "532110981120",
+    grantType: "password",
+    grant: Buffer.from(`${process.env.FDOC_EMPLOYEE_LOGIN}:${process.env.FDOC_EMPLOYEE_PASSWORD}`).toString("base64")
   }),
   signal: AbortSignal.timeout(15_000)
 });
