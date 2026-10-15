@@ -18,6 +18,8 @@
     "test:e2e": "playwright test",
     "deploy:prod": "scripts/deploy-prod.sh",
     "deploy:prod:fast": "scripts/deploy-prod.sh --skip-precheck",
+    "stage:setup": "scripts/setup-staging-server.sh",
+    "stage:deploy": "scripts/deploy-staging.sh",
     "prod:status": "scripts/deploy-prod.sh --status-only",
     "prod:health": "scripts/deploy-prod.sh --health-only",
     "monthly:prepare": "tsx scripts/run-monthly-cycle.ts",
