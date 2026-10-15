@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { sendFdocPackage } from "./fdoc-client";
+import { fdocStatus, sendFdocPackage } from "./fdoc-client";
 
 const keys = [
   "FDOC_MVP_ENABLED", "FDOC_BASE_URL", "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_EMPLOYEE_LOGIN",
@@ -49,4 +49,23 @@ it("sends both templates with known family data and leaves passport for parent",
   expect((body.documentTemplates as Array<{ templateParams: Array<{ id: number; value: string }> }>)[0].templateParams)
     .toEqual(expect.arrayContaining([{ id: 11, value: "Родитель Пример", isNotEditableByClient: true }, { id: 13, value: "Ребёнок Пример", isNotEditableByClient: true }]));
   expect(JSON.stringify(body)).not.toContain("passport");
+});
+
+it("authenticates status requests to the F.Doc portal", async () => {
+  Object.assign(process.env, {
+    FDOC_MVP_ENABLED: "true", FDOC_API_KEY: "test-key", FDOC_CORP_ID: "test-corp",
+    FDOC_EMPLOYEE_LOGIN: "test-login", FDOC_EMPLOYEE_PASSWORD: "test-password",
+    FDOC_CONTRACT_TEMPLATE_ID: "contract-template", FDOC_CONSENT_TEMPLATE_ID: "consent-template",
+    FDOC_CONTRACT_PARENT_NAME_PARAM_ID: "11", FDOC_CONTRACT_PARENT_PHONE_PARAM_ID: "12", FDOC_CONTRACT_CHILD_NAME_PARAM_ID: "13",
+    FDOC_CONSENT_PARENT_NAME_PARAM_ID: "21", FDOC_CONSENT_PARENT_PHONE_PARAM_ID: "22"
+  });
+  const requests: Array<{ url: string; authorization?: string }> = [];
+  vi.stubGlobal("fetch", vi.fn(async (url: string | URL, init: RequestInit) => {
+    requests.push({ url: String(url), authorization: new Headers(init.headers).get("Authorization") ?? undefined });
+    return new Response(JSON.stringify(requests.length === 1 ? { accessToken: "Bearer test-token" } : { status: "WAIT_FILL" }), { status: 200 });
+  }));
+  expect(await fdocStatus("document-1", "document")).toBe("WAIT_FILL");
+  expect(requests).toHaveLength(2);
+  expect(requests[1]).toMatchObject({ authorization: "Bearer test-token" });
+  expect(requests[1].url).toContain("id=document-1");
 });

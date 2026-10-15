@@ -103,9 +103,10 @@ export async function sendFdocPackage(packageId: string, names: SigningNames) {
 
 export async function fdocStatus(id: string, idType: "package" | "document") {
   const c = config();
+  const token = await accessToken();
   const url = new URL(`${c.base}/paperless-gateway/portal/api/v1/document/status`);
   url.search = new URLSearchParams({ id, idType, corpId: c.corpId }).toString();
-  const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(15_000) });
+  const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store", signal: AbortSignal.timeout(15_000) });
   if (!response.ok) throw new Error(`F.Doc: не удалось получить статус (${response.status}).`);
   return statusSchema.parse(await response.json()).status;
 }
