@@ -35,6 +35,7 @@ const trialInclude = {
   group: { select: { id: true, name: true, capacityLimit: true } },
   coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
   convertedChild: { select: { id: true, fullName: true, status: true } },
+  signingPackage: { select: { status: true, contractStatus: true, consentStatus: true, errorMessage: true, sentAt: true, checkedAt: true } },
   createdBy: { select: { id: true, displayName: true, login: true, role: true } }
 } as const;
 
@@ -62,6 +63,14 @@ export function serializeTrial(trial: TrialRecord) {
     source: trial.source,
     status: trial.status,
     trialAttended: trial.trialAttended,
+    signingPackage: trial.signingPackage ? {
+      status: trial.signingPackage.status,
+      contractStatus: trial.signingPackage.contractStatus,
+      consentStatus: trial.signingPackage.consentStatus,
+      errorMessage: trial.signingPackage.errorMessage,
+      sentAt: trial.signingPackage.sentAt?.toISOString() ?? null,
+      checkedAt: trial.signingPackage.checkedAt?.toISOString() ?? null
+    } : null,
     comment: trial.comment,
     convertedAt: trial.convertedAt?.toISOString() ?? null,
     createdAt: trial.createdAt.toISOString(),

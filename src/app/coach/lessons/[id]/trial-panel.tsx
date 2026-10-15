@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ClipboardCheck, Loader2, Phone, UserRoundPlus } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
+import { TrialSigningControls } from "@/components/trial-signing-controls";
 
 type TrialStatus = "TRIAL_BOOKED" | "TRIAL_ATTENDED" | "TRIAL_NO_SHOW" | "CONTACT_COLLECTED" | "TRANSFERRED_TO_ADMIN" | "CONVERTED_TO_ACTIVE";
 
@@ -17,6 +18,8 @@ type Trial = {
   parentVkUrl: string | null;
   source: string;
   status: TrialStatus;
+  trialAttended: boolean | null;
+  signingPackage: { status: string; contractStatus: string | null; consentStatus: string | null; errorMessage: string | null } | null;
   comment: string | null;
   convertedChild: { id: string; fullName: string; status: string } | null;
 };
@@ -290,6 +293,7 @@ function TrialCard({ trial }: { trial: Trial }) {
         </Button>
         {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
       </div>
+      <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} />
     </form>
   );
 }
