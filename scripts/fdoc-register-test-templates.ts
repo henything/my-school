@@ -58,7 +58,7 @@ for (const spec of specs) {
         template: { documentName: spec.name, templateFile: file.toString("base64") },
         templateParams: spec.codes.map((code) => ({
           code, name: fields[code as keyof typeof fields],
-          type: code === "passportNumber" ? "PASSPORT" : code === "passportDate" ? "PASSPORT_ISSUE_DATE" : code === "childBirth" ? "BIRTH_DATE" : "INPUT",
+          type: code === "passportDate" || code === "childBirth" ? "DATE" : code === "passportIssuer" || code === "parentAddress" ? "TEXTAREA" : "INPUT",
           required: true
         }))
       }),
