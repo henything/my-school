@@ -29,7 +29,7 @@ function config() {
     login: process.env.FDOC_TECH_LOGIN!,
     password: process.env.FDOC_TECH_PASSWORD!,
     employeeId: process.env.FDOC_EMPLOYEE_ID!,
-    app: process.env.FDOC_APP_CODE ?? "AZBUKA",
+    app: process.env.FDOC_APP_CODE ?? "API",
     contractTemplateId: process.env.FDOC_CONTRACT_TEMPLATE_ID!,
     consentTemplateId: process.env.FDOC_CONSENT_TEMPLATE_ID!
   };

@@ -10,7 +10,7 @@ const auth = await fetch(`${base}/operator/accessToken`, {
   body: JSON.stringify({
     apiKey: process.env.FDOC_API_KEY,
     corpId: process.env.FDOC_CORP_ID,
-    app: process.env.FDOC_APP_CODE ?? "AZBUKA",
+    app: process.env.FDOC_APP_CODE ?? "API",
     grantType: "techAccount",
     grant: Buffer.from(`${process.env.FDOC_TECH_LOGIN}:${process.env.FDOC_TECH_PASSWORD}`).toString("base64"),
     employeeInitiator: { id: process.env.FDOC_EMPLOYEE_ID }
