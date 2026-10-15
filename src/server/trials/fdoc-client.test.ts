@@ -25,11 +25,11 @@ it("sends both templates with known family data and leaves passport for parent",
     FDOC_CONTRACT_PARENT_NAME_PARAM_ID: "11", FDOC_CONTRACT_PARENT_PHONE_PARAM_ID: "12", FDOC_CONTRACT_CHILD_NAME_PARAM_ID: "13",
     FDOC_CONSENT_PARENT_NAME_PARAM_ID: "21", FDOC_CONSENT_PARENT_PHONE_PARAM_ID: "22"
   });
-  const requests: Array<{ url: string; body: Record<string, unknown> }> = [];
+  const requests: Array<{ url: string; body: Record<string, unknown>; authorization?: string }> = [];
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
-    requests.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown> });
+    requests.push({ url, body: JSON.parse(String(init.body)) as Record<string, unknown>, authorization: new Headers(init.headers).get("Authorization") ?? undefined });
     return new Response(JSON.stringify(requests.length === 1
-      ? { accessToken: "test-token" }
+      ? { accessToken: "Bearer test-token" }
       : { documentsFromTemplates: [
           { templateId: "contract-template", documentId: "contract-doc" },
           { templateId: "consent-template", documentId: "consent-doc" }
@@ -43,6 +43,7 @@ it("sends both templates with known family data and leaves passport for parent",
   expect(requests).toHaveLength(2);
   expect(requests[0].url).toContain("demo.fdoc.ru");
   expect(requests[0].body).toMatchObject({ grantType: "password", app: "532110981120" });
+  expect(requests[1].authorization).toBe("Bearer test-token");
   const body = requests[1].body;
   expect((body.package as { signers: unknown[] }).signers).toHaveLength(1);
   expect((body.documentTemplates as Array<{ templateParams: Array<{ id: number; value: string }> }>)[0].templateParams)

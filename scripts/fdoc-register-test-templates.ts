@@ -20,7 +20,8 @@ const auth = await fetch(`${base}/operator/accessToken`, {
 });
 if (!auth.ok) throw new Error(`F.Doc: ошибка входа (${auth.status}).`);
 const { accessToken } = await auth.json() as { accessToken: string };
-if (!accessToken) throw new Error("F.Doc не вернул токен сотрудника.");
+if (typeof accessToken !== "string" || !accessToken) throw new Error("F.Doc не вернул токен сотрудника.");
+const token = accessToken.replace(/^Bearer\s+/i, "");
 
 const fields = {
   parentName: "Родитель",
@@ -41,7 +42,7 @@ const specs = [
 ];
 
 const list = await fetch(`${base}/corp/templates`, {
-  headers: { Authorization: `Bearer ${accessToken}` },
+  headers: { Authorization: `Bearer ${token}` },
   signal: AbortSignal.timeout(15_000)
 });
 if (!list.ok) throw new Error(`F.Doc: ошибка списка шаблонов (${list.status}).`);
@@ -53,7 +54,7 @@ for (const spec of specs) {
     const file = await readFile(path.join(directory, spec.file));
     const response = await fetch(`${base}/template`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
         template: { documentName: spec.name, templateFile: file.toString("base64") },
         templateParams: spec.codes.map((code) => ({
@@ -70,7 +71,7 @@ for (const spec of specs) {
   if (!templateId) throw new Error(`F.Doc не вернул ID шаблона «${spec.name}».`);
   const url = new URL(`${base}/template`);
   url.searchParams.set("templateExternalId", templateId);
-  const detail = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` }, signal: AbortSignal.timeout(15_000) });
+  const detail = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(15_000) });
   if (!detail.ok) throw new Error(`F.Doc: не удалось прочитать поля шаблона (${detail.status}).`);
   const data = await detail.json() as { templateParams?: Array<{ id: number; code: string; name: string }> };
   console.log(JSON.stringify({ template: spec.name, id: templateId, params: (data.templateParams ?? []).map(({ id, code, name }) => ({ id, code, name })) }, null, 2));

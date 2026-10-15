@@ -53,7 +53,7 @@ async function accessToken() {
   });
   if (!response.ok) throw new Error(`F.Doc: ошибка авторизации (${response.status}).`);
   const payload = z.object({ accessToken: z.string().min(1) }).parse(await response.json());
-  return payload.accessToken;
+  return payload.accessToken.replace(/^Bearer\s+/i, "");
 }
 
 function templateParams(prefix: "CONTRACT" | "CONSENT", names: SigningNames) {

@@ -18,10 +18,11 @@ const auth = await fetch(`${base}/operator/accessToken`, {
 });
 if (!auth.ok) throw new Error(`F.Doc: ошибка входа (${auth.status}).`);
 const { accessToken } = await auth.json() as { accessToken: string };
-if (!accessToken) throw new Error("F.Doc не вернул токен сотрудника.");
+if (typeof accessToken !== "string" || !accessToken) throw new Error("F.Doc не вернул токен сотрудника.");
+const token = accessToken.replace(/^Bearer\s+/i, "");
 
 const list = await fetch(`${base}/corp/templates`, {
-  headers: { Authorization: `Bearer ${accessToken}` },
+  headers: { Authorization: `Bearer ${token}` },
   signal: AbortSignal.timeout(15_000)
 });
 if (!list.ok) throw new Error(`F.Doc: ошибка списка шаблонов (${list.status}).`);
@@ -30,7 +31,7 @@ for (const template of templates) {
   const url = new URL(`${base}/template`);
   url.searchParams.set("templateExternalId", template.templateExternalId);
   const detail = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
+    headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(15_000)
   });
   if (!detail.ok) throw new Error(`F.Doc: ошибка шаблона ${template.templateExternalId} (${detail.status}).`);
