@@ -40,7 +40,18 @@ try:
     with urllib.request.urlopen(request, timeout=15) as response:
         corp_id = json.load(response).get('corpId')
 except urllib.error.HTTPError as error:
-    raise SystemExit(f'F.Doc не подтвердил API Key и Basic Auth (HTTP {error.code}).') from None
+    try:
+        message = json.load(error).get('message', '')
+    except (ValueError, AttributeError):
+        message = ''
+    normalized = message.casefold()
+    if 'api key' in normalized and ('не найден' in normalized or 'not found' in normalized):
+        reason = 'API Key не найден у F.Doc. Проверьте, что взят ключ именно из письма/СМС для DEMO.'
+    elif any(word in normalized for word in ('password', 'парол', 'login', 'логин', 'basic')):
+        reason = 'Не принят логин или пароль Basic Auth приложения api_demo.'
+    else:
+        reason = 'Проверьте API Key и отдельный пароль Basic Auth для api_demo.'
+    raise SystemExit(f'F.Doc отказал в авторизации (HTTP {error.code}). {reason}') from None
 except (urllib.error.URLError, TimeoutError):
     raise SystemExit('Нет ответа от demo.fdoc.ru. Настройки не изменены.') from None
 if not isinstance(corp_id, str) or not corp_id.strip():
