@@ -64,7 +64,7 @@ export default async function TrialsPage() {
                     <StatusBadge status={trial.status} />
                   </div>
                   <TrialAttendanceButtons trialId={trial.id} status={trial.status} />
-                  <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} />
+                  <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} canDownload />
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <ConvertTrialForm trial={trial} groups={activeGroups} childRows={children} parents={parents} />
                     <TransferTrialForm trialId={trial.id} disabled={isClosed} />

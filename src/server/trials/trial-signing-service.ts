@@ -131,11 +131,11 @@ async function saveSignedPdf(packageId: string, documentId: string, kind: "contr
 }
 
 export async function getSignedTrialDocument(user: CurrentUser, trialId: string, kind: "contract" | "consent") {
+  if (!hasRole(user, ADMIN_ROLES)) throw new Error("Подписанные документы доступны только администратору.");
   const signing = await getPrisma().trialSigningPackage.findFirstOrThrow({
     where: { trialId, schoolId: user.schoolId },
     include: { trial: { include: { coach: { select: { userId: true } } } } }
   });
-  assertAccess(user, signing.trial.coach.userId);
   if (kind === "contract" ? signing.contractStatus !== "SIGNED" : signing.consentStatus !== "SIGNED") {
     throw new Error("Документ ещё не подписан.");
   }

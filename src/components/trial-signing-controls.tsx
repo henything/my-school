@@ -28,7 +28,7 @@ function documentStatus(status: string | null) {
   return status ? (documentLabels[status] ?? status) : "нет статуса";
 }
 
-export function TrialSigningControls({ trialId, attended, signing }: { trialId: string; attended: boolean; signing: Signing | null }) {
+export function TrialSigningControls({ trialId, attended, signing, canDownload = false }: { trialId: string; attended: boolean; signing: Signing | null; canDownload?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -61,8 +61,8 @@ export function TrialSigningControls({ trialId, attended, signing }: { trialId: 
       ) : null}
       <div className="mt-2 flex flex-wrap gap-2">
         {!signing && attended ? <Button type="button" size="sm" disabled={busy} onClick={() => void action("POST")}>Хочет продолжать — отправить договор и согласие</Button> : null}
-        {signing?.contractStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/contract`}>Скачать договор</a> : null}
-        {signing?.consentStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/consent`}>Скачать согласие</a> : null}
+        {canDownload && signing?.contractStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/contract`}>Скачать договор</a> : null}
+        {canDownload && signing?.consentStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/consent`}>Скачать согласие</a> : null}
         {signing && signing.status !== "PENDING" && signing.status !== "SENT" && signing.status !== "ERROR" ? <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void action("PUT")}>Проверить статус</Button> : null}
       </div>
       {message ? <p className="mt-2 text-[var(--danger)]">{message}</p> : null}
