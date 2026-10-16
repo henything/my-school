@@ -274,6 +274,7 @@ model School {
   auditLogs                 AuditLog[]
   trialParticipants         TrialParticipant[]
   trialSigningPackages      TrialSigningPackage[]
+  trialTestJourneys         TrialTestJourney[]
   importBatches             ImportBatch[]
   medicalCertificates       MedicalCertificate[]
   vacationRequests          VacationRequest[]
@@ -1164,6 +1165,7 @@ model TrialParticipant {
   convertedChild Child?        @relation("TrialConvertedChild", fields: [convertedChildId], references: [id], onDelete: SetNull)
   createdBy      User?         @relation("TrialParticipantCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   signingPackage TrialSigningPackage?
+  testJourney    TrialTestJourney?
 
   @@index([schoolId])
   @@index([lessonId])
@@ -1197,6 +1199,22 @@ model TrialSigningPackage {
 
   @@index([schoolId, status])
   @@map("trial_signing_packages")
+}
+
+model TrialTestJourney {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  trialId        String   @unique @map("trial_id") @db.Uuid
+  tokenHash      String   @unique @map("token_hash")
+  childBirthDate DateTime @map("child_birth_date") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+  paidAt         DateTime? @map("paid_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  trial  TrialParticipant @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("trial_test_journeys")
 }
 
 model ImportBatch {

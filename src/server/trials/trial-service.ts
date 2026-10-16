@@ -240,14 +240,22 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
   });
 }
 
-export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput) {
+export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput, options?: { initialChildStatus?: "ACTIVE" | "PAUSED" }) {
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    // Serialize a manual conversion racing with the test journey's status poll.
+    await tx.$queryRaw`SELECT "id" FROM "trial_participants" WHERE "id" = ${trialId}::uuid FOR UPDATE`;
     const existing = await tx.trialParticipant.findFirstOrThrow({
       where: { id: trialId, schoolId: currentUser.schoolId },
       include: trialInclude
     });
+
+    const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
+    if (testJourney) {
+      if (existing.signingPackage?.status !== "SIGNED") throw new Error("Для тестовой заявки сначала подпишите оба документа.");
+      if (options?.initialChildStatus !== "PAUSED") throw new Error("Тестовая заявка активируется только после тестовой оплаты.");
+    }
 
     assertTrialCanBeConverted(existing.status);
     if (existing.trialAttended === null) throw new Error("Сначала отметьте, был ли ребёнок на пробном занятии.");
@@ -305,7 +313,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId }
     }) : await tx.child.create({ data: {
       schoolId: currentUser.schoolId, parentId: parent?.id ?? null, currentGroupId,
-      fullName: childFullName, status: "ACTIVE", coachComment: existing.comment,
+      fullName: childFullName, status: options?.initialChildStatus ?? "ACTIVE", coachComment: existing.comment,
       adminComment: input.adminComment ?? null, admissionStatus: "ADMITTED"
     } });
 
