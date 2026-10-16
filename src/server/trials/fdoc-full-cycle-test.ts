@@ -12,7 +12,7 @@ import { syncTrialSigningByPackageId } from "./trial-signing-service";
 const registrationSchema = z.object({
   accessCode: z.string().min(1),
   lessonId: z.uuid(),
-  parentName: z.string().trim().min(2).max(150),
+  parentName: z.string().trim().min(2).max(150).regex(/^[\p{L}\s]+$/u, "Для F.Doc укажите ФИО буквами, без точек и цифр."),
   parentPhone: z.string().trim().min(10).max(30),
   childName: z.string().trim().min(2).max(150),
   childBirthDate: z.iso.date()
@@ -55,7 +55,10 @@ export async function testBookableLessons() {
     take: 25,
     include: { group: { select: { name: true, branch: { select: { name: true } } } } }
   });
-  return rows.map((row) => ({ id: row.id, date: dateToKey(row.lessonDate), time: row.startTime, group: row.group.name, branch: row.group.branch.name }));
+  const today = new Date();
+  return rows
+    .filter((row) => row.lessonDate <= today && rows.some((next) => next.groupId === row.groupId && next.lessonDate > row.lessonDate))
+    .map((row) => ({ id: row.id, date: dateToKey(row.lessonDate), time: row.startTime, group: row.group.name, branch: row.group.branch.name }));
 }
 
 export async function registerTestJourney(raw: unknown) {
