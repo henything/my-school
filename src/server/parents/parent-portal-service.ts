@@ -21,7 +21,19 @@ const childSummaryInclude = {
   },
   subscriptions: {
     orderBy: [{ periodEnd: "desc" as const }, { createdAt: "desc" as const }],
-    take: 1
+    take: 1,
+    include: {
+      _count: {
+        select: {
+          balanceTransactions: { where: { type: "MAKEUP_USED" as const, reason: "INVOICE_DISCOUNT" } }
+        }
+      },
+      invoices: {
+        where: { status: { not: "CANCELLED" as const } },
+        orderBy: { issuedAt: "desc" as const },
+        take: 1
+      }
+    }
   },
   invoices: {
     orderBy: [{ dueDate: "asc" as const }, { createdAt: "desc" as const }],
@@ -323,7 +335,9 @@ function serializeParentChild(child: ParentChildSummary) {
           periodEnd: dateToKey(latestSubscription.periodEnd),
           plannedLessonsCount: latestSubscription.plannedLessonsCount,
           totalAmountKopeks: latestSubscription.totalAmountKopeks,
-          paymentStatus: latestSubscription.paymentStatus
+          appliedMakeupCount: latestSubscription._count.balanceTransactions,
+          paymentStatus: latestSubscription.paymentStatus,
+          invoice: latestSubscription.invoices[0] ? serializeInvoiceSummary(latestSubscription.invoices[0]) : null
         }
       : null,
     openInvoices: openInvoices.map(serializeInvoiceSummary)

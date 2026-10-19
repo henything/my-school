@@ -98,6 +98,7 @@ type SubscriptionListRecord = {
   paymentStatusChangedAt: Date | null;
   paymentStatusComment: string | null;
   createdAt: Date;
+  _count?: { balanceTransactions: number };
   child: {
     id: string;
     fullName: string;
@@ -167,6 +168,7 @@ export function serializeSubscription(subscription: SubscriptionListRecord) {
     plannedLessonsCount: subscription.plannedLessonsCount,
     lessonPriceKopeks: subscription.lessonPriceKopeks,
     totalAmountKopeks: subscription.totalAmountKopeks,
+    appliedMakeupCount: subscription._count?.balanceTransactions ?? 0,
     paymentStatus: subscription.paymentStatus,
     paymentStatusChangedAt: subscription.paymentStatusChangedAt?.toISOString() ?? null,
     paymentStatusComment: subscription.paymentStatusComment,
@@ -1241,6 +1243,11 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
 }
 
 const subscriptionListInclude = {
+  _count: {
+    select: {
+      balanceTransactions: { where: { type: "MAKEUP_USED", reason: "INVOICE_DISCOUNT" } }
+    }
+  },
   child: {
     select: {
       id: true,

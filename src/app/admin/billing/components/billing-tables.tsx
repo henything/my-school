@@ -25,6 +25,7 @@ type Subscription = {
   periodEnd: string;
   plannedLessonsCount: number;
   totalAmountKopeks: number;
+  appliedMakeupCount: number;
   paymentStatus: string;
   paymentStatusChangedAt: string | null;
   paymentStatusComment: string | null;
@@ -32,6 +33,8 @@ type Subscription = {
 
 type Invoice = {
   id: string;
+  subscriptionId: string | null;
+  issuedAt: string;
   number: string;
   child: { fullName: string };
   parent: { fullName: string | null; phone: string | null };
@@ -82,6 +85,15 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
   const [statusFilter, setStatusFilter] = useState("ALL");
   const normalizedQuery = normalize(query);
   const childById = useMemo(() => new Map(childRows.map((child) => [child.id, child])), [childRows]);
+  const invoiceBySubscriptionId = useMemo(() => {
+    const result = new Map<string, Invoice>();
+    for (const invoice of invoices) {
+      if (!invoice.subscriptionId || invoice.status === "CANCELLED") continue;
+      const previous = result.get(invoice.subscriptionId);
+      if (!previous || invoice.issuedAt > previous.issuedAt) result.set(invoice.subscriptionId, invoice);
+    }
+    return result;
+  }, [invoices]);
 
   const filteredChildren = useMemo(
     () =>
@@ -254,20 +266,35 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
               <th>Ребёнок</th>
               <th>Период</th>
               <th>Занятия</th>
-              <th>Сумма абонемента</th>
+              <th>Абонемент и счёт</th>
               <th>Оплата</th>
               <th>Комментарий</th>
             </tr>
           </thead>
           <tbody>
-            {filteredSubscriptions.map((subscription) => (
-              <tr key={subscription.id}>
+            {filteredSubscriptions.map((subscription) => {
+              const invoice = invoiceBySubscriptionId.get(subscription.id);
+              return <tr key={subscription.id}>
                 <td className="font-semibold">{subscription.child.fullName}</td>
                 <td>
                   {formatDate(subscription.periodStart)} - {formatDate(subscription.periodEnd)}
                 </td>
                 <td>{subscription.plannedLessonsCount}</td>
-                <td className="font-semibold">{formatKopeks(subscription.totalAmountKopeks)}</td>
+                <td>
+                  <div className="text-xs text-[var(--muted)]">Полная стоимость: {formatKopeks(subscription.totalAmountKopeks)}</div>
+                  {invoice ? (
+                    <>
+                      {subscription.appliedMakeupCount > 0 ? (
+                        <div className="text-xs text-[var(--muted)]">Зачтено переносов: {subscription.appliedMakeupCount}</div>
+                      ) : null}
+                      {subscription.totalAmountKopeks > invoice.amountKopeks ? (
+                        <div className="text-xs text-[var(--muted)]">Учтено в счёте: −{formatKopeks(subscription.totalAmountKopeks - invoice.amountKopeks)}</div>
+                      ) : null}
+                      <div className="font-semibold">Счёт: {formatKopeks(invoice.amountKopeks)}</div>
+                      <div className="text-xs text-[var(--muted)]">Осталось оплатить: {formatKopeks(invoice.amountKopeks - invoice.paidAmountKopeks)}</div>
+                    </>
+                  ) : <div className="text-xs text-[var(--muted)]">Счёт не выставлен</div>}
+                </td>
                 <td>
                   <PaymentBadge status={subscription.paymentStatus} />
                   {subscription.paymentStatusChangedAt ? (
@@ -275,8 +302,8 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                   ) : null}
                 </td>
                 <td>{subscription.paymentStatusComment ?? "-"}</td>
-              </tr>
-            ))}
+              </tr>;
+            })}
             {filteredSubscriptions.length === 0 ? <EmptyTableRow colSpan={6} label="Абонементы по фильтрам не найдены." /> : null}
           </tbody>
         </table>
