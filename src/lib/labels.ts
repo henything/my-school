@@ -102,6 +102,7 @@ const enumLabels: Record<string, string> = {
   ABSENCE_NEEDS_FINALIZATION: "Финализировать отсутствие",
   COACH_SUBSTITUTION_ASSIGNED: "Назначена замена",
   CHILD_WITHOUT_ACTIVE_SUBSCRIPTION: "Нет активного абонемента",
+  BILLING_RECONCILIATION_REQUIRED: "Счёт требует проверки",
   MANUAL_TASK: "Ручная задача",
 
   TRIAL_BOOKED: "Пробник записан",

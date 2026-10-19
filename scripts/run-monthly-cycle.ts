@@ -1,10 +1,13 @@
 import "dotenv/config";
 import { todayInMoscow } from "../src/server/children/attendance-plan";
+import { ensureMonthlySubscriptionsForGroup } from "../src/server/billing/billing-service";
 import { getPrisma } from "../src/server/db/prisma";
 import { generateLessonsForMonth } from "../src/server/schedule/lesson-service";
 
 const prisma = getPrisma();
-const month = todayInMoscow().toISOString().slice(0, 7);
+const today = todayInMoscow();
+const month = today.toISOString().slice(0, 7);
+const prepareSchedule = today.getUTCDate() <= 3;
 const schools = await prisma.school.findMany({ select: { id: true, name: true } });
 let failed = false;
 
@@ -21,9 +24,11 @@ for (const school of schools) {
   }
 
   try {
-    const result = await generateLessonsForMonth(user, { month });
-    console.log(`[monthly-cycle] ${school.name} ${month}: занятий ${result.createdCount}, счетов ${result.billing?.createdCount ?? 0}, уже были ${result.billing?.existingCount ?? 0}`);
-    for (const issue of result.billing?.issues ?? []) {
+    const billing = prepareSchedule
+      ? (await generateLessonsForMonth(user, { month })).billing
+      : await ensureMonthlySubscriptionsForGroup(user, month);
+    console.log(`[monthly-cycle] ${school.name} ${month}: счетов ${billing?.createdCount ?? 0}, уже были ${billing?.existingCount ?? 0}, без занятий ${billing?.noLessonsCount ?? 0}`);
+    for (const issue of billing?.issues ?? []) {
       console.error(`[monthly-cycle] Требует проверки: ${issue.childName}: ${issue.reason}`);
       failed = true;
     }

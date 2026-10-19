@@ -1,10 +1,8 @@
 [Unit]
-Description=Prepare current month's lessons and invoices on the first three days
+Description=Reconcile current-month invoices daily; prepare lessons on the first three days
 
 [Timer]
-OnCalendar=*-*-01 02:15:00 Europe/Moscow
-OnCalendar=*-*-02 02:15:00 Europe/Moscow
-OnCalendar=*-*-03 02:15:00 Europe/Moscow
+OnCalendar=*-*-* 02:15:00 Europe/Moscow
 Persistent=false
 Unit=azbuka-monthly-cycle.service
 

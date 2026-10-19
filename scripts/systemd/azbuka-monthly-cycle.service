@@ -1,5 +1,5 @@
 [Unit]
-Description=Azbuka monthly lessons and billing reconciliation
+Description=Azbuka daily billing reconciliation and monthly lesson preparation
 After=network-online.target postgresql.service
 Wants=network-online.target
 

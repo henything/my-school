@@ -11,7 +11,7 @@ vi.mock("@/server/db/prisma", () => ({
   })
 }));
 
-import { generateLessonsForMonth } from "./lesson-service";
+import { generateLessonsForAcademicYear, generateLessonsForMonth } from "./lesson-service";
 
 const admin = { id: "admin", schoolId: "school", login: "owner", displayName: "Owner", role: "SUPER_ADMIN" } as const;
 
@@ -38,5 +38,11 @@ describe("monthly lesson generation", () => {
     const result = await generateLessonsForMonth(admin, { month: "2026-11", groupId: null });
     expect(result.billing).toBeNull();
     expect(billing).not.toHaveBeenCalled();
+  });
+
+  it("reconciles current-month bills after annual schedule generation", async () => {
+    const result = await generateLessonsForAcademicYear(admin, { academicYearStart: 2026, groupId: "group" });
+    expect(result.billing?.createdCount).toBe(1);
+    expect(billing).toHaveBeenCalledWith(admin, "2026-10", "group");
   });
 });
