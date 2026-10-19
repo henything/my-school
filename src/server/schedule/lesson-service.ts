@@ -315,7 +315,7 @@ export async function generateLessonsForMonth(currentUser: CurrentUser, input: G
 export async function generateLessonsForAcademicYear(currentUser: CurrentUser, input: GenerateAcademicYearInput) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => {
+  const generation = await getPrisma().$transaction(async (tx) => {
     const months = buildAcademicYearMonthKeys(input.academicYearStart);
     const templates = await findTemplatesForGeneration(tx, currentUser.schoolId, input.groupId);
     const candidates = buildAcademicYearLessonCandidates(templates, input.academicYearStart);
@@ -354,6 +354,14 @@ export async function generateLessonsForAcademicYear(currentUser: CurrentUser, i
       duplicateKeys
     };
   });
+
+  // Children may have been enrolled before the year's lessons existed.
+  // Only the current month is billable; future months remain deferred.
+  const currentMonth = dateToKey(todayInMoscow()).slice(0, 7);
+  const billing = generation.months.includes(currentMonth)
+    ? await ensureMonthlySubscriptionsForGroup(currentUser, currentMonth, input.groupId)
+    : null;
+  return { ...generation, billing };
 }
 
 async function findTemplatesForGeneration(tx: Prisma.TransactionClient, schoolId: string, groupId?: string | null) {

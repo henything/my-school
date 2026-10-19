@@ -19,7 +19,7 @@ export default async function BillingPage() {
     listBalanceTransactions(currentUser),
     listTasks(currentUser)
   ]);
-  const billingTasks = tasks.filter((task) => task.type === "CHILD_TOOK_CREDIT_LESSON" || task.type === "CHILD_NOT_ADMITTED");
+  const billingTasks = tasks.filter((task) => task.type === "CHILD_TOOK_CREDIT_LESSON" || task.type === "CHILD_NOT_ADMITTED" || task.type === "BILLING_RECONCILIATION_REQUIRED");
 
   return (
     <div className="grid gap-6">
@@ -28,8 +28,8 @@ export default async function BillingPage() {
       </section>
 
       <WorkQueuePanel
-        title="Критичные задачи по допуску"
-        subtitle="Долг и недопуск влияют на доступ ребёнка к занятиям, поэтому эта очередь стоит выше форм."
+        title="Задачи по счетам и допуску"
+        subtitle="Здесь видны расхождения счетов, долги и недопуск. Причина указана в каждой задаче."
         tasks={billingTasks}
         tone="critical"
       />

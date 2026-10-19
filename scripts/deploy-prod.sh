@@ -254,7 +254,7 @@ REMOTE
 }
 
 install_monthly_timer() {
-  log "Installing monthly billing timer"
+  log "Installing daily billing reconciliation timer"
   ssh_prod "APP_DIR='$APP_DIR' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
@@ -264,6 +264,7 @@ sed -e "s|@APP_USER@|$APP_USER|g" -e "s|@APP_DIR@|$APP_DIR|g" \
 install -m 0644 "$APP_DIR/scripts/systemd/azbuka-monthly-cycle.timer" \
   /etc/systemd/system/azbuka-monthly-cycle.timer
 systemctl daemon-reload
+systemctl stop azbuka-monthly-cycle.timer || true
 systemctl enable --now azbuka-monthly-cycle.timer
 systemctl is-active --quiet azbuka-monthly-cycle.timer
 REMOTE
