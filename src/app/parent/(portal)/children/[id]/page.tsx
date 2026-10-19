@@ -65,9 +65,23 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                 <div className="font-bold">
                   {formatDate(child.latestSubscription.periodStart)} - {formatDate(child.latestSubscription.periodEnd)}
                 </div>
-                <div className="mt-1 text-sm text-[var(--muted)]">
-                  {child.latestSubscription.plannedLessonsCount} занятий · {formatKopeks(child.latestSubscription.totalAmountKopeks)}
+                <div className="mt-2 text-sm text-[var(--muted)]">
+                  {child.latestSubscription.plannedLessonsCount} занятий · полная стоимость {formatKopeks(child.latestSubscription.totalAmountKopeks)}
                 </div>
+                {child.latestSubscription.invoice ? (
+                  <div className="mt-3 grid gap-1 border-t border-[var(--line)] pt-3 text-sm">
+                    {child.latestSubscription.appliedMakeupCount > 0 ? (
+                      <div>Зачтено переносов: {child.latestSubscription.appliedMakeupCount}</div>
+                    ) : null}
+                    {child.latestSubscription.totalAmountKopeks > child.latestSubscription.invoice.amountKopeks ? (
+                      <div>Учтено при выставлении счёта: −{formatKopeks(child.latestSubscription.totalAmountKopeks - child.latestSubscription.invoice.amountKopeks)}</div>
+                    ) : null}
+                    <div className="font-bold">Выставленный счёт: {formatKopeks(child.latestSubscription.invoice.amountKopeks)}</div>
+                    <div>Осталось оплатить: {formatKopeks(child.latestSubscription.invoice.remainingAmountKopeks)}</div>
+                  </div>
+                ) : (
+                  <div className="mt-2 text-sm text-[var(--muted)]">Счёт по этому абонементу ещё не выставлен.</div>
+                )}
                 <div className="mt-3">
                   <StatusBadge status={child.latestSubscription.paymentStatus} />
                 </div>

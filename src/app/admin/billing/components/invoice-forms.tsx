@@ -101,7 +101,7 @@ function CreateInvoiceForm({ subscriptions }: { subscriptions: SubscriptionOptio
           options={subscriptions.map((subscription) => ({
             value: subscription.id,
             label: subscription.child.fullName,
-            description: `${formatDate(subscription.periodStart)}-${formatDate(subscription.periodEnd)} · ${formatKopeks(subscription.totalAmountKopeks)} · ${labelForEnum(subscription.paymentStatus)}`
+            description: `${formatDate(subscription.periodStart)}-${formatDate(subscription.periodEnd)} · полная стоимость ${formatKopeks(subscription.totalAmountKopeks)} · ${labelForEnum(subscription.paymentStatus)}`
           }))}
         />
       </div>
