@@ -1388,6 +1388,12 @@ async function listRemainingLessonsForChild(
   });
   const trialLessonIds = new Set(trialLessons.map((trial) => trial.lessonId));
 
+  const quarantineRecords = await tx.attendanceRecord.findMany({
+    where: { childId, status: "ABSENT_QUARANTINE", lesson: { schoolId, lessonDate: { gte: periodStart, lte: periodEnd } } },
+    select: { lessonId: true }
+  });
+  const quarantinedLessonIds = new Set(quarantineRecords.map((record) => record.lessonId));
+
   const lessons = await tx.lesson.findMany({
     where: {
       schoolId,
@@ -1400,7 +1406,7 @@ async function listRemainingLessonsForChild(
     },
     select: { id: true, groupId: true, lessonDate: true }
   });
-  return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) &&
+  return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) && !quarantinedLessonIds.has(lesson.id) &&
     memberships.some((membership) => membership.groupId === lesson.groupId && isMemberOnDate(membership, lesson.lessonDate)) &&
     isLessonInChildPlan(plans, lesson.lessonDate));
 }

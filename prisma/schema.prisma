@@ -106,6 +106,7 @@ enum CoachAttendanceStatus {
   PRESENT
   ABSENT_UNEXCUSED
   ABSENT_SICK_PENDING
+  ABSENT_QUARANTINE
 }
 
 enum AdminFinalAttendanceStatus {

@@ -2,6 +2,7 @@ import type { CoachAttendanceStatus, TaskStatus } from "@/generated/prisma/enums
 import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import { applyAttendanceBalanceEffect } from "@/server/billing/billing-service";
+import { applyRecalculationInTransaction, getRecalculationPreviewInTransaction } from "@/server/billing/recalculation-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { childrenScheduledForLesson } from "@/server/children/group-membership";
@@ -202,6 +203,7 @@ export async function getCoachLessonDetail(currentUser: CurrentUser, lessonId: s
 
 export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: string, input: SaveAttendanceInput) {
   return getPrisma().$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "lessons" WHERE "id" = ${lessonId}::uuid FOR UPDATE`;
     const lesson = await tx.lesson.findFirstOrThrow({
       where: {
         id: lessonId,
@@ -227,7 +229,17 @@ export async function saveCoachAttendance(currentUser: CurrentUser, lessonId: st
       }
 
       seenChildIds.add(recordInput.childId);
+      const previous = await tx.attendanceRecord.findUnique({
+        where: { lessonId_childId: { lessonId, childId: recordInput.childId } },
+        select: { status: true, finalStatus: true }
+      });
+      if (previous?.finalStatus && previous.status !== recordInput.status) {
+        throw new Error("Итоговую причину отсутствия может изменить только администратор.");
+      }
       await upsertAttendanceRecord(tx, currentUser, lesson, recordInput);
+      if (previous?.status !== recordInput.status && (previous?.status === "ABSENT_QUARANTINE" || recordInput.status === "ABSENT_QUARANTINE")) {
+        await reconcileCoachQuarantine(tx, currentUser, lesson.lessonDate, recordInput.childId, recordInput.status === "ABSENT_QUARANTINE");
+      }
     }
 
     await refreshLessonAttendanceStatus(tx, lesson.id, childIds);
@@ -302,6 +314,11 @@ export async function correctAttendanceInTransaction(tx: Prisma.TransactionClien
 
 export async function updateAttendanceRecord(currentUser: CurrentUser, recordId: string, input: UpdateAttendanceRecordInput) {
   return getPrisma().$transaction(async (tx) => {
+    const target = await tx.attendanceRecord.findFirstOrThrow({
+      where: { id: recordId, lesson: { schoolId: currentUser.schoolId } },
+      select: { lessonId: true }
+    });
+    await tx.$queryRaw`SELECT "id" FROM "lessons" WHERE "id" = ${target.lessonId}::uuid FOR UPDATE`;
     const existing = await tx.attendanceRecord.findFirstOrThrow({
       where: { id: recordId },
       include: {
@@ -317,6 +334,9 @@ export async function updateAttendanceRecord(currentUser: CurrentUser, recordId:
 
     assertCanEditAttendance(currentUser, existing.lesson);
     assertLessonCanReceiveAttendance(existing.lesson);
+    if (existing.finalStatus && existing.status !== input.status) {
+      throw new Error("Итоговую причину отсутствия может изменить только администратор.");
+    }
 
     const childIds = scheduledChildrenForLesson(existing.lesson).map((child) => child.id);
     if (!childIds.includes(existing.childId)) throw new Error("Это занятие не входит в график ребёнка.");
@@ -326,6 +346,9 @@ export async function updateAttendanceRecord(currentUser: CurrentUser, recordId:
       status: input.status,
       comment: input.comment
     });
+    if (existing.status !== input.status && (existing.status === "ABSENT_QUARANTINE" || input.status === "ABSENT_QUARANTINE")) {
+      await reconcileCoachQuarantine(tx, currentUser, existing.lesson.lessonDate, existing.childId, input.status === "ABSENT_QUARANTINE");
+    }
     await refreshLessonAttendanceStatus(tx, existing.lesson.id, childIds);
 
     const updatedLesson = await tx.lesson.findUniqueOrThrow({
@@ -334,6 +357,32 @@ export async function updateAttendanceRecord(currentUser: CurrentUser, recordId:
     });
 
     return serializeCoachLessonDetail(updatedLesson);
+  });
+}
+
+async function reconcileCoachQuarantine(
+  tx: Prisma.TransactionClient,
+  currentUser: CurrentUser,
+  lessonDate: Date,
+  childId: string,
+  quarantineAdded: boolean
+) {
+  const subscription = await tx.subscription.findFirst({
+    where: { schoolId: currentUser.schoolId, childId, periodStart: { lte: lessonDate }, periodEnd: { gte: lessonDate } },
+    select: { id: true }
+  });
+  if (!subscription) return;
+  const preview = await getRecalculationPreviewInTransaction(tx, currentUser, subscription.id);
+  if (preview.nextLessonsCount === preview.previousLessonsCount && preview.nextTotalKopeks === preview.previousTotalKopeks) return;
+  if (!preview.canApply && !preview.canApplyPaid) {
+    throw new Error(`${preview.childName}: нельзя ${quarantineAdded ? "отметить карантин" : "исправить карантин"} без пересчёта счёта. ${preview.blockReason ?? "Проверьте счёт у администратора."}`);
+  }
+  await applyRecalculationInTransaction(tx, currentUser, subscription.id, {
+    reason: `${quarantineAdded ? "Карантин" : "Исправление карантина"} ${dateToKey(lessonDate)}: отметка тренера в табеле`,
+    paidDifferenceAction: preview.canApplyPaid ? "CREDIT" : undefined,
+    expectedLessonIds: preview.nextLessons.map((lesson) => lesson.id),
+    expectedSubscriptionUpdatedAt: preview.subscriptionUpdatedAt,
+    expectedInvoiceUpdatedAt: preview.invoiceUpdatedAt!
   });
 }
 

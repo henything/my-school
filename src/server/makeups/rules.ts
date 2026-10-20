@@ -23,6 +23,14 @@ export function makeupReasonForFinalStatus(status: AdminFinalAttendanceStatus): 
   }
 }
 
+export function shouldCreateMakeupForFinalization(finalStatus: AdminFinalAttendanceStatus, currentStatus: CoachAttendanceStatus) {
+  return makeupReasonForFinalStatus(finalStatus) !== null && currentStatus !== "ABSENT_QUARANTINE";
+}
+
+export function shouldCreateMakeupForGroupEvent(currentStatus: CoachAttendanceStatus | null) {
+  return currentStatus !== "ABSENT_QUARANTINE";
+}
+
 export function makeupReasonForGroupEvent(reason: LessonChangeReason): MakeupReason {
   return reason;
 }
@@ -56,6 +64,10 @@ export function finalStatusStoredAttendanceStatus(
   }
 
   if (finalStatus === "ABSENT_SICK_CONFIRMED") {
+    return currentStatus;
+  }
+
+  if (finalStatus === "ABSENT_QUARANTINE" && currentStatus === "ABSENT_QUARANTINE") {
     return currentStatus;
   }
 

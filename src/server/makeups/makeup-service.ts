@@ -22,6 +22,8 @@ import {
   finalStatusStoredAttendanceStatus,
   makeupReasonForFinalStatus,
   makeupReasonForGroupEvent,
+  shouldCreateMakeupForFinalization,
+  shouldCreateMakeupForGroupEvent,
   transactionTypeForMakeupReason
 } from "./rules";
 
@@ -225,6 +227,9 @@ export async function finalizeAttendanceInTransaction(
   if (input.finalStatus === "ABSENT_SICK_CONFIRMED" && existing.status !== "ABSENT_SICK_PENDING") {
     throw new Error("Подтвердить болезнь можно только для статуса ожидания справки.");
   }
+  if (existing.status === "ABSENT_QUARANTINE" && input.finalStatus !== "ABSENT_QUARANTINE") {
+    throw new Error("По карантину уже пересчитан счёт или создан зачёт. Сначала исправьте отметку и проверьте финансовый расчёт.");
+  }
 
   const oldValue = {
     status: existing.status,
@@ -252,7 +257,7 @@ export async function finalizeAttendanceInTransaction(
   });
 
   const reason = makeupReasonForFinalStatus(input.finalStatus);
-  const makeup = reason
+  const makeup = reason && shouldCreateMakeupForFinalization(input.finalStatus, existing.status)
     ? await createMakeupCredit(tx, currentUser, {
         childId: existing.childId,
         groupId: existing.lesson.groupId,
@@ -459,22 +464,28 @@ export async function createGroupEvent(currentUser: CurrentUser, input: CreateGr
       });
 
       for (const child of group.children) {
+        const priorAttendance = await tx.attendanceRecord.findUnique({
+          where: { lessonId_childId: { lessonId: lesson.id, childId: child.id } },
+          select: { status: true }
+        });
         const attendance = await upsertFinalAttendanceRecord(tx, currentUser, lesson, child.id, finalStatus, input.comment);
         await applyAttendanceBalanceEffect(tx, currentUser, lesson, {
           id: attendance.id,
           childId: child.id,
           status: "NOT_MARKED"
         });
-        await createMakeupCredit(tx, currentUser, {
-          childId: child.id,
-          groupId: group.id,
-          sourceLessonId: lesson.id,
-          sourceAttendanceRecordId: attendance.id,
-          groupEventId: event.id,
-          reason: makeupReason,
-          comment: input.comment
-        });
-        makeupCount += 1;
+        if (shouldCreateMakeupForGroupEvent(priorAttendance?.status ?? null)) {
+          await createMakeupCredit(tx, currentUser, {
+            childId: child.id,
+            groupId: group.id,
+            sourceLessonId: lesson.id,
+            sourceAttendanceRecordId: attendance.id,
+            groupEventId: event.id,
+            reason: makeupReason,
+            comment: input.comment
+          });
+          makeupCount += 1;
+        }
       }
     }
 

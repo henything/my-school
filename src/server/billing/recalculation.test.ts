@@ -1,9 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { calculateRecalculatedAmounts, countPlannedLessonsFromHistory, recalculationBlockReason } from "./recalculation";
+import { additionalPaidCreditKopeks, calculateRecalculatedAmounts, countPlannedLessonsFromHistory, recalculationBlockReason } from "./recalculation";
 
 const date = (value: string) => new Date(`${value}T00:00:00.000Z`);
 
 describe("subscription recalculation", () => {
+  it("removes a quarantined lesson from the bill and restores it when the mark is corrected", () => {
+    const base = {
+      lessons: [
+        { id: "first", groupId: "group", lessonDate: date("2026-10-20") },
+        { id: "second", groupId: "group", lessonDate: date("2026-10-22") }
+      ],
+      memberships: [{ groupId: "group", startDate: date("2026-10-01"), endDate: null }],
+      attendancePlans: [],
+      trialLessonIds: new Set<string>()
+    };
+    expect(countPlannedLessonsFromHistory({ ...base, attendanceRecords: [{ lessonId: "first", status: "ABSENT_QUARANTINE" }] })).toBe(1);
+    expect(countPlannedLessonsFromHistory({ ...base, attendanceRecords: [{ lessonId: "first", status: "ABSENT_UNEXCUSED" }] })).toBe(2);
+  });
+
   it("excludes the trial, follows dated group membership and keeps a separately recorded paid visit", () => {
     const count = countPlannedLessonsFromHistory({
       lessons: [
@@ -32,6 +46,12 @@ describe("subscription recalculation", () => {
     })).toEqual({ nextTotalKopeks: 315000, nextInvoiceAmountKopeks: 270000 });
     expect(calculateRecalculatedAmounts({ previousLessonsCount: 0, previousTotalKopeks: 0, unitPriceKopeks: 45000,
       nextLessonsCount: 2, appliedMakeupCount: 0 })).toEqual({ nextTotalKopeks: 90000, nextInvoiceAmountKopeks: 90000 });
+  });
+
+  it("creates only the extra credit when a second paid lesson is quarantined", () => {
+    expect(additionalPaidCreditKopeks(360000, 315000, 0)).toBe(45000);
+    expect(additionalPaidCreditKopeks(360000, 270000, 45000)).toBe(45000);
+    expect(additionalPaidCreditKopeks(360000, 315000, 45000)).toBe(0);
   });
 
   it("blocks automatic changes after payment or checkout starts", () => {

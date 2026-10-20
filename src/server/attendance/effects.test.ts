@@ -14,6 +14,7 @@ describe("attendance balance effects", () => {
   it("does not deduct for not marked and sick pending", () => {
     expect(desiredAttendanceLessonBalanceNet("NOT_MARKED")).toBe(0);
     expect(desiredAttendanceLessonBalanceNet("ABSENT_SICK_PENDING")).toBe(0);
+    expect(desiredAttendanceLessonBalanceNet("ABSENT_QUARANTINE")).toBe(0);
   });
 
   it("keeps repeated saves idempotent", () => {

@@ -8,7 +8,8 @@ const state = vi.hoisted(() => ({
   openTasks: [] as Array<{ id: string; relatedEntityId: string | null; description: string | null }>,
   taskCreate: vi.fn(),
   membership: null as null | { id: string },
-  lessons: [] as Array<{ id: string; groupId: string; lessonDate: Date }>
+  lessons: [] as Array<{ id: string; groupId: string; lessonDate: Date }>,
+  quarantineRecords: [] as Array<{ lessonId: string }>
 }));
 vi.mock("@/server/tasks/task-service", () => ({
   createTaskIfNotExists: state.taskCreate,
@@ -26,7 +27,7 @@ vi.mock("@/server/db/prisma", () => ({ getPrisma: () => ({
     childGroupMembership: { findMany: async () => state.membership ? [{ groupId: "group", startDate: new Date("2026-11-01T00:00:00.000Z"), endDate: null }] : [] },
     trialParticipant: { findMany: async () => [] },
     lesson: { findMany: async () => state.lessons },
-    attendanceRecord: { findFirst: async () => state.pendingSickness },
+    attendanceRecord: { findFirst: async () => state.pendingSickness, findMany: async () => state.quarantineRecords },
     invoice: { create: state.invoiceCreate },
     task: { findMany: async () => state.openTasks, update: vi.fn() }
   })
@@ -46,6 +47,7 @@ describe("monthly billing reconciliation", () => {
     state.taskCreate.mockClear();
     state.membership = null;
     state.lessons = [];
+    state.quarantineRecords = [];
   });
 
   it("leaves an existing invoice untouched on a repeated run", async () => {
@@ -71,6 +73,23 @@ describe("monthly billing reconciliation", () => {
     const result = await ensureMonthlySubscriptionsForGroup(admin, "2026-11");
     expect(result.issues[0].reason).toContain("Счёт уже оплачен");
     expect(state.invoiceCreate).not.toHaveBeenCalled();
+  });
+
+  it("does not count a quarantined lesson as billable in the monthly audit", async () => {
+    state.existing = {
+      id: "subscription", plannedLessonsCount: 1, paymentStatus: "INVOICED",
+      periodStart: new Date("2026-11-01T00:00:00.000Z"),
+      periodEnd: new Date("2026-11-30T00:00:00.000Z"),
+      invoices: [{ id: "invoice", status: "ISSUED" }]
+    };
+    state.membership = { id: "membership" };
+    state.lessons = [
+      { id: "quarantined", groupId: "group", lessonDate: new Date("2026-11-03T00:00:00.000Z") },
+      { id: "billable", groupId: "group", lessonDate: new Date("2026-11-05T00:00:00.000Z") }
+    ];
+    state.quarantineRecords = [{ lessonId: "quarantined" }];
+    const result = await ensureMonthlySubscriptionsForGroup(admin, "2026-11");
+    expect(result).toMatchObject({ createdCount: 0, existingCount: 1, issues: [] });
   });
 
   it("flags unresolved sickness instead of issuing an incorrect invoice", async () => {

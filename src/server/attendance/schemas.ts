@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { optionalTextSchema, requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 
-export const coachAttendanceStatusSchema = z.enum(["NOT_MARKED", "PRESENT", "ABSENT_UNEXCUSED", "ABSENT_SICK_PENDING"]);
+export const coachAttendanceStatusSchema = z.enum(["NOT_MARKED", "PRESENT", "ABSENT_UNEXCUSED", "ABSENT_SICK_PENDING", "ABSENT_QUARANTINE"]);
 
 export const attendanceRecordInputSchema = z.object({
   childId: uuidSchema,

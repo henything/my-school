@@ -36,7 +36,7 @@ export async function getAttendanceReport(currentUser: CurrentUser, filters: { f
         id: true, fullName: true, status: true, currentGroupId: true,
         groupMemberships: { select: { groupId: true, startDate: true, endDate: true } },
         attendancePlans: { select: { effectiveFrom: true, weekday: true } },
-        attendanceRecords: { where: { lesson: { lessonDate: { gte: from, lte: to } } }, select: { lessonId: true, status: true, lesson: { select: { groupId: true } } } },
+        attendanceRecords: { where: { lesson: { lessonDate: { gte: from, lte: to } } }, select: { lessonId: true, status: true, finalStatus: true, lesson: { select: { groupId: true } } } },
         convertedTrials: { where: { lesson: { lessonDate: { gte: from, lte: to } } }, select: { lessonId: true, groupId: true, status: true, trialAttended: true } }
       },
       orderBy: { fullName: "asc" }
@@ -61,7 +61,7 @@ export async function getAttendanceReport(currentUser: CurrentUser, filters: { f
         const scheduled = child.groupMemberships.some((membership) => membership.groupId === group.id && isMemberOnDate(membership, lesson.lessonDate)) &&
           isLessonInChildPlan(child.attendancePlans, lesson.lessonDate);
         if (trial) statusByDate[date].push(trial.trialAttended === false ? "Пробное: не был" : trial.trialAttended === true ? "Пробное: был" : "Пробное: нет отметки");
-        else if (scheduled || record) statusByDate[date].push(lesson.status === "CANCELLED" ? "Занятие отменено" : record?.status === "PRESENT" ? "Был" : record?.status === "ABSENT_UNEXCUSED" ? "Пропустил" : record?.status === "ABSENT_SICK_PENDING" ? "Болел" : "Нет отметки");
+        else if (scheduled || record) statusByDate[date].push(lesson.status === "CANCELLED" ? "Занятие отменено" : record?.status === "PRESENT" ? "Был" : record?.finalStatus === "ABSENT_QUARANTINE" || record?.status === "ABSENT_QUARANTINE" ? "Карантин" : record?.status === "ABSENT_UNEXCUSED" ? "Пропустил" : record?.status === "ABSENT_SICK_PENDING" ? "Болел" : "Нет отметки");
       }
       return { childId: child.id, childName: child.fullName, childStatus: child.status, groupId: group.id, groupName: group.name, branchName: group.branch.name,
         byDate: Object.fromEntries(dates.map((date) => [date, statusByDate[date].join("; ") || "—"])) };

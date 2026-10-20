@@ -2,12 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, FileText, Loader2, MessageSquare, Phone, UserRoundCheck, UserRoundX } from "lucide-react";
+import { AlertTriangle, FileText, Loader2, MessageSquare, Phone, ShieldAlert, UserRoundCheck, UserRoundX } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { Button } from "@/components/ui/button";
 import { labelForEnum } from "@/lib/labels";
 
-type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT_UNEXCUSED" | "ABSENT_SICK_PENDING";
+type AttendanceStatus = "NOT_MARKED" | "PRESENT" | "ABSENT_UNEXCUSED" | "ABSENT_SICK_PENDING" | "ABSENT_QUARANTINE";
 
 type Child = {
   id: string;
@@ -50,6 +50,7 @@ const statusOptions: Array<{ value: AttendanceStatus; label: string; icon: typeo
   { value: "PRESENT", label: "Был", icon: UserRoundCheck, tone: "border-[var(--brand-green)] bg-[var(--green-soft)] text-[var(--success-strong)]" },
   { value: "ABSENT_UNEXCUSED", label: "Пропуск", icon: UserRoundX, tone: "border-[var(--danger)] bg-[var(--red-soft)] text-[var(--danger-strong)]" },
   { value: "ABSENT_SICK_PENDING", label: "Болеет", icon: FileText, tone: "border-[var(--brand-yellow)] bg-[var(--yellow-soft)] text-[var(--warning-strong)]" },
+  { value: "ABSENT_QUARANTINE", label: "Карантин", icon: ShieldAlert, tone: "border-[var(--brand-yellow)] bg-[var(--yellow-soft)] text-[var(--warning-strong)]" },
   { value: "NOT_MARKED", label: "Не отмечен", icon: MessageSquare, tone: "border-[var(--line)] bg-white text-[var(--muted)]" }
 ];
 
@@ -261,7 +262,7 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
               ) : null}
             </div>
 
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
               {statusOptions.map((option) => {
                 const Icon = option.icon;
                 const selected = record.status === option.value;
@@ -282,6 +283,14 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
                 );
               })}
             </div>
+
+            {record.status === "ABSENT_QUARANTINE" ? (
+              <p className="text-sm font-semibold text-[var(--warning-strong)]">
+                {adminMode
+                  ? "Карантин исключит занятие из оплаты. После проверки расчёта выберите зачёт или сумму к возврату по оплаченному счёту."
+                  : "Карантин исключит занятие из оплаты. Неоплаченный счёт пересчитается, по оплаченному создастся зачёт на следующий месяц."}
+              </p>
+            ) : null}
 
             <label className="label">
               Комментарий
