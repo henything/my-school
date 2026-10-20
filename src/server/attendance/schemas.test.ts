@@ -14,6 +14,8 @@ describe("attendance schemas", () => {
     });
 
     expect(parsed.records[0].status).toBe("PRESENT");
+    expect(saveAttendanceSchema.parse({ records: [{ childId: "11111111-1111-4111-8111-111111111111", status: "ABSENT_QUARANTINE" }] }).records[0].status)
+      .toBe("ABSENT_QUARANTINE");
   });
 
   it("rejects an empty attendance sheet", () => {
