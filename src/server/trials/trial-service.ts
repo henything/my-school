@@ -35,6 +35,7 @@ const trialInclude = {
   group: { select: { id: true, name: true, capacityLimit: true } },
   coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
   convertedChild: { select: { id: true, fullName: true, status: true } },
+  signingPackage: { select: { status: true, contractStatus: true, consentStatus: true, errorMessage: true, sentAt: true, checkedAt: true } },
   createdBy: { select: { id: true, displayName: true, login: true, role: true } }
 } as const;
 
@@ -62,6 +63,14 @@ export function serializeTrial(trial: TrialRecord) {
     source: trial.source,
     status: trial.status,
     trialAttended: trial.trialAttended,
+    signingPackage: trial.signingPackage ? {
+      status: trial.signingPackage.status,
+      contractStatus: trial.signingPackage.contractStatus,
+      consentStatus: trial.signingPackage.consentStatus,
+      errorMessage: trial.signingPackage.errorMessage,
+      sentAt: trial.signingPackage.sentAt?.toISOString() ?? null,
+      checkedAt: trial.signingPackage.checkedAt?.toISOString() ?? null
+    } : null,
     comment: trial.comment,
     convertedAt: trial.convertedAt?.toISOString() ?? null,
     createdAt: trial.createdAt.toISOString(),
@@ -231,14 +240,22 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
   });
 }
 
-export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput) {
+export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput, options?: { initialChildStatus?: "ACTIVE" | "PAUSED" }) {
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    // Serialize a manual conversion racing with the test journey's status poll.
+    await tx.$queryRaw`SELECT "id" FROM "trial_participants" WHERE "id" = ${trialId}::uuid FOR UPDATE`;
     const existing = await tx.trialParticipant.findFirstOrThrow({
       where: { id: trialId, schoolId: currentUser.schoolId },
       include: trialInclude
     });
+
+    const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
+    if (testJourney) {
+      if (existing.signingPackage?.status !== "SIGNED") throw new Error("Для тестовой заявки сначала подпишите оба документа.");
+      if (options?.initialChildStatus !== "PAUSED") throw new Error("Тестовая заявка активируется только после тестовой оплаты.");
+    }
 
     assertTrialCanBeConverted(existing.status);
     if (existing.trialAttended === null) throw new Error("Сначала отметьте, был ли ребёнок на пробном занятии.");
@@ -282,6 +299,10 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
     if (!parent && parentPhone) {
       const matches = await tx.parent.findMany({ where: { schoolId: currentUser.schoolId, phone: parentPhone, archivedAt: null }, take: 2 });
       if (matches.length > 1) throw new Error("По телефону найдено несколько родителей. Выберите нужную карточку вручную.");
+      if (testJourney && matches[0] && parentName &&
+          matches[0].fullName?.trim().toLocaleLowerCase("ru") !== parentName.trim().toLocaleLowerCase("ru")) {
+        throw new Error("Телефон уже есть у родителя с другим ФИО. Попросите администратора проверить совпадение.");
+      }
       parent = matches[0] ?? null;
     }
     if (!parent && (parentName || parentPhone || parentVkUrl)) {
@@ -296,7 +317,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId }
     }) : await tx.child.create({ data: {
       schoolId: currentUser.schoolId, parentId: parent?.id ?? null, currentGroupId,
-      fullName: childFullName, status: "ACTIVE", coachComment: existing.comment,
+      fullName: childFullName, status: options?.initialChildStatus ?? "ACTIVE", coachComment: existing.comment,
       adminComment: input.adminComment ?? null, admissionStatus: "ADMITTED"
     } });
 

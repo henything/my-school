@@ -9,6 +9,7 @@ import { listParents } from "@/server/parents/parent-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTrials } from "@/server/trials/trial-service";
+import { TrialSigningControls } from "@/components/trial-signing-controls";
 
 export default async function TrialsPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
@@ -63,6 +64,7 @@ export default async function TrialsPage() {
                     <StatusBadge status={trial.status} />
                   </div>
                   <TrialAttendanceButtons trialId={trial.id} status={trial.status} />
+                  <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} canDownload />
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <ConvertTrialForm trial={trial} groups={activeGroups} childRows={children} parents={parents} />
                     <TransferTrialForm trialId={trial.id} disabled={isClosed} />
