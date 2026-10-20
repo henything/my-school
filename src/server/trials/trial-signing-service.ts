@@ -5,6 +5,7 @@ import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
+import { reservationDeadline } from "./test-journey-rules";
 
 function assertAccess(user: CurrentUser, coachUserId: string) {
   if (!hasRole(user, ADMIN_ROLES) && !(user.role === "COACH" && user.id === coachUserId)) {
@@ -37,6 +38,35 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   }
   assertFdocConfigured();
   const parentPhone = normalizePhone(trial.parentPhone);
+
+  const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
+  if (testJourney?.reserveExpiresAt && testJourney.reserveExpiresAt < new Date()) {
+    throw new Error("Срок резерва места истёк. Администратор должен проверить доступность группы.");
+  }
+  if (testJourney && !testJourney.reserveExpiresAt) {
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "groups" WHERE "id" = ${trial.groupId}::uuid FOR UPDATE`;
+      const group = await tx.trainingGroup.findUniqueOrThrow({
+        where: { id: trial.groupId },
+        select: { capacityLimit: true, children: { where: { status: "ACTIVE" }, select: { id: true } } }
+      });
+      const reserves = await tx.trialTestJourney.count({
+        where: {
+          id: { not: testJourney.id },
+          reserveExpiresAt: { gt: new Date() },
+          paidAt: null,
+          trial: { groupId: trial.groupId }
+        }
+      });
+      if (group.children.length + reserves >= group.capacityLimit) {
+        throw new Error("В группе больше нет свободного места для резерва.");
+      }
+      await tx.trialTestJourney.update({
+        where: { id: testJourney.id },
+        data: { reserveExpiresAt: reservationDeadline(new Date()) }
+      });
+    });
+  }
 
   const signing = await prisma.trialSigningPackage.upsert({
     where: { trialId },

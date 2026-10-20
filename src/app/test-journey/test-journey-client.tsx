@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
-type Lesson = { id: string; date: string; time: string; group: string; branch: string };
+type Lesson = { id: string; date: string; time: string; group: string; branch: string; weekdays: number[] };
 type Journey = {
   trialDate: string;
   trialStatus: string;
@@ -13,6 +13,10 @@ type Journey = {
   contractStatus: string | null;
   consentStatus: string | null;
   childStatus: string | null;
+  attendanceWeekday: number | null;
+  reserveExpiresAt: string | null;
+  paymentDueAt: string | null;
+  firstPaidLessonDate: string | null;
   invoice: { number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string } | null;
 };
 
@@ -22,6 +26,9 @@ export function TestJourneyClient({ lessons, token }: { lessons: Lesson[]; token
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [activationUrl, setActivationUrl] = useState<string | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState("");
+  const selectedLesson = lessons.find((lesson) => lesson.id === selectedLessonId);
+  const weekdayLabels = ["", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
 
   useEffect(() => {
     if (!token) return;
@@ -74,9 +81,13 @@ export function TestJourneyClient({ lessons, token }: { lessons: Lesson[]; token
       {!token ? (
         <form className="panel mt-6 grid gap-4 p-5" onSubmit={register}>
           <label className="label">Код доступа к тесту<input className="field" name="accessCode" required autoComplete="off" /></label>
-          <label className="label">Пробное занятие<select className="field" name="lessonId" required defaultValue="">
+          <label className="label">Пробное занятие<select className="field" name="lessonId" required value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
             <option value="">Выберите занятие</option>
             {lessons.map((lesson) => <option key={lesson.id} value={lesson.id}>{lesson.date} {lesson.time} · {lesson.group} · {lesson.branch}</option>)}
+          </select></label>
+          <label className="label">График после пробного<select className="field" name="attendanceWeekday" defaultValue="0">
+            <option value="0">Все занятия группы</option>
+            {selectedLesson?.weekdays.map((weekday) => <option key={weekday} value={weekday}>Раз в неделю: {weekdayLabels[weekday]}</option>)}
           </select></label>
           <label className="label">ФИО родителя<input className="field" name="parentName" required /></label>
           <label className="label">Телефон для ссылки F.Doc<input className="field" name="parentPhone" type="tel" required placeholder="+7 999 123-45-67" /></label>
@@ -91,6 +102,10 @@ export function TestJourneyClient({ lessons, token }: { lessons: Lesson[]; token
             <p>Пробное {journey.trialDate}: {journey.trialAttended === true ? "ребёнок был" : journey.trialAttended === false ? "ребёнок не пришёл" : "ожидает отметки"}</p>
             <p>Документы: {journey.signingStatus ?? "ещё не отправлены"}</p>
             <p>Договор: {journey.contractStatus ?? "нет статуса"} · Согласие: {journey.consentStatus ?? "нет статуса"}</p>
+            <p>График: {journey.attendanceWeekday === null ? "все занятия группы" : `раз в неделю, ${weekdayLabels[journey.attendanceWeekday]}`}</p>
+            {journey.reserveExpiresAt ? <p>Резерв места до: {new Date(journey.reserveExpiresAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК</p> : null}
+            {journey.paymentDueAt ? <p>Оплатить до: {new Date(journey.paymentDueAt).toLocaleString("ru-RU", { timeZone: "Europe/Moscow" })} МСК</p> : null}
+            {journey.firstPaidLessonDate ? <p>Первое платное занятие: {journey.firstPaidLessonDate}</p> : null}
             <p>Ребёнок в системе: {journey.childStatus ?? "после подписи"}</p>
             {journey.invoice ? <p>Счёт {journey.invoice.number}: {(journey.invoice.amountKopeks / 100).toLocaleString("ru-RU")} ₽ · {journey.invoice.status}</p> : null}
             <Button variant="secondary" type="button" disabled={busy} onClick={() => void action("refresh")}>Проверить подпись и обновить путь</Button>

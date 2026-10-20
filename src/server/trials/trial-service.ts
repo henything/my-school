@@ -299,6 +299,10 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
     if (!parent && parentPhone) {
       const matches = await tx.parent.findMany({ where: { schoolId: currentUser.schoolId, phone: parentPhone, archivedAt: null }, take: 2 });
       if (matches.length > 1) throw new Error("По телефону найдено несколько родителей. Выберите нужную карточку вручную.");
+      if (testJourney && matches[0] && parentName &&
+          matches[0].fullName?.trim().toLocaleLowerCase("ru") !== parentName.trim().toLocaleLowerCase("ru")) {
+        throw new Error("Телефон уже есть у родителя с другим ФИО. Попросите администратора проверить совпадение.");
+      }
       parent = matches[0] ?? null;
     }
     if (!parent && (parentName || parentPhone || parentVkUrl)) {

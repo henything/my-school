@@ -1209,6 +1209,10 @@ model TrialTestJourney {
   trialId        String   @unique @map("trial_id") @db.Uuid
   tokenHash      String   @unique @map("token_hash")
   childBirthDate DateTime @map("child_birth_date") @db.Date
+  attendanceWeekday Int? @map("attendance_weekday")
+  reserveExpiresAt DateTime? @map("reserve_expires_at")
+  paymentDueAt DateTime? @map("payment_due_at")
+  firstPaidLessonDate DateTime? @map("first_paid_lesson_date") @db.Date
   createdAt      DateTime @default(now()) @map("created_at")
   paidAt         DateTime? @map("paid_at")
 
