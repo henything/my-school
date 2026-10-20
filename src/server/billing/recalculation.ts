@@ -9,13 +9,15 @@ export function plannedLessonIdsFromHistory(input: {
   attendanceRecords: Array<{ lessonId: string; status: string }>;
   trialLessonIds: Set<string>;
 }) {
+  const quarantinedLessonIds = new Set(input.attendanceRecords.filter((record) => record.status === "ABSENT_QUARANTINE").map((record) => record.lessonId));
   const ids = new Set(input.lessons.filter((lesson) =>
     !input.trialLessonIds.has(lesson.id) &&
+    !quarantinedLessonIds.has(lesson.id) &&
     input.memberships.some((membership) => membership.groupId === lesson.groupId && isMemberOnDate(membership, lesson.lessonDate)) &&
     isLessonInChildPlan(input.attendancePlans, lesson.lessonDate)
   ).map((lesson) => lesson.id));
   for (const record of input.attendanceRecords) {
-    if (!input.trialLessonIds.has(record.lessonId) && ["PRESENT", "ABSENT_UNEXCUSED"].includes(record.status)) {
+    if (!input.trialLessonIds.has(record.lessonId) && !quarantinedLessonIds.has(record.lessonId) && ["PRESENT", "ABSENT_UNEXCUSED"].includes(record.status)) {
       ids.add(record.lessonId);
     }
   }
@@ -68,4 +70,8 @@ export function calculateRecalculatedAmounts(input: {
     input.appliedMakeupCount
   );
   return { nextTotalKopeks, nextInvoiceAmountKopeks };
+}
+
+export function additionalPaidCreditKopeks(paidAmountKopeks: number, nextInvoiceAmountKopeks: number, existingAdjustmentsKopeks: number) {
+  return Math.max(0, paidAmountKopeks - nextInvoiceAmountKopeks - existingAdjustmentsKopeks);
 }

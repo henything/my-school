@@ -7,6 +7,8 @@ import {
   finalStatusStoredAttendanceStatus,
   makeupReasonForFinalStatus,
   makeupReasonForGroupEvent,
+  shouldCreateMakeupForFinalization,
+  shouldCreateMakeupForGroupEvent,
   transactionTypeForMakeupReason
 } from "./rules";
 
@@ -31,6 +33,15 @@ describe("makeup rules", () => {
     expect(makeupReasonForFinalStatus("ABSENT_UNEXCUSED_FINAL")).toBeNull();
     expect(finalStatusBalanceEffectStatus("ABSENT_UNEXCUSED_FINAL")).toBe("ABSENT_UNEXCUSED");
     expect(finalStatusStoredAttendanceStatus("ABSENT_UNEXCUSED_FINAL", "ABSENT_SICK_PENDING")).toBe("ABSENT_UNEXCUSED");
+  });
+
+  it("does not add a second credit when confirming a coach's billed quarantine", () => {
+    expect(shouldCreateMakeupForFinalization("ABSENT_QUARANTINE", "ABSENT_QUARANTINE")).toBe(false);
+    expect(shouldCreateMakeupForFinalization("ABSENT_EVENT", "ABSENT_QUARANTINE")).toBe(false);
+    expect(shouldCreateMakeupForGroupEvent("ABSENT_QUARANTINE")).toBe(false);
+    expect(shouldCreateMakeupForGroupEvent("ABSENT_UNEXCUSED")).toBe(true);
+    expect(finalStatusStoredAttendanceStatus("ABSENT_QUARANTINE", "ABSENT_QUARANTINE")).toBe("ABSENT_QUARANTINE");
+    expect(shouldCreateMakeupForFinalization("ABSENT_QUARANTINE", "ABSENT_UNEXCUSED")).toBe(true);
   });
 
   it("prevents vacation backdating", () => {

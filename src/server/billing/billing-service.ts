@@ -19,6 +19,7 @@ import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import { isLessonInChildPlan, todayInMoscow, type AttendancePlan } from "@/server/children/attendance-plan";
 import { isMemberOnDate } from "@/server/children/group-membership";
+import { closeTasksByCondition, createTaskIfNotExists } from "@/server/tasks/task-service";
 import { applyAvailableCreditsToInvoice } from "./billing-adjustment-service";
 import {
   admissionStatusAfterLessonBalance,
@@ -98,6 +99,7 @@ type SubscriptionListRecord = {
   paymentStatusChangedAt: Date | null;
   paymentStatusComment: string | null;
   createdAt: Date;
+  _count?: { balanceTransactions: number };
   child: {
     id: string;
     fullName: string;
@@ -167,6 +169,7 @@ export function serializeSubscription(subscription: SubscriptionListRecord) {
     plannedLessonsCount: subscription.plannedLessonsCount,
     lessonPriceKopeks: subscription.lessonPriceKopeks,
     totalAmountKopeks: subscription.totalAmountKopeks,
+    appliedMakeupCount: subscription._count?.balanceTransactions ?? 0,
     paymentStatus: subscription.paymentStatus,
     paymentStatusChangedAt: subscription.paymentStatusChangedAt?.toISOString() ?? null,
     paymentStatusComment: subscription.paymentStatusComment,
@@ -654,7 +657,7 @@ export async function ensureMonthlySubscriptionsForGroup(
       status: "ACTIVE",
       currentGroupId: groupId ?? { not: null }
     },
-    select: { id: true, fullName: true, parentId: true, currentGroupId: true },
+    select: { id: true, fullName: true, parentId: true, currentGroupId: true, attendancePlans: { select: { effectiveFrom: true, weekday: true } } },
     orderBy: { fullName: "asc" }
   });
   let createdCount = 0;
@@ -674,13 +677,21 @@ export async function ensureMonthlySubscriptionsForGroup(
         await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${child.id}::uuid FOR UPDATE`;
         const existing = await tx.subscription.findFirst({
           where: { schoolId: currentUser.schoolId, childId: child.id, periodStart: { lte: monthEnd }, periodEnd: { gte: monthStart } },
-          select: { id: true, paymentStatus: true, periodStart: true, periodEnd: true, invoices: { select: { id: true, status: true } } }
+          select: { id: true, plannedLessonsCount: true, paymentStatus: true, periodStart: true, periodEnd: true, invoices: { select: { id: true, status: true } } }
         });
         if (existing) {
           if (existing.invoices.length > 1 || existing.invoices.some((invoice) => invoice.status === "CANCELLED")) {
             return "invoiceAnomaly" as const;
           }
-          if (existing.invoices.length === 1) return "existing" as const;
+          if (existing.invoices.length === 1) {
+            const currentLessonCount = await countRemainingLessonsForChild(
+              tx, currentUser.schoolId, child.id, existing.periodStart, existing.periodEnd, child.attendancePlans
+            );
+            if (currentLessonCount !== existing.plannedLessonsCount) {
+              return { kind: "countMismatch" as const, billed: existing.plannedLessonsCount, current: currentLessonCount, paid: existing.invoices[0].status === "PAID" };
+            }
+            return "existing" as const;
+          }
         }
 
         const pendingSickness = await tx.attendanceRecord.findFirst({
@@ -707,7 +718,26 @@ export async function ensureMonthlySubscriptionsForGroup(
       }, { timeout: 20_000 });
       if (outcome === "created") createdCount += 1;
       if (outcome === "existing") existingCount += 1;
-      if (outcome === "noLessons") noLessonsCount += 1;
+      if (outcome === "noLessons") {
+        noLessonsCount += 1;
+        const tableRecord = await prisma.attendanceRecord.findFirst({
+          where: { childId: child.id, lesson: { lessonDate: { gte: monthStart, lte: monthEnd } } },
+          select: { id: true }
+        });
+        const membership = await prisma.childGroupMembership.findFirst({
+          where: { childId: child.id, startDate: { lte: monthEnd }, OR: [{ endDate: null }, { endDate: { gt: monthStart } }] },
+          select: { id: true }
+        });
+        if (tableRecord || membership) {
+          issues.push({
+            childId: child.id,
+            childName: child.fullName,
+            reason: tableRecord
+              ? "Есть отметка в табеле, но не найдены оплачиваемые занятия. Проверьте расписание, дату начала и пробное."
+              : "У ребёнка нет оплачиваемых занятий в этом месяце. Проверьте расписание, дату начала и график."
+          });
+        }
+      }
       if (outcome === "pendingSickness") {
         issues.push({ childId: child.id, childName: child.fullName, reason: "Есть неподтверждённая болезнь за прошлый месяц — проверьте перенос перед выставлением счёта." });
       }
@@ -717,12 +747,73 @@ export async function ensureMonthlySubscriptionsForGroup(
       if (outcome === "invoiceAnomaly") {
         issues.push({ childId: child.id, childName: child.fullName, reason: "У абонемента отменённый или повторный счёт — проверьте его вручную." });
       }
+      if (typeof outcome === "object" && outcome.kind === "countMismatch") {
+        issues.push({
+          childId: child.id,
+          childName: child.fullName,
+          reason: `После изменения расписания число занятий стало ${outcome.current}, в счёте — ${outcome.billed}. ${outcome.paid ? "Счёт уже оплачен; нужен ручной перерасчёт." : "Проверьте и пересчитайте неоплаченный счёт."}`
+        });
+      }
     } catch (error) {
       issues.push({ childId: child.id, childName: child.fullName, reason: error instanceof Error ? error.message : "Не удалось создать счёт." });
     }
   }
 
+  await syncMonthlyBillingIssues(currentUser, month, children, issues);
   return { createdCount, existingCount, noLessonsCount, issues };
+}
+
+async function syncMonthlyBillingIssues(
+  currentUser: CurrentUser,
+  month: string,
+  children: Array<{ id: string; currentGroupId: string | null }>,
+  issues: Array<{ childId: string; childName: string; reason: string }>
+) {
+  const relatedEntityType = `BillingReconciliation:${month}`;
+  const issueIds = new Set(issues.map((issue) => issue.childId));
+  const groupIds = new Map(children.map((child) => [child.id, child.currentGroupId]));
+
+  await getPrisma().$transaction(async (tx) => {
+    // Prevent simultaneous timer and admin runs from creating duplicate tasks.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${currentUser.schoolId}::text), hashtext(${relatedEntityType}::text))`;
+    const openTasks = await tx.task.findMany({
+      where: { schoolId: currentUser.schoolId, type: "BILLING_RECONCILIATION_REQUIRED", relatedEntityType, status: { in: OPEN_TASK_STATUSES } },
+      select: { id: true, relatedEntityId: true, description: true }
+    });
+
+    for (const issue of issues) {
+      const description = `${month}: ${issue.reason}`;
+      const existing = openTasks.find((task) => task.relatedEntityId === issue.childId);
+      if (existing) {
+        if (existing.description !== description) {
+          await tx.task.update({ where: { id: existing.id }, data: { description } });
+        }
+      } else {
+        await createTaskIfNotExists(tx, {
+          schoolId: currentUser.schoolId,
+          actorUserId: currentUser.id,
+          type: "BILLING_RECONCILIATION_REQUIRED",
+          priority: "HIGH",
+          relatedEntityType,
+          relatedEntityId: issue.childId,
+          childId: issue.childId,
+          groupId: groupIds.get(issue.childId) ?? null,
+          title: `Проверить счёт за ${month}: ${issue.childName}`,
+          description
+        });
+      }
+    }
+
+    const resolvedIds = openTasks.filter((task) => task.relatedEntityId && !issueIds.has(task.relatedEntityId)).map((task) => task.id);
+    if (resolvedIds.length > 0) {
+      await closeTasksByCondition(tx, {
+        schoolId: currentUser.schoolId,
+        actorUserId: currentUser.id,
+        where: { id: { in: resolvedIds } },
+        comment: "Автозакрытие: ежемесячная сверка больше не находит расхождения."
+      });
+    }
+  });
 }
 
 async function createSubscriptionInTransaction(
@@ -1241,6 +1332,11 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
 }
 
 const subscriptionListInclude = {
+  _count: {
+    select: {
+      balanceTransactions: { where: { type: "MAKEUP_USED", reason: "INVOICE_DISCOUNT" } }
+    }
+  },
   child: {
     select: {
       id: true,
@@ -1292,6 +1388,12 @@ async function listRemainingLessonsForChild(
   });
   const trialLessonIds = new Set(trialLessons.map((trial) => trial.lessonId));
 
+  const quarantineRecords = await tx.attendanceRecord.findMany({
+    where: { childId, status: "ABSENT_QUARANTINE", lesson: { schoolId, lessonDate: { gte: periodStart, lte: periodEnd } } },
+    select: { lessonId: true }
+  });
+  const quarantinedLessonIds = new Set(quarantineRecords.map((record) => record.lessonId));
+
   const lessons = await tx.lesson.findMany({
     where: {
       schoolId,
@@ -1304,7 +1406,7 @@ async function listRemainingLessonsForChild(
     },
     select: { id: true, groupId: true, lessonDate: true }
   });
-  return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) &&
+  return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) && !quarantinedLessonIds.has(lesson.id) &&
     memberships.some((membership) => membership.groupId === lesson.groupId && isMemberOnDate(membership, lesson.lessonDate)) &&
     isLessonInChildPlan(plans, lesson.lessonDate));
 }

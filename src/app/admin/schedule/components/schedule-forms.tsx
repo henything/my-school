@@ -243,23 +243,26 @@ function GenerateMonthForm({ groups }: { groups: Group[] }) {
 function GenerateAcademicYearForm({ groups }: { groups: Group[] }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
+  const [billingIssues, setBillingIssues] = useState<Array<{ childName: string; reason: string }>>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
+    setBillingIssues([]);
     setIsSubmitting(true);
     const formData = new FormData(event.currentTarget);
 
     try {
-      const payload = await submitJson<{ result: { monthCount: number; createdCount: number; skippedDuplicateCount: number } }>(
+      const payload = await submitJson<{ result: { monthCount: number; createdCount: number; skippedDuplicateCount: number; billing: { createdCount: number; existingCount: number; issues: Array<{ childName: string; reason: string }> } | null } }>(
         "/api/lessons/generate-academic-year",
         {
           academicYearStart: formData.get("academicYearStart"),
           groupId: nullable(formData.get("groupId"))
         }
       );
-      setMessage(`Месяцев: ${payload.result.monthCount}. Создано: ${payload.result.createdCount}. Дубли: ${payload.result.skippedDuplicateCount}.`);
+      setMessage(`Месяцев: ${payload.result.monthCount}. Создано: ${payload.result.createdCount}. Дубли: ${payload.result.skippedDuplicateCount}. ${payload.result.billing ? `Новых счетов за текущий месяц: ${payload.result.billing.createdCount}, уже были: ${payload.result.billing.existingCount}.` : "Счета за текущий месяц не требуются."}`);
+      setBillingIssues(payload.result.billing?.issues ?? []);
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
@@ -292,6 +295,10 @@ function GenerateAcademicYearForm({ groups }: { groups: Group[] }) {
         />
       </div>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Сгенерировать" />
+      {billingIssues.length > 0 ? <div className="rounded-lg border border-[var(--warning)] p-3 text-sm" role="alert">
+        <p className="font-semibold">Счета требуют проверки: {billingIssues.length}</p>
+        <ul className="mt-2 list-disc pl-5">{billingIssues.map((issue, index) => <li key={`${issue.childName}-${index}`}>{issue.childName}: {issue.reason}</li>)}</ul>
+      </div> : null}
     </form>
   );
 }

@@ -6,11 +6,16 @@ import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, assertRole } from "@/server/rbac/rbac";
 import { admissionStatusAfterLessonBalance } from "./calculations";
 import { applyAvailableCreditsToInvoice } from "./billing-adjustment-service";
-import { calculateRecalculatedAmounts, plannedLessonIdsFromHistory, recalculationBlockReason } from "./recalculation";
+import { additionalPaidCreditKopeks, calculateRecalculatedAmounts, plannedLessonIdsFromHistory, recalculationBlockReason } from "./recalculation";
 
 export async function getRecalculationPreview(currentUser: CurrentUser, subscriptionId: string, tx?: Prisma.TransactionClient) {
   assertRole(currentUser, ADMIN_ROLES);
   return tx ? buildPreview(tx, currentUser, subscriptionId) : getPrisma().$transaction((inner) => buildPreview(inner, currentUser, subscriptionId));
+}
+
+/** Internal preview for an already authorized attendance change in the same transaction. */
+export async function getRecalculationPreviewInTransaction(tx: Prisma.TransactionClient, currentUser: CurrentUser, subscriptionId: string) {
+  return buildPreview(tx, currentUser, subscriptionId);
 }
 
 type RecalculationInput = {
@@ -72,13 +77,13 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         reason: input.reason, createdByUserId: currentUser.id
       } });
       if (input.paidDifferenceAction === "CREDIT") {
-        const laterInvoice = await tx.invoice.findFirst({
+        const laterInvoices = await tx.invoice.findMany({
           where: { schoolId: currentUser.schoolId, childId: preview.childId,
             periodStart: { gt: new Date(`${preview.periodEnd}T00:00:00.000Z`) },
             status: { in: ["DRAFT", "ISSUED", "OVERDUE"] } },
           orderBy: { periodStart: "asc" }, select: { id: true }
         });
-        if (laterInvoice) await applyAvailableCreditsToInvoice(tx, laterInvoice.id);
+        for (const laterInvoice of laterInvoices) await applyAvailableCreditsToInvoice(tx, laterInvoice.id);
       }
     }
 
@@ -157,7 +162,7 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
         orderBy: { createdAt: "desc" }
       },
       lessonSnapshots: { select: { lessonId: true, lessonDate: true } },
-      billingAdjustments: { select: { id: true } }
+      billingAdjustments: { select: { id: true, amountKopeks: true } }
     }
   });
   const memberships = subscription.child.groupMemberships;
@@ -239,9 +244,13 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     nextBalance,
     unchanged: delta === 0 && invoice?.amountKopeks === nextInvoiceAmountKopeks
     });
-  const paidDifferenceKopeks = Math.max(0, (invoice?.paidAmountKopeks ?? 0) - nextInvoiceAmountKopeks);
+  const paidDifferenceKopeks = additionalPaidCreditKopeks(
+    invoice?.paidAmountKopeks ?? 0,
+    nextInvoiceAmountKopeks,
+    subscription.billingAdjustments.reduce((sum, adjustment) => sum + adjustment.amountKopeks, 0)
+  );
   const canApplyPaid = invoice?.status === "PAID" && !invoice.billingAdjustmentApplications.length && paidDifferenceKopeks > 0 &&
-    activeInvoicesCount === 1 && subscription.billingAdjustments.length === 0 && nextBalance >= -1 &&
+    activeInvoicesCount === 1 && nextBalance >= -1 &&
     (delta !== 0 || subscription.totalAmountKopeks !== nextTotalKopeks);
   const oldIds = new Set(subscription.lessonSnapshots.map((snapshot) => snapshot.lessonId));
   const snapshotComplete = subscription.lessonSnapshots.length === subscription.plannedLessonsCount;
