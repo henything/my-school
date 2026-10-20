@@ -163,7 +163,7 @@ function TrialCard({ trial }: { trial: Trial }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const disabled = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE" || trial.status === "NOT_PLANNING";
+  const disabled = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE" || trial.status === "NOT_PLANNING" || trial.status === "WANTS_TO_CONTINUE";
 
   async function submitStatus(form: HTMLFormElement, status?: TrialStatus) {
     setMessage("");
