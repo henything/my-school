@@ -188,8 +188,18 @@ export async function refreshTestJourney(token: string) {
   const journey = await findJourney(token);
   const signing = journey.trial.signingPackage;
   if (signing && signing.status === "WAITING") await syncTrialSigningByPackageId(signing.id);
-  const updated = await findJourney(token);
-  if (updated.trial.signingPackage?.status !== "SIGNED" || updated.trial.convertedChildId) return getTestJourney(token);
+  await finalizeSignedTestJourneyByTrialId(journey.trialId);
+  return getTestJourney(token);
+}
+
+export async function finalizeSignedTestJourneyByTrialId(trialId: string) {
+  const updated = await getPrisma().trialTestJourney.findUnique({
+    where: { trialId },
+    include: { trial: { include: { lesson: true, signingPackage: true } } }
+  });
+  if (!updated) return;
+  assertTestMode();
+  if (updated.trial.signingPackage?.status !== "SIGNED" || updated.paymentDueAt) return;
 
   const now = new Date();
   if (updated.reserveExpiresAt && updated.reserveExpiresAt < now) {
@@ -240,7 +250,6 @@ export async function refreshTestJourney(token: string) {
       } });
     });
   }
-  return getTestJourney(token);
 }
 
 export async function simulateTestPayment(token: string) {
