@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { testBookableLessons } from "@/server/trials/fdoc-full-cycle-test";
 import { TestJourneyClient } from "./test-journey-client";
+import { getCurrentUser } from "@/server/auth/current-user";
 
 export const dynamic = "force-dynamic";
 
@@ -8,5 +9,6 @@ export default async function TestJourneyPage({ searchParams }: { searchParams: 
   let lessons;
   try { lessons = await testBookableLessons(); } catch { notFound(); }
   const { token = "" } = await searchParams;
-  return <TestJourneyClient lessons={lessons} token={token} />;
+  const user = await getCurrentUser();
+  return <TestJourneyClient lessons={lessons} token={token} existingParent={user?.role === "PARENT"} />;
 }

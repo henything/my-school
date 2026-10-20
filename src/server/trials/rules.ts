@@ -1,8 +1,8 @@
 import type { TrialStatus } from "@/generated/prisma/enums";
 
-export const coachEditableTrialStatuses: TrialStatus[] = ["TRIAL_BOOKED", "CONTACT_COLLECTED", "TRIAL_ATTENDED", "TRIAL_NO_SHOW"];
-export const coachSettableTrialStatuses: TrialStatus[] = ["CONTACT_COLLECTED", "TRIAL_ATTENDED", "TRIAL_NO_SHOW"];
-export const terminalTrialStatuses: TrialStatus[] = ["TRANSFERRED_TO_ADMIN", "CONVERTED_TO_ACTIVE"];
+export const coachEditableTrialStatuses: TrialStatus[] = ["TRIAL_BOOKED", "CONTACT_COLLECTED", "TRIAL_ATTENDED", "TRIAL_NO_SHOW", "WANTS_TO_CONTINUE"];
+export const coachSettableTrialStatuses: TrialStatus[] = ["CONTACT_COLLECTED", "TRIAL_ATTENDED", "TRIAL_NO_SHOW", "WANTS_TO_CONTINUE", "NOT_PLANNING"];
+export const terminalTrialStatuses: TrialStatus[] = ["TRANSFERRED_TO_ADMIN", "CONVERTED_TO_ACTIVE", "NOT_PLANNING"];
 
 export function canCoachSetTrialStatus(status: TrialStatus) {
   return coachSettableTrialStatuses.includes(status);

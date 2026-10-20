@@ -4,6 +4,7 @@ import { StatusBadge } from "@/components/badges";
 import { formatLessonDateTime } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentDashboard } from "@/server/parents/parent-portal-service";
+import { getPrisma } from "@/server/db/prisma";
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -14,6 +15,11 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
 export default async function ParentHomePage() {
   const currentUser = await requireRole(["PARENT"]);
   const dashboard = await getParentDashboard(currentUser);
+  const testApplications = process.env.FDOC_FULL_CYCLE_TEST_ENABLED === "true" ? await getPrisma().trialTestJourney.findMany({
+    where: { schoolId: currentUser.schoolId, trial: { convertedChild: { parent: { account: { userId: currentUser.id } } } } },
+    include: { trial: { select: { childName: true, status: true, lesson: { select: { lessonDate: true } } } } },
+    orderBy: { createdAt: "desc" }, take: 10
+  }) : [];
   const totalLessons = dashboard.children.reduce((sum, child) => sum + child.lessonBalance, 0);
   const totalMakeups = dashboard.children.reduce((sum, child) => sum + child.makeupBalance, 0);
   const totalOpenInvoices = dashboard.children.reduce((sum, child) => sum + child.openInvoices.length, 0);
@@ -43,6 +49,12 @@ export default async function ParentHomePage() {
       </section>
 
       <section className="grid gap-4">
+        {testApplications.length > 0 ? <div className="panel p-5">
+          <h2 className="mb-3 text-xl font-extrabold">Пробные занятия и документы</h2>
+          <div className="grid gap-2">{testApplications.map((application) => <Link key={application.id} href={`/test-journey?token=${application.id}`} className="rounded-lg border border-[var(--line)] p-3 hover:border-[var(--accent)]">
+            {application.trial.childName} · {application.trial.lesson.lessonDate.toLocaleDateString("ru-RU")} · {application.trial.status}
+          </Link>)}</div>
+        </div> : null}
         {dashboard.children.map((child) => {
           const nextLesson = child.upcomingLessons[0] ?? null;
           const firstInvoice = child.openInvoices[0] ?? null;
@@ -54,7 +66,7 @@ export default async function ParentHomePage() {
                   <h2 className="text-xl font-extrabold">{child.fullName}</h2>
                   <p className="mt-1 text-sm text-[var(--muted)]">{child.currentGroup?.name ?? "Без группы"}</p>
                 </div>
-                <StatusBadge status={parentAdmissionLabel(child.admissionStatus)} />
+                <StatusBadge status={child.status === "TRIAL" ? "Пробное занятие" : parentAdmissionLabel(child.admissionStatus)} />
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-3">

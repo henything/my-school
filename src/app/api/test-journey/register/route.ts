@@ -1,11 +1,19 @@
 import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
 import { registerTestJourney } from "@/server/trials/fdoc-full-cycle-test";
+import { createSession, setSessionCookie } from "@/server/auth/session-service";
+import { getCurrentUser } from "@/server/auth/current-user";
 
 export async function POST(request: Request) {
   try {
-    const result = await registerTestJourney(await request.json());
-    return NextResponse.json(result);
+    const currentUser = await getCurrentUser();
+    const result = await registerTestJourney(await request.json(), currentUser);
+    const response = NextResponse.json({ token: result.token });
+    if (!currentUser) {
+      const { token, expiresAt } = await createSession(result.user);
+      setSessionCookie(response, token, expiresAt);
+    }
+    return response;
   } catch (error) {
     return jsonError(errorMessage(error), 400);
   }

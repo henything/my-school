@@ -7,8 +7,8 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
 import { reservationDeadline } from "./test-journey-rules";
 
-function assertAccess(user: CurrentUser, coachUserId: string) {
-  if (!hasRole(user, ADMIN_ROLES) && !(user.role === "COACH" && user.id === coachUserId)) {
+function assertAccess(user: CurrentUser, coachUserId: string, parentUserId?: string | null) {
+  if (!hasRole(user, ADMIN_ROLES) && !(user.role === "COACH" && user.id === coachUserId) && !(user.role === "PARENT" && user.id === parentUserId)) {
     throw new Error("Нет доступа к пробному занятию.");
   }
 }
@@ -27,10 +27,14 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   const prisma = getPrisma();
   const trial = await prisma.trialParticipant.findFirstOrThrow({
     where: { id: trialId, schoolId: user.schoolId },
-    include: { coach: { select: { userId: true } } }
+    include: { coach: { select: { userId: true } }, convertedChild: { select: { parent: { select: { account: { select: { userId: true } } } } } } }
   });
-  assertAccess(user, trial.coach.userId);
-  if (trial.status !== "TRIAL_ATTENDED" || trial.trialAttended !== true) {
+  assertAccess(user, trial.coach.userId, trial.convertedChild?.parent?.account?.userId);
+  const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
+  if (testJourney && (trial.status !== "WANTS_TO_CONTINUE" || !testJourney.scheduleChosenAt)) {
+    throw new Error("Тренер должен подтвердить продолжение, а родитель — выбрать график.");
+  }
+  if ((!testJourney && trial.status !== "TRIAL_ATTENDED") || trial.trialAttended !== true) {
     throw new Error("Сначала отметьте, что ребёнок посетил пробное занятие.");
   }
   if (!trial.childName || !trial.parentName || !trial.parentPhone) {
@@ -39,7 +43,6 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   assertFdocConfigured();
   const parentPhone = normalizePhone(trial.parentPhone);
 
-  const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
   if (testJourney?.reserveExpiresAt && testJourney.reserveExpiresAt < new Date()) {
     throw new Error("Срок резерва места истёк. Администратор должен проверить доступность группы.");
   }
@@ -115,9 +118,16 @@ export async function syncTrialSigning(user: CurrentUser, trialId: string) {
   const prisma = getPrisma();
   const signing = await prisma.trialSigningPackage.findFirstOrThrow({
     where: { trialId, schoolId: user.schoolId },
-    include: { trial: { include: { coach: { select: { userId: true } } } } }
+    include: {
+      trial: {
+        include: {
+          coach: { select: { userId: true } },
+          convertedChild: { select: { parent: { select: { account: { select: { userId: true } } } } } }
+        }
+      }
+    }
   });
-  assertAccess(user, signing.trial.coach.userId);
+  assertAccess(user, signing.trial.coach.userId, signing.trial.convertedChild?.parent?.account?.userId);
   return syncSigningRecord(signing, user.id);
 }
 

@@ -18,6 +18,7 @@ import {
   trialClosesProcessingTask,
   trialNeedsProcessingTask
 } from "./rules";
+import { reservationDeadline } from "./test-journey-rules";
 
 const trialInclude = {
   lesson: {
@@ -108,6 +109,22 @@ export async function listTrials(currentUser: CurrentUser) {
   return trials.map(serializeTrial);
 }
 
+export async function listCoachTrialFollowups(currentUser: CurrentUser) {
+  if (currentUser.role !== "COACH") throw new Error("Список доступен только тренеру.");
+  const trials = await getPrisma().trialParticipant.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      status: { in: ["TRIAL_ATTENDED", "CONTACT_COLLECTED"] },
+      trialAttended: true,
+      convertedChild: { status: "TRIAL" },
+      OR: [{ coach: { userId: currentUser.id } }, { lesson: { substituteCoach: { userId: currentUser.id } } }]
+    },
+    include: trialInclude,
+    orderBy: { createdAt: "desc" }
+  });
+  return trials.map(serializeTrial);
+}
+
 export async function listLessonTrials(currentUser: CurrentUser, lessonId: string) {
   const prisma = getPrisma();
   const lesson = await prisma.lesson.findFirstOrThrow({
@@ -183,6 +200,35 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
     assertCanAccessTrial(currentUser, existing);
 
     const nextStatus = input.status ?? existing.status;
+    const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
+    if (testJourney && nextStatus === "CONTACT_COLLECTED" && existing.trialAttended !== true) {
+      throw new Error("Контакт после пробного фиксируется только для присутствовавшего ребёнка.");
+    }
+    if (testJourney && nextStatus === "CONTACT_COLLECTED" && !input.comment?.trim() && !existing.comment?.trim()) {
+      throw new Error("Перед сохранением контакта добавьте краткий итог разговора в комментарий.");
+    }
+    if (testJourney && existing.status === "WANTS_TO_CONTINUE" && nextStatus !== "WANTS_TO_CONTINUE") {
+      throw new Error("После решения продолжать изменение статуса проверяет администратор.");
+    }
+    if ((nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING") && !testJourney) {
+      throw new Error("Это действие доступно только в новом пути записи на пробное.");
+    }
+    if (testJourney && (nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING")) {
+      if (existing.status !== "CONTACT_COLLECTED" || existing.trialAttended !== true) {
+        throw new Error("Сначала отметьте посещение и контакт с родителем.");
+      }
+      if (!input.comment?.trim() && !existing.comment?.trim()) throw new Error("Укажите краткий итог разговора с родителем.");
+      if (nextStatus === "WANTS_TO_CONTINUE") {
+        await tx.$queryRaw`SELECT "id" FROM "groups" WHERE "id" = ${existing.groupId}::uuid FOR UPDATE`;
+        const group = await tx.trainingGroup.findUniqueOrThrow({ where: { id: existing.groupId }, select: { capacityLimit: true } });
+        const [active, reserved] = await Promise.all([
+          tx.child.count({ where: { schoolId: currentUser.schoolId, currentGroupId: existing.groupId, status: "ACTIVE" } }),
+          tx.trialTestJourney.count({ where: { id: { not: testJourney.id }, paidAt: null, reserveExpiresAt: { gt: new Date() }, trial: { groupId: existing.groupId } } })
+        ]);
+        if (active + reserved >= group.capacityLimit) throw new Error("Свободных мест для резерва больше нет.");
+        await tx.trialTestJourney.update({ where: { id: testJourney.id }, data: { reserveExpiresAt: reservationDeadline(new Date()) } });
+      }
+    }
 
     if (currentUser.role === "COACH") {
       if (!canCoachEditTrial(existing.status)) {
@@ -287,7 +333,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       where: { id: input.existingChildId, schoolId: currentUser.schoolId },
       include: { groupMemberships: { where: { endDate: null }, orderBy: { startDate: "desc" }, take: 1 } }
     }) : null;
-    if (existingChild && existingChild.status !== "ACTIVE") throw new Error("Существующий ребёнок должен быть активным.");
+    const earlyTrialChild = Boolean(testJourney && existingChild && existing.convertedChildId === existingChild.id && existingChild.status === "TRIAL");
+    if (existingChild && existingChild.status !== "ACTIVE" && !earlyTrialChild) throw new Error("Существующий ребёнок должен быть активным.");
     if (existingChild?.currentGroupId && existingChild.currentGroupId !== currentGroupId) {
       throw new Error("Существующий ребёнок состоит в другой группе. Сначала исправьте историю перевода.");
     }
@@ -314,7 +361,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 
     const child = existingChild ? await tx.child.update({
       where: { id: existingChild.id },
-      data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId }
+      data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId, status: earlyTrialChild ? "PAUSED" : undefined }
     }) : await tx.child.create({ data: {
       schoolId: currentUser.schoolId, parentId: parent?.id ?? null, currentGroupId,
       fullName: childFullName, status: options?.initialChildStatus ?? "ACTIVE", coachComment: existing.comment,

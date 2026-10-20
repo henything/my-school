@@ -7,7 +7,7 @@ import { StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
 import { TrialSigningControls } from "@/components/trial-signing-controls";
 
-type TrialStatus = "TRIAL_BOOKED" | "TRIAL_ATTENDED" | "TRIAL_NO_SHOW" | "CONTACT_COLLECTED" | "TRANSFERRED_TO_ADMIN" | "CONVERTED_TO_ACTIVE";
+type TrialStatus = "TRIAL_BOOKED" | "TRIAL_ATTENDED" | "TRIAL_NO_SHOW" | "CONTACT_COLLECTED" | "WANTS_TO_CONTINUE" | "NOT_PLANNING" | "TRANSFERRED_TO_ADMIN" | "CONVERTED_TO_ACTIVE";
 
 type Trial = {
   id: string;
@@ -163,7 +163,7 @@ function TrialCard({ trial }: { trial: Trial }) {
   const formRef = useRef<HTMLFormElement>(null);
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const disabled = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE";
+  const disabled = trial.status === "TRANSFERRED_TO_ADMIN" || trial.status === "CONVERTED_TO_ACTIVE" || trial.status === "NOT_PLANNING";
 
   async function submitStatus(form: HTMLFormElement, status?: TrialStatus) {
     setMessage("");
@@ -291,9 +291,13 @@ function TrialCard({ trial }: { trial: Trial }) {
         <Button type="button" variant="danger" size="sm" disabled={disabled || isSubmitting} onClick={() => submitFromButton("TRIAL_NO_SHOW")}>
           Не пришёл
         </Button>
+        {trial.convertedChild?.status === "TRIAL" && trial.status === "CONTACT_COLLECTED" && trial.trialAttended === true ? <>
+          <Button type="button" size="sm" disabled={isSubmitting} onClick={() => submitFromButton("WANTS_TO_CONTINUE")}>Будет ходить</Button>
+          <Button type="button" variant="secondary" size="sm" disabled={isSubmitting} onClick={() => submitFromButton("NOT_PLANNING")}>Пока не планирует ходить</Button>
+        </> : null}
         {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
       </div>
-      <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} />
+      {trial.convertedChild?.status !== "TRIAL" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} /> : null}
     </form>
   );
 }

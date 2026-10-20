@@ -206,6 +206,8 @@ enum TrialStatus {
   TRIAL_ATTENDED
   TRIAL_NO_SHOW
   CONTACT_COLLECTED
+  WANTS_TO_CONTINUE
+  NOT_PLANNING
   TRANSFERRED_TO_ADMIN
   CONVERTED_TO_ACTIVE
 }
@@ -1210,6 +1212,7 @@ model TrialTestJourney {
   tokenHash      String   @unique @map("token_hash")
   childBirthDate DateTime @map("child_birth_date") @db.Date
   attendanceWeekday Int? @map("attendance_weekday")
+  scheduleChosenAt DateTime? @map("schedule_chosen_at")
   reserveExpiresAt DateTime? @map("reserve_expires_at")
   paymentDueAt DateTime? @map("payment_due_at")
   firstPaidLessonDate DateTime? @map("first_paid_lesson_date") @db.Date
