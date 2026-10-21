@@ -7,9 +7,10 @@ import { getCurrentUser } from "@/server/auth/current-user";
 export async function POST(request: Request) {
   try {
     const currentUser = await getCurrentUser();
-    const result = await registerTestJourney(await request.json(), currentUser);
+    const parentUser = currentUser?.role === "PARENT" ? currentUser : null;
+    const result = await registerTestJourney(await request.json(), parentUser);
     const response = NextResponse.json({ token: result.token });
-    if (!currentUser) {
+    if (!parentUser) {
       const { token, expiresAt } = await createSession(result.user);
       setSessionCookie(response, token, expiresAt);
     }

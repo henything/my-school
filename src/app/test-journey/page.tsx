@@ -10,5 +10,5 @@ export default async function TestJourneyPage({ searchParams }: { searchParams: 
   try { lessons = await testBookableLessons(); } catch { notFound(); }
   const { token = "" } = await searchParams;
   const user = await getCurrentUser();
-  return <TestJourneyClient lessons={lessons} token={token} existingParent={user?.role === "PARENT"} />;
+  return <TestJourneyClient lessons={lessons} token={token} existingParent={user?.role === "PARENT"} staffSession={Boolean(user && user.role !== "PARENT")} />;
 }

@@ -23,7 +23,7 @@ type Journey = {
   invoice: { number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string } | null;
 };
 
-export function TestJourneyClient({ lessons, token, existingParent }: { lessons: Lesson[]; token: string; existingParent: boolean }) {
+export function TestJourneyClient({ lessons, token, existingParent, staffSession }: { lessons: Lesson[]; token: string; existingParent: boolean; staffSession: boolean }) {
   const router = useRouter();
   const [journey, setJourney] = useState<Journey | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,6 +81,7 @@ export function TestJourneyClient({ lessons, token, existingParent }: { lessons:
       <p className="mt-2 text-sm text-[var(--muted)]">Изолированный контур. Создайте тестовый родительский кабинет. Используйте вымышленные данные ребёнка и паспорта. Тестовая оплата не списывает деньги.</p>
       {!token ? (
         <form className="panel mt-6 grid gap-4 p-5" onSubmit={register}>
+          {staffSession ? <p className="text-sm text-[var(--muted)]">Вы вошли как сотрудник. После записи это окно переключится в новый родительский кабинет. Кабинет тренера откройте в приватном окне.</p> : null}
           <label className="label">Код доступа к тесту<input className="field" name="accessCode" required autoComplete="off" /></label>
           <label className="label">Пробное занятие<select className="field" name="lessonId" required value={selectedLessonId} onChange={(event) => setSelectedLessonId(event.target.value)}>
             <option value="">Выберите занятие</option>
