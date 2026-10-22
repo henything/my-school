@@ -8,6 +8,7 @@ import { requireRole } from "@/server/auth/current-user";
 import { listCoachLessons } from "@/server/schedule/lesson-service";
 import { listMyTasks, requiresCloseComment } from "@/server/tasks/task-service";
 import { listCoachTrialFollowups } from "@/server/trials/trial-service";
+import { TrialFollowupList } from "./trial-followup-list";
 
 export default async function CoachPage() {
   const currentUser = await requireRole(["COACH"]);
@@ -47,14 +48,7 @@ export default async function CoachPage() {
       </section>
 
       <section className="grid gap-4">
-        <div className="panel">
-          <div className="border-b border-[var(--line)] px-5 py-4"><h2 className="text-lg font-extrabold">После пробного: обратная связь и решение</h2></div>
-          {trialFollowups.length === 0 ? <p className="p-5 text-sm text-[var(--muted)]">Детей, ожидающих обратной связи, нет.</p> :
-            <div className="grid gap-3 p-4">{trialFollowups.map((trial) => <Link key={trial.id} href={`/coach/lessons/${trial.lessonId}`} className="rounded-lg border border-[var(--line)] p-4 hover:border-[var(--accent)]">
-              <strong>{trial.childName}</strong> · {trial.parentName} · {trial.parentPhone}
-              <p className="text-sm text-[var(--muted)]">{trial.lesson.lessonDate} · {trial.group.name} · {trial.status === "CONTACT_COLLECTED" ? "ожидаем решения семьи" : "свяжитесь с родителем"}</p>
-            </Link>)}</div>}
-        </div>
+        <TrialFollowupList trials={trialFollowups} />
         <LessonPanel title="Сегодня" lessons={todayLessons} empty="На сегодня занятий нет." />
         <LessonPanel title="Будущие" lessons={futureLessons} empty="Будущих занятий пока нет." />
         <LessonPanel title="Прошедшие" lessons={pastLessons} empty="Прошедших занятий пока нет." />
