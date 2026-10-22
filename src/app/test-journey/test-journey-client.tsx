@@ -78,7 +78,7 @@ export function TestJourneyClient({ lessons, token, existingParent, staffSession
   return (
     <main className="mx-auto max-w-2xl px-4 py-10">
       <h1 className="text-2xl font-bold">Тест полного пути F.Doc</h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">Изолированный контур. Создайте тестовый родительский кабинет. Используйте вымышленные данные ребёнка и паспорта. Тестовая оплата не списывает деньги.</p>
+      <p className="mt-2 text-sm text-[var(--muted)]">Изолированный контур. Создайте тестовый родительский кабинет. Используйте вымышленные данные ребёнка и паспорта. Через F.Doc DEMO придут договор и согласие на основе присланных вами документов. Тестовая оплата не списывает деньги.</p>
       {!token ? (
         <form className="panel mt-6 grid gap-4 p-5" onSubmit={register}>
           {staffSession ? <p className="text-sm text-[var(--muted)]">Вы вошли как сотрудник. После записи это окно переключится в новый родительский кабинет. Кабинет тренера откройте в приватном окне.</p> : null}
@@ -109,6 +109,7 @@ export function TestJourneyClient({ lessons, token, existingParent, staffSession
             </div> : null}
             {journey.trialStatus === "WANTS_TO_CONTINUE" && journey.scheduleChosen && !journey.signingStatus ?
               <Button type="button" disabled={busy} onClick={() => void action("start-signing")}>Подписать документы через F.Doc</Button> : null}
+            {journey.trialStatus === "WANTS_TO_CONTINUE" && journey.scheduleChosen && !journey.signingStatus ? <p className="text-sm text-[var(--muted)]">После нажатия придёт SMS от F.Doc. Откройте два документа, проверьте подставленные данные, заполните паспорт в F.Doc и подпишите оба документа.</p> : null}
             <p>Документы: {journey.signingStatus ?? "ещё не отправлены"}</p>
             <p>Договор: {journey.contractStatus ?? "нет статуса"} · Согласие: {journey.consentStatus ?? "нет статуса"}</p>
             <p>График: {journey.attendanceWeekday === null ? "все занятия группы" : `раз в неделю, ${weekdayLabels[journey.attendanceWeekday]}`}</p>
@@ -120,6 +121,7 @@ export function TestJourneyClient({ lessons, token, existingParent, staffSession
             <Button variant="secondary" type="button" disabled={busy} onClick={() => void action("refresh")}>Проверить подпись и обновить путь</Button>
             {journey.signingStatus === "SIGNED" && journey.invoice && journey.invoice.status !== "PAID" ?
               <Button type="button" disabled={busy} onClick={() => void action("simulate-payment")}>Симулировать оплату без списания денег</Button> : null}
+            {journey.signingStatus === "SIGNED" && journey.invoice && journey.invoice.status !== "PAID" ? <p className="text-sm text-[var(--muted)]">Счёт также виден в разделе «Оплаты» кабинета родителя. Кнопка выше отмечает его оплаченным только в тестовой базе.</p> : null}
             <a className="underline" href="/parent">Открыть родительский кабинет</a>
             {journey.invoice?.status === "PAID" ? <p>Оплата отмечена. Ребёнок должен появиться в будущих табелях группы.</p> : null}
           </> : <p>Загружаю состояние…</p>}

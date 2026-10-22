@@ -28,6 +28,7 @@ const fields = {
   parentPhone: "Телефон родителя",
   childName: "Ребёнок",
   childBirth: "Дата рождения ребёнка",
+  groupName: "Группа ребёнка",
   passportNumber: "Паспорт",
   passportDate: "Дата выдачи паспорта",
   passportIssuer: "Кем выдан паспорт",
@@ -36,9 +37,13 @@ const fields = {
 } as const;
 
 const directory = process.env.FDOC_TEST_TEMPLATE_DIR ?? path.join(process.cwd(), ".local", "fdoc-templates");
-const specs = [
-  { name: "Азбука MVP ТЕСТ договор", file: "fdoc-mvp-contract-test.docx", codes: Object.keys(fields) },
-  { name: "Азбука MVP ТЕСТ согласие", file: "fdoc-mvp-consent-test.docx", codes: Object.keys(fields).filter((code) => !["childName", "childBirth"].includes(code)) }
+const realDocuments = process.env.FDOC_TEST_REAL_DOCUMENTS === "true";
+const specs = realDocuments ? [
+  { name: "Азбука ДЕМО договор по исходному документу 2026", file: "fdoc-real-contract-demo.docx", codes: Object.keys(fields) },
+  { name: "Азбука ДЕМО согласие по исходному документу 2026", file: "fdoc-real-consent-demo.docx", codes: Object.keys(fields).filter((code) => !["childName", "childBirth", "groupName"].includes(code)) }
+] : [
+  { name: "Азбука MVP ТЕСТ договор", file: "fdoc-mvp-contract-test.docx", codes: Object.keys(fields).filter((code) => code !== "groupName") },
+  { name: "Азбука MVP ТЕСТ согласие", file: "fdoc-mvp-consent-test.docx", codes: Object.keys(fields).filter((code) => !["childName", "childBirth", "groupName"].includes(code)) }
 ];
 
 const list = await fetch(`${base}/corp/templates`, {

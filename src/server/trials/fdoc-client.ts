@@ -6,7 +6,7 @@ const responseSchema = z.object({
 
 const statusSchema = z.object({ status: z.string() });
 
-type SigningNames = { parentName: string; parentPhone: string; childName: string };
+type SigningNames = { parentName: string; parentPhone: string; childName: string; childBirth?: string; groupName?: string };
 
 function config() {
   if (process.env.FDOC_MVP_ENABLED !== "true") throw new Error("Подписание F.Doc не настроено.");
@@ -19,7 +19,13 @@ function config() {
     "FDOC_CONSENT_PARENT_NAME_PARAM_ID", "FDOC_CONSENT_PARENT_PHONE_PARAM_ID"
   ] as const;
   for (const key of required) if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
-  for (const key of required.filter((item) => item.endsWith("_PARAM_ID"))) {
+  const realDocumentFields = ["FDOC_CONTRACT_CHILD_BIRTH_PARAM_ID", "FDOC_CONTRACT_GROUP_NAME_PARAM_ID"] as const;
+  if (process.env.FDOC_REAL_DOCUMENTS === "true") {
+    for (const key of realDocumentFields) {
+      if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
+    }
+  }
+  for (const key of [...required.filter((item) => item.endsWith("_PARAM_ID")), ...(process.env.FDOC_REAL_DOCUMENTS === "true" ? realDocumentFields : [])]) {
     if (!Number.isSafeInteger(Number(process.env[key])) || Number(process.env[key]) <= 0) throw new Error(`Неверный ID параметра ${key}.`);
   }
   return {
@@ -60,11 +66,13 @@ function templateParams(prefix: "CONTRACT" | "CONSENT", names: SigningNames) {
   const fields = [
     ["PARENT_NAME", names.parentName],
     ["PARENT_PHONE", names.parentPhone],
-    ["CHILD_NAME", names.childName]
+    ["CHILD_NAME", names.childName],
+    ["CHILD_BIRTH", names.childBirth],
+    ["GROUP_NAME", names.groupName]
   ] as const;
   return fields.flatMap(([field, value]) => {
     const id = Number(process.env[`FDOC_${prefix}_${field}_PARAM_ID`]);
-    return Number.isSafeInteger(id) && id > 0 ? [{ id, value, isNotEditableByClient: true }] : [];
+    return value && Number.isSafeInteger(id) && id > 0 ? [{ id, value, isNotEditableByClient: true }] : [];
   });
 }
 

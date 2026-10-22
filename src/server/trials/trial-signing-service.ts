@@ -27,7 +27,7 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   const prisma = getPrisma();
   const trial = await prisma.trialParticipant.findFirstOrThrow({
     where: { id: trialId, schoolId: user.schoolId },
-    include: { coach: { select: { userId: true } }, convertedChild: { select: { parent: { select: { account: { select: { userId: true } } } } } } }
+    include: { coach: { select: { userId: true } }, group: { select: { name: true } }, convertedChild: { select: { birthDate: true, parent: { select: { account: { select: { userId: true } } } } } } }
   });
   assertAccess(user, trial.coach.userId, trial.convertedChild?.parent?.account?.userId);
   const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
@@ -89,7 +89,9 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
     const ids = await sendFdocPackage(signing.id, {
       childName: trial.childName,
       parentName: trial.parentName,
-      parentPhone
+      parentPhone,
+      childBirth: (testJourney?.childBirthDate ?? trial.convertedChild?.birthDate)?.toLocaleDateString("ru-RU", { timeZone: "UTC" }),
+      groupName: trial.group.name
     });
     const updated = await prisma.trialSigningPackage.update({
       where: { id: signing.id },
