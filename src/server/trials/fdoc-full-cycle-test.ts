@@ -14,14 +14,21 @@ import { firstPaidLessonAfter, lessonStartsAt, paymentDeadline, reservationDeadl
 import { convertTrial } from "./trial-service";
 import { syncTrialSigningByPackageId } from "./trial-signing-service";
 
-const registrationSchema = z.object({
+export const testParentSignupSchema = z.object({
   accessCode: z.string().min(1),
-  lessonId: z.uuid(),
-  parentName: z.string().trim().min(2).max(150).regex(/^[\p{L}\s]+$/u, "Для F.Doc укажите ФИО буквами, без точек и цифр."),
   parentPhone: z.string().trim().min(10).max(30),
+  password: z.string().min(10).max(128),
+  passwordConfirm: z.string()
+}).refine((input) => input.password === input.passwordConfirm, {
+  message: "Пароли не совпадают.", path: ["passwordConfirm"]
+});
+
+const registrationSchema = z.object({
+  lessonId: z.uuid(),
+  parentName: z.string().trim().min(2).max(150).regex(/^[\p{L}\s-]+$/u, "Укажите имя и фамилию буквами."),
+  parentVkUrl: z.string().trim().max(500).refine((value) => !value || /^https:\/\/(vk\.ru|vk\.com)\//i.test(value), "Укажите ссылку на vk.ru или vk.com.").optional(),
   childName: z.string().trim().min(2).max(150),
-  childBirthDate: z.iso.date(),
-  password: z.string().min(10).max(128).optional()
+  childBirthDate: z.iso.date()
 });
 
 function assertTestMode() {
@@ -88,26 +95,62 @@ export async function testBookableLessons() {
     .filter((row) => lessonStartsAt(row) > today && row.lessonDate <= latest &&
       (activeByGroup.get(row.groupId) ?? 0) + (reservedByGroup.get(row.groupId) ?? 0) < row.group.capacityLimit &&
       rows.some((next) => next.groupId === row.groupId && next.lessonDate > row.lessonDate))
-    .slice(0, 40)
+    .slice(0, 400)
     .map((row) => ({
-      id: row.id, date: dateToKey(row.lessonDate), time: row.startTime,
+      id: row.id, groupId: row.groupId, date: dateToKey(row.lessonDate), time: row.startTime,
       group: row.group.name, branch: row.group.branch.name,
       weekdays: [...new Set(row.group.scheduleTemplates.map((template) => template.weekday))].sort()
     }));
 }
 
-export async function registerTestJourney(raw: unknown, currentUser: CurrentUser | null = null) {
+export async function testBookingGroups() {
+  const { schoolId } = assertTestMode();
+  const [groups, lessons] = await Promise.all([
+    getPrisma().trainingGroup.findMany({
+      where: { schoolId, status: "ACTIVE", name: { not: "Группа F.Doc ТЕСТ" } },
+      orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
+      include: {
+        branch: { select: { name: true, address: true } },
+        scheduleTemplates: { where: { status: "ACTIVE" }, orderBy: [{ weekday: "asc" }, { startTime: "asc" }], select: { weekday: true, startTime: true, endTime: true } }
+      }
+    }),
+    testBookableLessons()
+  ]);
+  return groups.map((group) => ({
+    id: group.id, name: group.name, branch: group.branch.name,
+    address: group.address ?? group.branch.address ?? "Адрес уточняется",
+    schedule: group.scheduleTemplates,
+    lessons: lessons.filter((lesson) => lesson.groupId === group.id).map(({ id, date, time }) => ({ id, date, time }))
+  }));
+}
+
+export async function signupTestParent(raw: unknown) {
   const { schoolId, accessCode } = assertTestMode();
-  const input = registrationSchema.parse(raw);
+  const input = testParentSignupSchema.parse(raw);
   if (!equalSecret(input.accessCode, accessCode)) throw new Error("Неверный код доступа к тесту.");
   const phone = normalizeParentPhone(input.parentPhone);
+  const passwordHash = await hashPassword(input.password);
+  return getPrisma().$transaction(async (tx) => {
+    const [existingUser, existingParent] = await Promise.all([
+      tx.user.findFirst({ where: { schoolId, login: { in: [phone, phone.slice(1)] } }, select: { id: true } }),
+      tx.parent.findFirst({ where: { schoolId, phone, archivedAt: null }, select: { id: true } })
+    ]);
+    if (existingUser || existingParent) throw new Error("Этот телефон уже зарегистрирован. Войдите в кабинет родителя.");
+    const parent = await tx.parent.create({ data: { schoolId, phone } });
+    const user = await tx.user.create({ data: { schoolId, login: phone, passwordHash, role: "PARENT", status: "ACTIVE", displayName: "Родитель" } });
+    await tx.parentAccount.create({ data: { schoolId, parentId: parent.id, userId: user.id, status: "ACTIVE", activatedAt: new Date() } });
+    return user;
+  });
+}
+
+export async function registerTestJourney(raw: unknown, currentUser: CurrentUser) {
+  const { schoolId } = assertTestMode();
+  const input = registrationSchema.parse(raw);
   const birthDate = new Date(`${input.childBirthDate}T00:00:00.000Z`);
   const today = new Date();
   if (birthDate > today || birthDate.getUTCFullYear() < today.getUTCFullYear() - 18) throw new Error("Проверьте дату рождения ребёнка.");
   const age = today.getUTCFullYear() - birthDate.getUTCFullYear();
-  if (currentUser && (currentUser.role !== "PARENT" || currentUser.schoolId !== schoolId)) throw new Error("Запись доступна только родителю.");
-  if (!currentUser && !input.password) throw new Error("Укажите пароль для кабинета родителя.");
-  const passwordHash = !currentUser ? await hashPassword(input.password!) : null;
+  if (currentUser.role !== "PARENT" || currentUser.schoolId !== schoolId) throw new Error("Запись доступна только родителю.");
   const token = randomBytes(32).toString("base64url");
   const registration = await getPrisma().$transaction(async (tx) => {
     const lesson = await tx.lesson.findFirstOrThrow({
@@ -122,35 +165,25 @@ export async function registerTestJourney(raw: unknown, currentUser: CurrentUser
       tx.trialParticipant.count({ where: { schoolId, lessonId: lesson.id, status: "TRIAL_BOOKED" } })
     ]);
     if (activeChildren + reservations + bookedTrials >= lesson.group.capacityLimit) throw new Error("В выбранной группе сейчас нет свободного места.");
-    let parent;
-    let user;
-    if (currentUser) {
-      const account = await tx.parentAccount.findFirstOrThrow({ where: { schoolId, userId: currentUser.id, status: "ACTIVE" }, include: { parent: true, user: true } });
-      if (account.parent.phone !== phone || account.parent.fullName?.trim().toLocaleLowerCase("ru") !== input.parentName.trim().toLocaleLowerCase("ru")) {
-        throw new Error("Используйте имя и телефон своего кабинета.");
-      }
-      parent = account.parent;
-      user = account.user;
-    } else {
-      const [existingUser, existingParent] = await Promise.all([
-        tx.user.findFirst({ where: { schoolId, login: { in: [phone, phone.slice(1)] } }, select: { id: true } }),
-        tx.parent.findFirst({ where: { schoolId, phone, archivedAt: null }, select: { id: true } })
-      ]);
-      if (existingUser || existingParent) throw new Error("Этот телефон уже связан с карточкой. Войдите в существующий кабинет или обратитесь к администратору.");
-      parent = await tx.parent.create({ data: { schoolId, fullName: input.parentName, phone } });
-      user = await tx.user.create({ data: { schoolId, login: phone, passwordHash: passwordHash!, role: "PARENT", status: "ACTIVE", displayName: input.parentName } });
-      await tx.parentAccount.create({ data: { schoolId, parentId: parent.id, userId: user.id, status: "ACTIVE", activatedAt: today } });
+    const account = await tx.parentAccount.findFirstOrThrow({ where: { schoolId, userId: currentUser.id, status: "ACTIVE" }, include: { parent: true, user: true } });
+    if (account.parent.fullName && account.parent.fullName.trim().toLocaleLowerCase("ru") !== input.parentName.trim().toLocaleLowerCase("ru")) {
+      throw new Error("Используйте имя и фамилию своего кабинета.");
     }
+    const parent = await tx.parent.update({ where: { id: account.parentId }, data: {
+      fullName: input.parentName, vkProfileUrl: input.parentVkUrl || account.parent.vkProfileUrl
+    } });
+    await tx.user.update({ where: { id: account.userId }, data: { displayName: input.parentName } });
+    const phone = normalizeParentPhone(parent.phone);
     const child = await tx.child.create({ data: { schoolId, parentId: parent.id, fullName: input.childName, birthDate, status: "TRIAL" } });
     const trial = await tx.trialParticipant.create({ data: {
       schoolId, lessonId: lesson.id, groupId: lesson.groupId, coachId: lesson.substituteCoachId ?? lesson.coachId,
       convertedChildId: child.id, childName: input.childName, childAge: age, parentName: input.parentName,
-      parentPhone: phone, source: "OTHER"
+      parentPhone: phone, parentVkUrl: parent.vkProfileUrl, source: "OTHER"
     } });
     const journey = await tx.trialTestJourney.create({ data: { schoolId, trialId: trial.id, tokenHash: hashToken(token), childBirthDate: birthDate } });
-    return { user, journeyId: journey.id };
+    return { journeyId: journey.id };
   });
-  return { token: registration.journeyId, user: registration.user };
+  return { token: registration.journeyId };
 }
 
 async function findJourney(token: string, user: CurrentUser) {
