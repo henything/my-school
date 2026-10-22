@@ -17,18 +17,7 @@ type Followup = {
   group: { name: string };
 };
 
-export function TrialFollowupList({ trials }: { trials: Followup[] }) {
-  return <div className="panel">
-    <div className="border-b border-[var(--line)] px-5 py-4">
-      <h2 className="text-lg font-extrabold">После пробного: обратная связь и решение</h2>
-      <p className="mt-1 text-sm text-[var(--muted)]">Свяжитесь с родителем по телефону, запишите итог и отметьте решение семьи.</p>
-    </div>
-    {trials.length === 0 ? <p className="p-5 text-sm text-[var(--muted)]">Детей, ожидающих обратной связи, нет.</p> :
-      <div className="grid gap-3 p-4">{trials.map((trial) => <FollowupCard key={trial.id} trial={trial} />)}</div>}
-  </div>;
-}
-
-function FollowupCard({ trial }: { trial: Followup }) {
+export function TrialTaskActions({ trial }: { trial: Followup }) {
   const router = useRouter();
   const [comment, setComment] = useState(trial.comment ?? "");
   const [busy, setBusy] = useState(false);
@@ -57,7 +46,7 @@ function FollowupCard({ trial }: { trial: Followup }) {
     }
   }
 
-  return <article className="rounded-lg border border-[var(--line)] bg-white p-4">
+  return <div className="mt-4 border-t border-[var(--line)] pt-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <strong>{trial.childName ?? "Пробник"}</strong>
@@ -80,5 +69,5 @@ function FollowupCard({ trial }: { trial: Followup }) {
       </div>
     </div>}
     {error ? <p className="mt-3 text-sm text-red-700" role="alert">{error}</p> : null}
-  </article>;
+  </div>;
 }

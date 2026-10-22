@@ -436,9 +436,12 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 }
 
 async function ensureTrialProcessingTask(tx: Prisma.TransactionClient, currentUser: CurrentUser, trial: TrialRecord) {
-  const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
+  const coachFollowup = trial.trialAttended === true && Boolean(await tx.trialTestJourney.findUnique({ where: { trialId: trial.id }, select: { id: true } }));
+  const assigneeUserId = coachFollowup ? trial.coach.userId : await findAdminAssigneeUserId(tx, currentUser.schoolId);
   const lessonDate = dateToKey(trial.lesson.lessonDate);
-  const description = trial.childName
+  const description = coachFollowup
+    ? `Пробное занятие ${trial.childName ?? "ребёнка"} прошло ${lessonDate}. Свяжитесь с родителем, запишите обратную связь и отметьте решение семьи.`
+    : trial.childName
     ? `Пробник ${trial.childName} был на пробном занятии ${lessonDate}. Нужно обработать результат и принять решение.`
     : `Пробник без имени был на пробном занятии ${lessonDate}. Нужно проверить контакты и обработать.`;
 
@@ -447,11 +450,11 @@ async function ensureTrialProcessingTask(tx: Prisma.TransactionClient, currentUs
     actorUserId: currentUser.id,
     type: "TRIAL_NEEDS_PROCESSING",
     priority: "HIGH",
-    assigneeUserId: adminUserId,
+    assigneeUserId,
     relatedEntityType: "TrialParticipant",
     relatedEntityId: trial.id,
     groupId: trial.groupId,
-    title: "Обработать пробника",
+    title: coachFollowup ? `Обратная связь после пробного: ${trial.childName ?? "ребёнок"}` : "Обработать пробника",
     description
   });
 }
