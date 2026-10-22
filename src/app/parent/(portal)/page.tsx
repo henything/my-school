@@ -2,6 +2,7 @@ import Link from "next/link";
 import { CalendarDays, CreditCard, RefreshCcw } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { formatLessonDateTime } from "@/lib/date-format";
+import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentDashboard } from "@/server/parents/parent-portal-service";
 import { getPrisma } from "@/server/db/prisma";
@@ -52,7 +53,7 @@ export default async function ParentHomePage() {
         {testApplications.length > 0 ? <div className="panel p-5">
           <h2 className="mb-3 text-xl font-extrabold">Пробные занятия и документы</h2>
           <div className="grid gap-2">{testApplications.map((application) => <Link key={application.id} href={`/test-journey?token=${application.id}`} className="rounded-lg border border-[var(--line)] p-3 hover:border-[var(--accent)]">
-            {application.trial.childName} · {application.trial.lesson.lessonDate.toLocaleDateString("ru-RU")} · {application.trial.status}
+            {application.trial.childName} · {application.trial.lesson.lessonDate.toLocaleDateString("ru-RU")} · {labelForEnum(application.trial.status)}
           </Link>)}</div>
         </div> : null}
         {dashboard.children.map((child) => {
