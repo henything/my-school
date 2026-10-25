@@ -36,7 +36,8 @@ const trialInclude = {
   group: { select: { id: true, name: true, capacityLimit: true } },
   coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
   convertedChild: { select: { id: true, fullName: true, status: true } },
-  signingPackage: { select: { status: true, contractStatus: true, consentStatus: true, errorMessage: true, sentAt: true, checkedAt: true } },
+  signingPackage: { select: { status: true, method: true, contractStatus: true, consentStatus: true, errorMessage: true, sentAt: true, checkedAt: true } },
+  testJourney: { select: { mode: true, processingError: true, reserveExpiresAt: true, paymentDueAt: true, invoiceId: true, paidAt: true } },
   createdBy: { select: { id: true, displayName: true, login: true, role: true } }
 } as const;
 
@@ -66,11 +67,20 @@ export function serializeTrial(trial: TrialRecord) {
     trialAttended: trial.trialAttended,
     signingPackage: trial.signingPackage ? {
       status: trial.signingPackage.status,
+      method: trial.signingPackage.method,
       contractStatus: trial.signingPackage.contractStatus,
       consentStatus: trial.signingPackage.consentStatus,
       errorMessage: trial.signingPackage.errorMessage,
       sentAt: trial.signingPackage.sentAt?.toISOString() ?? null,
       checkedAt: trial.signingPackage.checkedAt?.toISOString() ?? null
+    } : null,
+    journey: trial.testJourney ? {
+      mode: trial.testJourney.mode,
+      processingError: trial.testJourney.processingError,
+      reserveExpiresAt: trial.testJourney.reserveExpiresAt?.toISOString() ?? null,
+      paymentDueAt: trial.testJourney.paymentDueAt?.toISOString() ?? null,
+      invoiceId: trial.testJourney.invoiceId,
+      paidAt: trial.testJourney.paidAt?.toISOString() ?? null
     } : null,
     comment: trial.comment,
     convertedAt: trial.convertedAt?.toISOString() ?? null,
@@ -299,8 +309,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 
     const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
     if (testJourney) {
-      if (existing.signingPackage?.status !== "SIGNED") throw new Error("Для тестовой заявки сначала подпишите оба документа.");
-      if (options?.initialChildStatus !== "PAUSED") throw new Error("Тестовая заявка активируется только после тестовой оплаты.");
+      if (existing.signingPackage?.status !== "SIGNED") throw new Error("Для заявки сначала подпишите оба документа.");
+      if (options?.initialChildStatus !== "PAUSED") throw new Error("Заявка активируется только после подтверждения оплаты.");
     }
 
     assertTrialCanBeConverted(existing.status);

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 
 type Signing = {
   status: string;
+  method?: string;
   contractStatus: string | null;
   consentStatus: string | null;
   errorMessage: string | null;
@@ -28,10 +29,11 @@ function documentStatus(status: string | null) {
   return status ? (documentLabels[status] ?? status) : "нет статуса";
 }
 
-export function TrialSigningControls({ trialId, attended, signing, canDownload = false }: { trialId: string; attended: boolean; signing: Signing | null; canDownload?: boolean }) {
+export function TrialSigningControls({ trialId, attended, signing, canDownload = false, canManual = false }: { trialId: string; attended: boolean; signing: Signing | null; canDownload?: boolean; canManual?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [manualOpen, setManualOpen] = useState(false);
 
   async function action(method: "POST" | "PUT") {
     setBusy(true);
@@ -48,10 +50,23 @@ export function TrialSigningControls({ trialId, attended, signing, canDownload =
     }
   }
 
+  async function submitManual(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true); setMessage("");
+    try {
+      const response = await fetch(`/api/trials/${trialId}/manual-signing`, { method: "POST", body: new FormData(event.currentTarget) });
+      const payload = await response.json() as { error?: string };
+      if (!response.ok) throw new Error(payload.error ?? "Не удалось подтвердить документы.");
+      setManualOpen(false);
+      router.refresh();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Ошибка проверки документов."); }
+    finally { setBusy(false); }
+  }
+
   if (!attended && !signing) return null;
   return (
     <div className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">
-      <div className="font-semibold">Документы F.Doc</div>
+      <div className="font-semibold">Документы · {signing?.method === "MANUAL" ? "проверены администратором" : "F.Doc"}</div>
       {signing ? (
         <div className="mt-1">
           <p>{labels[signing.status] ?? signing.status}</p>
@@ -63,8 +78,15 @@ export function TrialSigningControls({ trialId, attended, signing, canDownload =
         {!signing && attended ? <Button type="button" size="sm" disabled={busy} onClick={() => void action("POST")}>Хочет продолжать — отправить договор и согласие</Button> : null}
         {canDownload && signing?.contractStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/contract`}>Скачать договор</a> : null}
         {canDownload && signing?.consentStatus === "SIGNED" ? <a className="text-[var(--accent-strong)] underline" href={`/api/trials/${trialId}/signing/consent`}>Скачать согласие</a> : null}
-        {signing && signing.status !== "PENDING" && signing.status !== "SENT" && signing.status !== "ERROR" ? <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void action("PUT")}>Проверить статус</Button> : null}
+        {signing && signing.method !== "MANUAL" && signing.status !== "PENDING" && signing.status !== "SENT" && signing.status !== "ERROR" ? <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void action("PUT")}>Проверить статус</Button> : null}
+        {canManual && !signing && attended ? <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => setManualOpen((value) => !value)}>Подписано другим способом</Button> : null}
       </div>
+      {manualOpen ? <form className="mt-3 grid gap-2" onSubmit={submitManual}>
+        <label className="label">Подписанный договор PDF<input className="field" type="file" name="contract" accept="application/pdf" required /></label>
+        <label className="label">Подписанное согласие PDF<input className="field" type="file" name="consent" accept="application/pdf" required /></label>
+        <label className="label">Как проверили документы<input className="field" name="comment" minLength={3} required /></label>
+        <Button type="submit" size="sm" disabled={busy}>Проверить и выставить счёт</Button>
+      </form> : null}
       {message ? <p className="mt-2 text-[var(--danger)]">{message}</p> : null}
     </div>
   );

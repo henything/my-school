@@ -1,0 +1,24 @@
+import { NextResponse } from "next/server";
+import { errorMessage, jsonError } from "@/lib/http";
+import { requireApiUser } from "@/server/auth/api-user";
+import { chooseTestSchedule, getTestJourney, refreshTestJourney, startTestSigning } from "@/server/trials/fdoc-full-cycle-test";
+
+export async function GET(request: Request) {
+  const user = await requireApiUser(["PARENT", "ADMIN", "SUPER_ADMIN"]);
+  if (!user.ok) return jsonError(user.error, user.status);
+  try { return NextResponse.json(await getTestJourney(new URL(request.url).searchParams.get("token") ?? "", user.user, "PRODUCTION")); }
+  catch (error) { return jsonError(errorMessage(error), 400); }
+}
+
+export async function POST(request: Request) {
+  const user = await requireApiUser(["PARENT", "ADMIN", "SUPER_ADMIN"]);
+  if (!user.ok) return jsonError(user.error, user.status);
+  try {
+    const input = await request.json() as { token?: string; action?: string; attendanceWeekday?: number };
+    const token = input.token ?? "";
+    if (input.action === "refresh") return NextResponse.json(await refreshTestJourney(token, user.user, "PRODUCTION"));
+    if (input.action === "choose-schedule") return NextResponse.json(await chooseTestSchedule(token, user.user, input.attendanceWeekday, "PRODUCTION"));
+    if (input.action === "start-signing") return NextResponse.json(await startTestSigning(token, user.user, "PRODUCTION"));
+    return jsonError("Неизвестное действие.", 400);
+  } catch (error) { return jsonError(errorMessage(error), 400); }
+}

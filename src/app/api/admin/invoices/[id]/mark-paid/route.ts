@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { errorMessage, jsonError } from "@/lib/http";
 import { requireApiUser } from "@/server/auth/api-user";
 import { markInvoicePaidManually } from "@/server/billing/billing-service";
+import { activatePaidProductionJourney } from "@/server/trials/fdoc-full-cycle-test";
 import { markInvoicePaidSchema } from "@/server/billing/schemas";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 
@@ -20,6 +21,7 @@ export async function POST(request: Request, context: RouteContext) {
     const { id } = await context.params;
     const input = markInvoicePaidSchema.parse(await request.json().catch(() => ({})));
     const invoice = await markInvoicePaidManually(currentUser.user, id, input);
+    if (invoice.status === "PAID") await activatePaidProductionJourney(id);
     return NextResponse.json({ invoice });
   } catch (error) {
     return jsonError(errorMessage(error), 400);

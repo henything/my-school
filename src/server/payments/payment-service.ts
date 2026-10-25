@@ -5,6 +5,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { admissionStatusAfterLessonBalance } from "@/server/billing/calculations";
 import { getActiveParentAccount } from "@/server/parents/parent-auth-service";
+import { activatePaidProductionJourney } from "@/server/trials/fdoc-full-cycle-test";
 import { phoneDigitsForProvider } from "@/server/parents/phone";
 import {
   createYooKassaPayment,
@@ -194,6 +195,8 @@ export async function handleYooKassaWebhook(payload: YooKassaWebhookPayload) {
 
     if (event === "payment.succeeded" && payment.status === "succeeded" && payment.paid) {
       await applySucceededProviderPayment(payment, paymentId);
+      const invoiceId = typeof payment.metadata?.invoiceId === "string" ? payment.metadata.invoiceId : null;
+      if (invoiceId) await activatePaidProductionJourney(invoiceId);
     } else if (event === "payment.canceled" || payment.status === "canceled") {
       await applyCanceledProviderPayment(paymentId, payment.status);
     }
@@ -242,6 +245,11 @@ async function createWebhookEventIfNew(
     return { created: true, id: event.id };
   } catch (error) {
     if (isUniqueConstraintError(error)) {
+      const prior = await prisma.paymentWebhookEvent.findUnique({
+        where: { provider_providerEventId: { provider: YOOKASSA_PROVIDER, providerEventId: input.providerEventId } },
+        select: { id: true, processedAt: true }
+      });
+      if (prior && !prior.processedAt) return { created: true, id: prior.id };
       return { created: false, id: null };
     }
     throw error;

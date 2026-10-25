@@ -6,6 +6,7 @@ import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
 import { reservationDeadline } from "./test-journey-rules";
+import { finalizeSignedTestJourneyByTrialId } from "./fdoc-full-cycle-test";
 
 function assertAccess(user: CurrentUser, coachUserId: string, parentUserId?: string | null) {
   if (!hasRole(user, ADMIN_ROLES) && !(user.role === "COACH" && user.id === coachUserId) && !(user.role === "PARENT" && user.id === parentUserId)) {
@@ -31,6 +32,9 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   });
   assertAccess(user, trial.coach.userId, trial.convertedChild?.parent?.account?.userId);
   const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
+  if (testJourney && (testJourney.mode === "PRODUCTION") !== (process.env.FDOC_ENVIRONMENT === "PRODUCTION")) {
+    throw new Error("Контур F.Doc не соответствует заявке.");
+  }
   if (testJourney && (trial.status !== "WANTS_TO_CONTINUE" || !testJourney.scheduleChosenAt)) {
     throw new Error("Тренер должен подтвердить продолжение, а родитель — выбрать график.");
   }
@@ -76,6 +80,7 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
     create: { schoolId: user.schoolId, trialId },
     update: {}
   });
+  if (signing.method !== "FDOC") throw new Error("Для этой заявки выбран другой способ подписания.");
   if (signing.status !== "PENDING") return signing;
 
   // Claim the package before the external call; a repeat click cannot send a second SMS.
@@ -136,7 +141,60 @@ export async function syncTrialSigning(user: CurrentUser, trialId: string) {
 export async function syncTrialSigningByPackageId(packageId: string) {
   const signing = await getPrisma().trialSigningPackage.findUnique({ where: { id: packageId } });
   if (!signing) return null;
+  if (signing.method !== "FDOC") return signing;
   return syncSigningRecord(signing, null);
+}
+
+export async function verifyManualTrialSigning(user: CurrentUser, trialId: string, contract: File, consent: File, comment: string) {
+  if (!hasRole(user, ADMIN_ROLES)) throw new Error("Подписанные документы проверяет администратор.");
+  if (!comment.trim()) throw new Error("Укажите основание проверки документов.");
+  const validate = async (file: File) => {
+    if (file.type !== "application/pdf" || file.size < 5 || file.size > 8_000_000) throw new Error("Нужны два PDF-файла до 8 МБ каждый.");
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (bytes.subarray(0, 5).toString() !== "%PDF-") throw new Error("Загружен файл не в формате PDF.");
+    return bytes;
+  };
+  const [contractBytes, consentBytes] = await Promise.all([validate(contract), validate(consent)]);
+  const prisma = getPrisma();
+  const trial = await prisma.trialParticipant.findFirstOrThrow({
+    where: { id: trialId, schoolId: user.schoolId },
+    include: { testJourney: true }
+  });
+  if (!trial.testJourney || trial.testJourney.mode !== "PRODUCTION" || trial.status !== "WANTS_TO_CONTINUE" ||
+      !trial.testJourney.scheduleChosenAt || trial.trialAttended !== true) {
+    throw new Error("Ручное подтверждение доступно после пробного, решения продолжать и выбора графика.");
+  }
+  if (trial.testJourney.reserveExpiresAt && trial.testJourney.reserveExpiresAt < new Date()) {
+    throw new Error("Резерв истёк. Проверьте место перед подтверждением документов.");
+  }
+  const existing = await prisma.trialSigningPackage.findUnique({ where: { trialId } });
+  if (existing && (existing.method !== "MANUAL" || existing.status !== "ERROR")) {
+    throw new Error("Для заявки уже создан комплект документов. Повторная проверка требует отдельного разбора.");
+  }
+  const directory = process.env.FDOC_SIGNED_FILES_DIR;
+  if (!directory) throw new Error("Приватное хранилище документов не настроено.");
+  const signing = existing ?? await prisma.trialSigningPackage.create({
+    data: { schoolId: user.schoolId, trialId, method: "MANUAL", status: "SENT" }
+  });
+  try {
+    await mkdir(path.join(directory, signing.id), { recursive: true, mode: 0o700 });
+    await Promise.all([
+      writeFile(pdfPath(signing.id, "contract"), contractBytes, { mode: 0o600 }),
+      writeFile(pdfPath(signing.id, "consent"), consentBytes, { mode: 0o600 })
+    ]);
+    await prisma.trialSigningPackage.update({ where: { id: signing.id }, data: {
+      status: "SIGNED", contractStatus: "SIGNED", consentStatus: "SIGNED", signedAt: new Date(), checkedAt: new Date(),
+      verifiedByUserId: user.id, verificationComment: comment.trim(), errorMessage: null
+    } });
+    await writeAuditLog({ schoolId: user.schoolId, actorUserId: user.id, action: "TRIAL_MANUAL_SIGNING_VERIFIED", entityType: "TrialSigningPackage", entityId: signing.id,
+      newValue: { method: "MANUAL", contractFile: contract.name, consentFile: consent.name }, comment: comment.trim() });
+    await finalizeSignedTestJourneyByTrialId(trialId);
+    return { signed: true };
+  } catch (error) {
+    const latest = await prisma.trialSigningPackage.findUnique({ where: { id: signing.id }, select: { status: true } });
+    if (latest?.status !== "SIGNED") await prisma.trialSigningPackage.update({ where: { id: signing.id }, data: { status: "ERROR", errorMessage: publicError(error) } });
+    throw error;
+  }
 }
 
 async function syncSigningRecord(signing: {
@@ -173,11 +231,14 @@ async function saveSignedPdf(packageId: string, documentId: string, kind: "contr
 }
 
 export async function getSignedTrialDocument(user: CurrentUser, trialId: string, kind: "contract" | "consent") {
-  if (!hasRole(user, ADMIN_ROLES)) throw new Error("Подписанные документы доступны только администратору.");
   const signing = await getPrisma().trialSigningPackage.findFirstOrThrow({
     where: { trialId, schoolId: user.schoolId },
-    include: { trial: { include: { coach: { select: { userId: true } } } } }
+    include: { trial: { include: { convertedChild: { include: { parent: { include: { account: { select: { userId: true, status: true } } } } } } } } }
   });
+  const ownsDocument = user.role === "PARENT" &&
+    signing.trial.convertedChild?.parent?.account?.status === "ACTIVE" &&
+    signing.trial.convertedChild.parent.account.userId === user.id;
+  if (!hasRole(user, ADMIN_ROLES) && !ownsDocument) throw new Error("Нет доступа к документу.");
   if (kind === "contract" ? signing.contractStatus !== "SIGNED" : signing.consentStatus !== "SIGNED") {
     throw new Error("Документ ещё не подписан.");
   }

@@ -1,0 +1,7 @@
+[Unit]
+Description=Back up signed F.Doc PDF files
+
+[Service]
+Type=oneshot
+TimeoutStartSec=10min
+ExecStart=@APP_DIR@/scripts/backup-fdoc-documents.sh

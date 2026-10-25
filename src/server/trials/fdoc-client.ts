@@ -11,7 +11,21 @@ type SigningNames = { parentName: string; parentPhone: string; childName: string
 function config() {
   if (process.env.FDOC_MVP_ENABLED !== "true") throw new Error("Подписание F.Doc не настроено.");
   const base = process.env.FDOC_BASE_URL ?? "https://demo.fdoc.ru";
-  if (new URL(base).hostname !== "demo.fdoc.ru") throw new Error("MVP разрешён только в тестовом контуре F.Doc.");
+  const url = new URL(base);
+  const production = process.env.FDOC_ENVIRONMENT === "PRODUCTION";
+  if (url.protocol !== "https:" || !url.hostname.endsWith(".fdoc.ru") && url.hostname !== "fdoc.ru") {
+    throw new Error("Недопустимый адрес F.Doc.");
+  }
+  if (production) {
+    if (url.hostname === "demo.fdoc.ru" || process.env.FDOC_PROD_ENABLED !== "true" ||
+        process.env.APP_BASE_URL !== "https://azbukadvizheniya.ru" || process.env.FDOC_REAL_DOCUMENTS !== "true" ||
+        !process.env.FDOC_EMPLOYEE_ID) {
+      throw new Error("Рабочий F.Doc не готов к отправке документов.");
+    }
+  } else if ((process.env.FDOC_ENVIRONMENT ?? "DEMO") !== "DEMO" || url.hostname !== "demo.fdoc.ru" ||
+             process.env.APP_BASE_URL !== "https://test.195.133.56.68.sslip.io") {
+    throw new Error("Тестовый F.Doc разрешён только в DEMO контуре.");
+  }
   const required = [
     "FDOC_API_KEY", "FDOC_CORP_ID", "FDOC_EMPLOYEE_LOGIN", "FDOC_EMPLOYEE_PASSWORD",
     "FDOC_CONTRACT_TEMPLATE_ID", "FDOC_CONSENT_TEMPLATE_ID",
@@ -106,7 +120,7 @@ export async function sendFdocPackage(packageId: string, names: SigningNames) {
   const contractDocumentId = ids.find((item) => item.templateId === c.contractTemplateId)?.documentId;
   const consentDocumentId = ids.find((item) => item.templateId === c.consentTemplateId)?.documentId;
   if (!contractDocumentId || !consentDocumentId) throw new Error("F.Doc не вернул номера обоих документов.");
-  return { contractDocumentId, consentDocumentId };
+  return { contractDocumentId, consentDocumentId, contractTemplateId: c.contractTemplateId, consentTemplateId: c.consentTemplateId };
 }
 
 export async function fdocStatus(id: string, idType: "package" | "document") {

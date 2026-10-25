@@ -60,11 +60,13 @@ export default async function TrialsPage() {
                         {trial.convertedChild ? <span>Ребёнок: {trial.convertedChild.fullName}</span> : null}
                       </div>
                       {trial.comment ? <p className="mt-2 text-sm text-[var(--muted)]">{trial.comment}</p> : null}
+                      {trial.journey?.mode === "PRODUCTION" ? <p className="mt-2 text-sm">Заявка на зачисление · {trial.journey.paidAt ? "оплачена" : trial.journey.invoiceId ? "ожидает оплату" : "в работе"}</p> : null}
+                      {trial.journey?.processingError ? <p className="mt-2 rounded-lg border border-red-300 bg-red-50 p-2 text-sm text-red-800">Требует проверки: {trial.journey.processingError}</p> : null}
                     </div>
                     <StatusBadge status={trial.status} />
                   </div>
                   <TrialAttendanceButtons trialId={trial.id} status={trial.status} />
-                  <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} canDownload />
+                  {process.env.FDOC_MVP_ENABLED === "true" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} canDownload canManual={trial.status === "WANTS_TO_CONTINUE" && trial.convertedChild?.status === "TRIAL"} /> : null}
                   <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <ConvertTrialForm trial={trial} groups={activeGroups} childRows={children} parents={parents} />
                     <TransferTrialForm trialId={trial.id} disabled={isClosed} />

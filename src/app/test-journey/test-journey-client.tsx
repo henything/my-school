@@ -12,6 +12,7 @@ type Journey = {
   trialStatus: string;
   trialAttended: boolean | null;
   signingStatus: string | null;
+  signingMethod: string | null;
   contractStatus: string | null;
   consentStatus: string | null;
   childStatus: string | null;
@@ -21,7 +22,7 @@ type Journey = {
   reserveExpiresAt: string | null;
   paymentDueAt: string | null;
   firstPaidLessonDate: string | null;
-  invoice: { number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string } | null;
+  invoice: { id: string; number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string; paidDates: string[] } | null;
 };
 
 const weekdayLabels = ["", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
@@ -45,8 +46,10 @@ function dateLabel(date: string) {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric", weekday: "long", timeZone: "UTC" });
 }
 
-export function TestJourneyClient({ groups, token, parent, staffSession }: { groups: Group[]; token: string; parent: Parent | null; staffSession: boolean }) {
+export function TestJourneyClient({ groups, token, parent, staffSession, mode = "TEST" }: { groups: Group[]; token: string; parent: Parent | null; staffSession: boolean; mode?: "TEST" | "PRODUCTION" }) {
   const router = useRouter();
+  const apiBase = mode === "TEST" ? "/api/test-journey" : "/api/join";
+  const pageBase = mode === "TEST" ? "/test-journey" : "/join";
   const [journey, setJourney] = useState<Journey | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -72,7 +75,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
     let active = true;
     async function load() {
       try {
-        const response = await fetch(`/api/test-journey?token=${encodeURIComponent(token)}`, { cache: "no-store" });
+        const response = await fetch(`${apiBase}?token=${encodeURIComponent(token)}`, { cache: "no-store" });
         const body = await response.json();
         if (!response.ok) throw new Error(body.error ?? "Не удалось загрузить заявку.");
         if (active) { setJourney(body as Journey); setError(""); }
@@ -83,16 +86,16 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
     void load();
     const timer = window.setInterval(() => void load(), 15_000);
     return () => { active = false; window.clearInterval(timer); };
-  }, [token]);
+  }, [token, apiBase]);
 
   async function signup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (password !== passwordConfirm) { setError("Пароли не совпадают."); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/test-journey/signup", {
+      const response = await fetch(`${apiBase}/signup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accessCode, parentPhone: phone, password, passwordConfirm })
+        body: JSON.stringify({ ...(mode === "TEST" ? { accessCode } : {}), parentPhone: phone, password, passwordConfirm })
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Не удалось создать кабинет.");
@@ -110,7 +113,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
     if (!selectedLessonId || !selectedGroup) { setError("Выберите группу и дату пробного занятия."); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/test-journey/register", {
+      const response = await fetch(`${apiBase}/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate })
       });
@@ -125,7 +128,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
   async function action(name: "refresh" | "choose-schedule" | "start-signing" | "simulate-payment") {
     setBusy(true); setError("");
     try {
-      const response = await fetch("/api/test-journey", {
+      const response = await fetch(apiBase, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, action: name, attendanceWeekday: chosenWeekday })
       });
@@ -141,7 +144,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <h1 className="text-2xl font-bold">{token ? "Ваш путь после пробного занятия" : "Запись на пробное занятие"}</h1>
-      <p className="mt-2 text-sm text-[var(--muted)]">Тестовый стенд: используйте вымышленные данные ребёнка и паспорта. Деньги при тестовой оплате не списываются.</p>
+      {mode === "TEST" ? <p className="mt-2 text-sm text-[var(--muted)]">Тестовый стенд: используйте вымышленные данные ребёнка и паспорта. Деньги при тестовой оплате не списываются.</p> : <p className="mt-2 text-sm text-[var(--muted)]">Запишитесь на бесплатное пробное занятие. После него тренер расскажет, как прошло занятие, и поможет с дальнейшими шагами.</p>}
       {!token ? <>
         <nav className="mt-7 grid grid-cols-4 gap-2" aria-label="Шаги записи">
           {stageLabels.map((label, index) => <div key={label} aria-current={stage === index + 1 ? "step" : undefined}
@@ -152,7 +155,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
         {stage === 1 ? <form className="panel mt-6 grid gap-4 p-5" onSubmit={signup}>
           <h2 className="text-lg font-bold">Создайте кабинет родителя</h2>
           {staffSession ? <p className="text-sm text-[var(--muted)]">Сейчас вы вошли как сотрудник. После регистрации это окно переключится в кабинет родителя. Кабинет тренера откройте в приватном окне.</p> : null}
-          <label className="label">Код доступа к тесту<input className="field" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required autoComplete="off" /></label>
+          {mode === "TEST" ? <label className="label">Код доступа к тесту<input className="field" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required autoComplete="off" /></label> : null}
           <label className="label">Номер телефона<input className="field" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" inputMode="tel" required placeholder="+7 999 123-45-67" autoComplete="tel" /></label>
           <label className="label">Придумайте пароль<input className="field" value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={10} maxLength={128} required autoComplete="new-password" /></label>
           <label className="label">Повторите пароль<input className="field" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} type="password" minLength={10} maxLength={128} required autoComplete="new-password" aria-invalid={Boolean(passwordConfirm && password !== passwordConfirm)} /></label>
@@ -171,7 +174,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
         </form> : null}
         {stage === 3 ? <section className="mt-6 grid gap-4">
           <div className="panel p-5"><h2 className="text-lg font-bold">Выберите группу и пробное занятие</h2>
-            <p className="mt-1 text-sm text-[var(--muted)]">Здесь показаны группы Азбуки движения и ближайшие свободные занятия на тестовом стенде.</p></div>
+            <p className="mt-1 text-sm text-[var(--muted)]">Здесь показаны ближайшие свободные занятия.</p></div>
           {groups.map((group) => <div key={group.id} className={`panel p-5 ${selectedGroupId === group.id ? "ring-2 ring-[var(--accent)]" : ""}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div><h3 className="text-lg font-bold">{group.branch} · {group.name}</h3><p className="mt-1 text-sm">{group.address}</p></div>
@@ -201,7 +204,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
             <p className="mt-2 font-semibold">{dateLabel(selectedLesson.date)} в {selectedLesson.time}</p>
             <p className="mt-1 text-sm">{selectedGroup.address}</p>
             <p className="mt-4 text-sm text-[var(--muted)]">Тренер отметит посещение после занятия. Дальнейшие шаги появятся в вашем кабинете.</p>
-            <div className="mt-6"><Button type="button" autoFocus onClick={() => router.push(`/test-journey?token=${encodeURIComponent(createdToken)}`)}>Перейти в кабинет</Button></div>
+            <div className="mt-6"><Button type="button" autoFocus onClick={() => router.push(`${pageBase}?token=${encodeURIComponent(createdToken)}`)}>Перейти в кабинет</Button></div>
           </div>
         </div> : null}
       </> : (
@@ -271,16 +274,22 @@ export function TestJourneyClient({ groups, token, parent, staffSession }: { gro
 
               {journey.signingStatus === "SIGNED" ? <div className="panel grid gap-3 p-6">
                 <h3 className="text-xl font-bold">Документы подписаны</h3>
-                <p className="text-sm text-[var(--muted)]">Договор и согласие получены. Теперь можно оплатить занятия.</p>
+                <p className="text-sm text-[var(--muted)]">Договор и согласие {journey.signingMethod === "MANUAL" ? "проверены администратором" : "подписаны через F.Doc"}. Теперь можно оплатить занятия.</p>
+                <div className="flex gap-4 text-sm font-semibold text-[var(--accent-strong)]">
+                  <a className="underline" href={`/api/trials/${journey.trialId}/signing/contract`}>Скачать договор</a>
+                  <a className="underline" href={`/api/trials/${journey.trialId}/signing/consent`}>Скачать согласие</a>
+                </div>
                 {journey.invoice ? <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4">
                   <p className="font-semibold">Счёт {journey.invoice.number}</p>
                   <p className="mt-1 text-2xl font-bold">{(journey.invoice.amountKopeks / 100).toLocaleString("ru-RU")} ₽</p>
                   <p className="mt-1 text-sm">{invoiceLabel(journey.invoice.status)}</p>
+                  {journey.invoice.paidDates.length ? <p className="mt-2 text-sm">Занятия в счёте: {journey.invoice.paidDates.map((date) => dateLabel(date)).join(" · ")}</p> : null}
                 </div> : <div className="grid gap-3"><p className="text-sm">Счёт формируется. Обычно это занимает несколько секунд.</p>
                   <div><Button variant="secondary" type="button" disabled={busy} onClick={() => void action("refresh")}>Проверить счёт</Button></div>
                 </div>}
-                {journey.invoice && journey.invoice.status !== "PAID" ? <div><Button type="button" disabled={busy} onClick={() => void action("simulate-payment")}>Симулировать оплату без списания денег</Button></div> : null}
-                {journey.invoice && journey.invoice.status !== "PAID" ? <p className="text-sm text-[var(--muted)]">На тестовом стенде кнопка отмечает счёт оплаченным без списания денег.</p> : null}
+                {journey.invoice && journey.invoice.status !== "PAID" && mode === "TEST" ? <div><Button type="button" disabled={busy} onClick={() => void action("simulate-payment")}>Симулировать оплату без списания денег</Button></div> : null}
+                {journey.invoice && journey.invoice.status !== "PAID" && mode === "TEST" ? <p className="text-sm text-[var(--muted)]">На тестовом стенде кнопка отмечает счёт оплаченным без списания денег.</p> : null}
+                {journey.invoice && journey.invoice.status !== "PAID" && mode === "PRODUCTION" ? <a className="inline-flex rounded-lg bg-[var(--accent)] px-4 py-3 font-semibold text-white" href={`/parent/payments?invoice=${journey.invoice.id}`}>Перейти к оплате</a> : null}
               </div> : null}
 
               <div className="panel grid gap-2 p-5 text-sm">

@@ -1187,6 +1187,11 @@ model TrialSigningPackage {
   schoolId          String             @map("school_id") @db.Uuid
   trialId           String             @unique @map("trial_id") @db.Uuid
   status            TrialSigningStatus @default(PENDING)
+  method            String             @default("FDOC")
+  verifiedByUserId  String?            @map("verified_by_user_id") @db.Uuid
+  verificationComment String?          @map("verification_comment")
+  contractTemplateId String?            @map("contract_template_id")
+  consentTemplateId  String?            @map("consent_template_id")
   contractDocumentId String?           @map("contract_document_id")
   consentDocumentId  String?           @map("consent_document_id")
   contractStatus    String?            @map("contract_status")
@@ -1210,6 +1215,9 @@ model TrialTestJourney {
   schoolId       String   @map("school_id") @db.Uuid
   trialId        String   @unique @map("trial_id") @db.Uuid
   tokenHash      String   @unique @map("token_hash")
+  mode           String   @default("TEST")
+  invoiceId      String?  @unique @map("invoice_id") @db.Uuid
+  processingError String? @map("processing_error")
   childBirthDate DateTime @map("child_birth_date") @db.Date
   attendanceWeekday Int? @map("attendance_weekday")
   scheduleChosenAt DateTime? @map("schedule_chosen_at")

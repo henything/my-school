@@ -38,7 +38,7 @@ export default async function CoachLessonPage({ params }: { params: Promise<{ id
         </div>
       </section>
 
-      <TrialPanel lessonId={lesson.id} trials={lesson.trials} />
+      <TrialPanel lessonId={lesson.id} trials={lesson.trials} signingEnabled={process.env.FDOC_MVP_ENABLED === "true"} />
       <AttendanceForm lessonId={lesson.id} lessonChildren={lesson.children} />
     </div>
   );

@@ -27,6 +27,7 @@ type Trial = {
 type TrialPanelProps = {
   lessonId: string;
   trials: Trial[];
+  signingEnabled: boolean;
 };
 
 const sources = [
@@ -43,7 +44,7 @@ function nullable(value: FormDataEntryValue | null) {
   return text.length > 0 ? text : null;
 }
 
-export function TrialPanel({ lessonId, trials }: TrialPanelProps) {
+export function TrialPanel({ lessonId, trials, signingEnabled }: TrialPanelProps) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -150,7 +151,7 @@ export function TrialPanel({ lessonId, trials }: TrialPanelProps) {
       ) : (
         <div className="grid gap-3">
           {trials.map((trial) => (
-            <TrialCard key={trial.id} trial={trial} />
+            <TrialCard key={trial.id} trial={trial} signingEnabled={signingEnabled} />
           ))}
         </div>
       )}
@@ -158,7 +159,7 @@ export function TrialPanel({ lessonId, trials }: TrialPanelProps) {
   );
 }
 
-function TrialCard({ trial }: { trial: Trial }) {
+function TrialCard({ trial, signingEnabled }: { trial: Trial; signingEnabled: boolean }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [message, setMessage] = useState("");
@@ -297,7 +298,7 @@ function TrialCard({ trial }: { trial: Trial }) {
         </> : null}
         {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
       </div>
-      {trial.convertedChild?.status !== "TRIAL" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} /> : null}
+      {signingEnabled && trial.convertedChild?.status !== "TRIAL" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} /> : null}
     </form>
   );
 }

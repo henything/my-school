@@ -16,8 +16,8 @@ const rubFormatter = new Intl.NumberFormat("ru-RU", {
 export default async function ParentHomePage() {
   const currentUser = await requireRole(["PARENT"]);
   const dashboard = await getParentDashboard(currentUser);
-  const testApplications = process.env.FDOC_FULL_CYCLE_TEST_ENABLED === "true" ? await getPrisma().trialTestJourney.findMany({
-    where: { schoolId: currentUser.schoolId, trial: { convertedChild: { parent: { account: { userId: currentUser.id } } } } },
+  const applications = process.env.FDOC_FULL_CYCLE_TEST_ENABLED === "true" || process.env.FDOC_PROD_ENABLED === "true" ? await getPrisma().trialTestJourney.findMany({
+    where: { schoolId: currentUser.schoolId, mode: process.env.FDOC_PROD_ENABLED === "true" ? "PRODUCTION" : "TEST", trial: { convertedChild: { parent: { account: { userId: currentUser.id } } } } },
     include: { trial: { select: { childName: true, status: true, lesson: { select: { lessonDate: true } } } } },
     orderBy: { createdAt: "desc" }, take: 10
   }) : [];
@@ -50,9 +50,9 @@ export default async function ParentHomePage() {
       </section>
 
       <section className="grid gap-4">
-        {testApplications.length > 0 ? <div className="panel p-5">
+        {applications.length > 0 ? <div className="panel p-5">
           <h2 className="mb-3 text-xl font-extrabold">Пробные занятия и документы</h2>
-          <div className="grid gap-2">{testApplications.map((application) => <Link key={application.id} href={`/test-journey?token=${application.id}`} className="rounded-lg border border-[var(--line)] p-3 hover:border-[var(--accent)]">
+          <div className="grid gap-2">{applications.map((application) => <Link key={application.id} href={`${application.mode === "PRODUCTION" ? "/join" : "/test-journey"}?token=${application.id}`} className="rounded-lg border border-[var(--line)] p-3 hover:border-[var(--accent)]">
             {application.trial.childName} · {application.trial.lesson.lessonDate.toLocaleDateString("ru-RU")} · {labelForEnum(application.trial.status)}
           </Link>)}</div>
         </div> : null}

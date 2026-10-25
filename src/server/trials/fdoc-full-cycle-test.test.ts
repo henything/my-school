@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { testBookableLessons, testParentSignupSchema } from "./fdoc-full-cycle-test";
+import { productionBookingGroups, productionParentSignupSchema, testBookableLessons, testParentSignupSchema } from "./fdoc-full-cycle-test";
 
 afterEach(() => vi.unstubAllEnvs());
 
@@ -17,4 +17,10 @@ it("requires the password confirmation to match before creating an account", () 
   const signup = { accessCode: "code", parentPhone: "+79990000000", password: "long-password-1", passwordConfirm: "another-password" };
   expect(testParentSignupSchema.safeParse(signup).success).toBe(false);
   expect(testParentSignupSchema.safeParse({ ...signup, passwordConfirm: signup.password }).success).toBe(true);
+  expect(productionParentSignupSchema.safeParse({ ...signup, passwordConfirm: "another-password" }).success).toBe(false);
+});
+
+it("keeps production booking closed until the pilot flag is enabled", async () => {
+  vi.stubEnv("FDOC_PUBLIC_BOOKING_ENABLED", "false");
+  await expect(productionBookingGroups()).rejects.toThrow("закрыта");
 });

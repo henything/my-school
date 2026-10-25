@@ -4,7 +4,7 @@ import { requireApiUser } from "@/server/auth/api-user";
 import { getSignedTrialDocument } from "@/server/trials/trial-signing-service";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; kind: string }> }) {
-  const user = await requireApiUser(["SUPER_ADMIN", "ADMIN"]);
+  const user = await requireApiUser(["SUPER_ADMIN", "ADMIN", "PARENT"]);
   if (!user.ok) return jsonError(user.error, user.status);
   try {
     const { id, kind } = await params;

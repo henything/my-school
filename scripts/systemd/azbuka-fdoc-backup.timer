@@ -1,0 +1,10 @@
+[Unit]
+Description=Back up signed F.Doc PDF files daily
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Moscow
+Persistent=false
+Unit=azbuka-fdoc-backup.service
+
+[Install]
+WantedBy=timers.target

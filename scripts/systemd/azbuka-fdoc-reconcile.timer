@@ -1,0 +1,10 @@
+[Unit]
+Description=Check pending F.Doc signatures and paid enrollment every fifteen minutes
+
+[Timer]
+OnCalendar=*-*-* *:0/15:00
+Persistent=false
+Unit=azbuka-fdoc-reconcile.service
+
+[Install]
+WantedBy=timers.target
