@@ -4,7 +4,9 @@ set -Eeuo pipefail
 if [ "$(id -u)" -ne 0 ]; then echo 'Нужен root.' >&2; exit 1; fi
 SITE=/etc/nginx/sites-enabled/my-school
 ZONE=/etc/nginx/conf.d/azbuka-join-rate-limit.conf
-BACKUP="${SITE}.before-join-$(date +%Y%m%d_%H%M%S)"
+BACKUP_DIR=/etc/nginx/azbuka-backups
+install -d -m 0700 "$BACKUP_DIR"
+BACKUP="$BACKUP_DIR/my-school.before-join-$(date +%Y%m%d_%H%M%S)"
 cp -p "$SITE" "$BACKUP"
 if [ ! -f "$ZONE" ]; then
   printf '%s\n' 'limit_req_zone $binary_remote_addr zone=azbuka_join:10m rate=6r/m;' > "$ZONE"
