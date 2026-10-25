@@ -7,12 +7,13 @@ import { ADMIN_ROLES } from "@/server/rbac/rbac";
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
   currency: "RUB",
-  maximumFractionDigits: 0
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
 });
 
-export default async function AnalyticsPage() {
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const currentUser = await requireRole(ADMIN_ROLES);
-  const analytics = await getAnalyticsDashboard(currentUser);
+  const analytics = await getAnalyticsDashboard(currentUser, await searchParams);
 
   const topMetrics = [
     {
@@ -25,7 +26,7 @@ export default async function AnalyticsPage() {
     {
       label: "Средний чек",
       value: money(analytics.totals.averageReceiptKopeks),
-      detail: "средний успешный платеж",
+      detail: "средний успешный платёж за период",
       icon: Receipt,
       tone: "info"
     },
@@ -65,12 +66,21 @@ export default async function AnalyticsPage() {
         </div>
       </section>
 
-      <section className="relative z-10 -mt-14 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard label="Общая сумма прихода" value={money(analytics.totals.totalReceiptAmountKopeks)} icon={Coins} tone="success" />
-        <MetricCard label="Общая сумма долга" value={money(analytics.totals.totalDebtAmountKopeks)} icon={WalletCards} tone={analytics.totals.totalDebtAmountKopeks > 0 ? "danger" : "success"} />
-        <MetricCard label="Общее кол-во человек" value={analytics.totals.totalActiveChildren.toString()} icon={UsersRound} tone="info" />
-        <MetricCard label="Наполняемость групп" value={`${analytics.totals.fillPercent}%`} icon={Percent} tone="warning" />
+      <form className="relative z-10 -mt-14 panel grid gap-3 p-5 sm:grid-cols-[1fr_1fr_auto]" method="get">
+        <label className="label">Платежи с<input className="field" name="from" type="date" defaultValue={analytics.period.from} required /></label>
+        <label className="label">По<input className="field" name="to" type="date" defaultValue={analytics.period.to} required /></label>
+        <button className="min-h-11 self-end rounded-lg bg-[var(--brand-yellow)] px-5 font-bold" type="submit">Показать</button>
+      </form>
+      <p className="text-sm text-[var(--muted)]">Период по московскому времени. Учитываются успешные платежи, сохранённые в системе. Комиссия ЮKassa — фактическая разница между платежом и суммой после удержаний.</p>
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+        <MetricCard label="Оплатили родители" value={money(analytics.receipt.grossKopeks)} detail="успешные платежи за выбранный период" icon={Coins} tone="success" />
+        <MetricCard label="Удержала ЮKassa" value={analytics.receipt.feeKopeks === null ? "Нет данных" : money(analytics.receipt.feeKopeks)} detail="комиссия по платежам ЮKassa, включая НДС" icon={Percent} tone="warning" />
+        <MetricCard label="После удержаний" value={analytics.receipt.netKopeks === null ? "Нет данных" : money(analytics.receipt.netKopeks)} detail="платежи за вычетом комиссии ЮKassa; дата выплаты на счёт может отличаться" icon={WalletCards} tone="info" />
+        <MetricCard label="Общая сумма долга" value={money(analytics.totals.totalDebtAmountKopeks)} detail="текущий остаток, вне выбранного периода" icon={WalletCards} tone={analytics.totals.totalDebtAmountKopeks > 0 ? "danger" : "success"} />
+        <MetricCard label="Общее кол-во человек" value={analytics.totals.totalActiveChildren.toString()} detail="активные дети сейчас" icon={UsersRound} tone="info" />
+        <MetricCard label="Наполняемость групп" value={`${analytics.totals.fillPercent}%`} detail="текущая загрузка" icon={Percent} tone="warning" />
       </section>
+      {analytics.receipt.unknownFeeCount > 0 ? <p className="rounded-lg border border-[var(--danger)]/30 bg-white p-4 text-sm font-semibold text-[var(--danger)]">У {analytics.receipt.unknownFeeCount} платежей ЮKassa нет достоверной суммы после удержаний. Комиссия и итог не рассчитаны; проверьте данные этих платежей.</p> : null}
       <Link href="/admin/attendance-report" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Отчёт по посещаемости и выгрузка Excel →</Link>
       <Link href="/admin/discrepancies" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Расхождения, требующие проверки →</Link>
 
@@ -81,8 +91,8 @@ export default async function AnalyticsPage() {
       </section>
 
       <section className="grid gap-4 xl:grid-cols-2">
-        <MoneyPanel title="Приход по группам" rows={analytics.receiptByGroup} emptyLabel="Успешных платежей пока нет." />
-        <MoneyPanel title="Долг по группам" rows={analytics.debtByGroup} emptyLabel="Непогашенных долгов нет." />
+        <MoneyPanel title="Оплатили родители по группам · за период" rows={analytics.receiptByGroup} emptyLabel="Успешных платежей за период нет." />
+        <MoneyPanel title="Долг по группам · сейчас" rows={analytics.debtByGroup} emptyLabel="Непогашенных долгов нет." />
       </section>
 
       <DataPanel title="Группы">
@@ -94,8 +104,8 @@ export default async function AnalyticsPage() {
               <th>Тренер</th>
               <th>Людей</th>
               <th>Наполняемость</th>
-              <th>Приход</th>
-              <th>Долг</th>
+              <th>Оплатили за период</th>
+              <th>Долг сейчас</th>
             </tr>
           </thead>
           <tbody>

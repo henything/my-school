@@ -3,6 +3,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { ADMIN_ROLES, assertRole } from "@/server/rbac/rbac";
+import { reconcileReceipts, resolveReceiptPeriod, yookassaIncomeKopeks } from "./receipt-period";
 
 const PAID_PAYMENT_STATUS: PaymentRecordStatus = "SUCCEEDED";
 const NON_DEBT_INVOICE_STATUSES: InvoiceStatus[] = ["PAID", "CANCELLED"];
@@ -29,10 +30,11 @@ type MoneyByGroup = {
 
 export type AnalyticsDashboard = Awaited<ReturnType<typeof getAnalyticsDashboard>>;
 
-export async function getAnalyticsDashboard(currentUser: CurrentUser) {
+export async function getAnalyticsDashboard(currentUser: CurrentUser, filters: { from?: string; to?: string } = {}) {
   assertRole(currentUser, ADMIN_ROLES);
 
   const prisma = getPrisma();
+  const period = resolveReceiptPeriod(filters);
   const [groups, totalActiveChildren, payments, invoices, subscriptions, trialCount, convertedTrialCount, attendanceNotFilledCount] = await Promise.all([
     prisma.trainingGroup.findMany({
       where: { schoolId: currentUser.schoolId },
@@ -45,9 +47,11 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
     }),
     prisma.child.count({ where: { schoolId: currentUser.schoolId, status: "ACTIVE" } }),
     prisma.payment.findMany({
-      where: { schoolId: currentUser.schoolId, status: PAID_PAYMENT_STATUS },
+      where: { schoolId: currentUser.schoolId, status: PAID_PAYMENT_STATUS, paidAt: { gte: period.start, lt: period.endExclusive } },
       select: {
         amountKopeks: true,
+        provider: true,
+        providerPaymentId: true,
         subscription: { select: { groupId: true, lessonSnapshots: { select: { groupId: true } } } }
       }
     }),
@@ -79,6 +83,26 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
       }
     })
   ]);
+
+  const providerPaymentIds = payments
+    .filter((payment) => payment.provider === "YOOKASSA" && payment.providerPaymentId)
+    .map((payment) => payment.providerPaymentId!);
+  const events = providerPaymentIds.length ? await prisma.paymentWebhookEvent.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      provider: "YOOKASSA",
+      providerPaymentId: { in: providerPaymentIds },
+      eventType: "payment.succeeded",
+      signatureValid: true
+    },
+    select: { providerPaymentId: true, payload: true }
+  }) : [];
+  const incomeByPaymentId = new Map<string, number>();
+  for (const event of events) {
+    const income = yookassaIncomeKopeks(event.payload);
+    if (event.providerPaymentId && income !== null) incomeByPaymentId.set(event.providerPaymentId, income);
+  }
+  const receipt = reconcileReceipts(payments, incomeByPaymentId);
 
   const groupIndex = createGroupIndex(groups);
   const receiptByGroup = createMoneyRows(groupIndex, payments, (payment) => payment.amountKopeks, (payment) => payment.subscription);
@@ -129,7 +153,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
     .map(([, row]) => row)
     .sort((left, right) => right.salaryAmountKopeks - left.salaryAmountKopeks);
 
-  const totalReceiptAmountKopeks = sum(payments, (payment) => payment.amountKopeks);
+  const totalReceiptAmountKopeks = receipt.grossKopeks;
   const totalDebtAmountKopeks = sum(invoices, (invoice) => Math.max(0, invoice.amountKopeks - invoice.paidAmountKopeks));
   const totalCapacity = sum(activeGroups, (group) => group.capacityLimit);
   const paidSubscriptionCount = subscriptions.filter((subscription) => subscription.paymentStatus === "PAID").length;
@@ -137,6 +161,8 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser) {
   const averageReceiptKopeks = payments.length > 0 ? Math.round(totalReceiptAmountKopeks / payments.length) : 0;
 
   return {
+    period: { from: period.from, to: period.to },
+    receipt,
     totals: {
       totalReceiptAmountKopeks,
       totalDebtAmountKopeks,
