@@ -109,6 +109,8 @@ const enumLabels: Record<string, string> = {
   TRIAL_ATTENDED: "Пробник пришёл",
   TRIAL_NO_SHOW: "Пробник не пришёл",
   CONTACT_COLLECTED: "Контакт получен",
+  WANTS_TO_CONTINUE: "Будет ходить",
+  NOT_PLANNING: "Пока не планирует",
   TRANSFERRED_TO_ADMIN: "Передан админу",
   CONVERTED_TO_ACTIVE: "Зачислен",
 

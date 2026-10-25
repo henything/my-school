@@ -20,6 +20,8 @@ export const trialStatusSchema = z.enum([
   "TRIAL_ATTENDED",
   "TRIAL_NO_SHOW",
   "CONTACT_COLLECTED",
+  "WANTS_TO_CONTINUE",
+  "NOT_PLANNING",
   "TRANSFERRED_TO_ADMIN",
   "CONVERTED_TO_ACTIVE"
 ]);

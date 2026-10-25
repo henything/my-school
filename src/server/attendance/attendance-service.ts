@@ -65,6 +65,7 @@ const lessonDetailInclude = {
     include: {
       coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
       convertedChild: { select: { id: true, fullName: true, status: true } },
+      signingPackage: { select: { status: true, contractStatus: true, consentStatus: true, errorMessage: true } },
       createdBy: { select: { id: true, displayName: true, login: true, role: true } }
     },
     orderBy: trialParticipantOrderBy
@@ -172,6 +173,8 @@ export function serializeCoachLessonDetail(lesson: LessonDetailRecord) {
       parentVkUrl: trial.parentVkUrl,
       source: trial.source,
       status: trial.status,
+      trialAttended: trial.trialAttended,
+      signingPackage: trial.signingPackage,
       comment: trial.comment,
       convertedAt: trial.convertedAt?.toISOString() ?? null,
       createdAt: trial.createdAt.toISOString(),

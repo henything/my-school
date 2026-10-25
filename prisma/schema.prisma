@@ -206,6 +206,8 @@ enum TrialStatus {
   TRIAL_ATTENDED
   TRIAL_NO_SHOW
   CONTACT_COLLECTED
+  WANTS_TO_CONTINUE
+  NOT_PLANNING
   TRANSFERRED_TO_ADMIN
   CONVERTED_TO_ACTIVE
 }
@@ -217,6 +219,16 @@ enum TrialSource {
   ADVERTISING
   OTHER
   UNKNOWN
+}
+
+enum TrialSigningStatus {
+  PENDING
+  SENT
+  WAITING
+  SIGNED
+  DECLINED
+  EXPIRED
+  ERROR
 }
 
 enum ImportBatchStatus {
@@ -265,6 +277,8 @@ model School {
   tasks                     Task[]
   auditLogs                 AuditLog[]
   trialParticipants         TrialParticipant[]
+  trialSigningPackages      TrialSigningPackage[]
+  trialTestJourneys         TrialTestJourney[]
   importBatches             ImportBatch[]
   medicalCertificates       MedicalCertificate[]
   vacationRequests          VacationRequest[]
@@ -1154,6 +1168,8 @@ model TrialParticipant {
   coach          CoachProfile  @relation(fields: [coachId], references: [id], onDelete: Restrict)
   convertedChild Child?        @relation("TrialConvertedChild", fields: [convertedChildId], references: [id], onDelete: SetNull)
   createdBy      User?         @relation("TrialParticipantCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  signingPackage TrialSigningPackage?
+  testJourney    TrialTestJourney?
 
   @@index([schoolId])
   @@index([lessonId])
@@ -1164,6 +1180,50 @@ model TrialParticipant {
   @@index([createdByUserId])
   @@index([schoolId, status])
   @@map("trial_participants")
+}
+
+model TrialSigningPackage {
+  id                String             @id @default(uuid()) @db.Uuid
+  schoolId          String             @map("school_id") @db.Uuid
+  trialId           String             @unique @map("trial_id") @db.Uuid
+  status            TrialSigningStatus @default(PENDING)
+  contractDocumentId String?           @map("contract_document_id")
+  consentDocumentId  String?           @map("consent_document_id")
+  contractStatus    String?            @map("contract_status")
+  consentStatus     String?            @map("consent_status")
+  errorMessage      String?            @map("error_message")
+  sentAt            DateTime?          @map("sent_at")
+  signedAt          DateTime?          @map("signed_at")
+  checkedAt         DateTime?          @map("checked_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  trial  TrialParticipant @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId, status])
+  @@map("trial_signing_packages")
+}
+
+model TrialTestJourney {
+  id             String   @id @default(uuid()) @db.Uuid
+  schoolId       String   @map("school_id") @db.Uuid
+  trialId        String   @unique @map("trial_id") @db.Uuid
+  tokenHash      String   @unique @map("token_hash")
+  childBirthDate DateTime @map("child_birth_date") @db.Date
+  attendanceWeekday Int? @map("attendance_weekday")
+  scheduleChosenAt DateTime? @map("schedule_chosen_at")
+  reserveExpiresAt DateTime? @map("reserve_expires_at")
+  paymentDueAt DateTime? @map("payment_due_at")
+  firstPaidLessonDate DateTime? @map("first_paid_lesson_date") @db.Date
+  createdAt      DateTime @default(now()) @map("created_at")
+  paidAt         DateTime? @map("paid_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  trial  TrialParticipant @relation(fields: [trialId], references: [id], onDelete: Cascade)
+
+  @@index([schoolId])
+  @@map("trial_test_journeys")
 }
 
 model ImportBatch {

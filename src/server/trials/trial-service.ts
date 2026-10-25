@@ -18,6 +18,7 @@ import {
   trialClosesProcessingTask,
   trialNeedsProcessingTask
 } from "./rules";
+import { reservationDeadline } from "./test-journey-rules";
 
 const trialInclude = {
   lesson: {
@@ -35,6 +36,7 @@ const trialInclude = {
   group: { select: { id: true, name: true, capacityLimit: true } },
   coach: { select: { id: true, userId: true, user: { select: { displayName: true, login: true } } } },
   convertedChild: { select: { id: true, fullName: true, status: true } },
+  signingPackage: { select: { status: true, contractStatus: true, consentStatus: true, errorMessage: true, sentAt: true, checkedAt: true } },
   createdBy: { select: { id: true, displayName: true, login: true, role: true } }
 } as const;
 
@@ -62,6 +64,14 @@ export function serializeTrial(trial: TrialRecord) {
     source: trial.source,
     status: trial.status,
     trialAttended: trial.trialAttended,
+    signingPackage: trial.signingPackage ? {
+      status: trial.signingPackage.status,
+      contractStatus: trial.signingPackage.contractStatus,
+      consentStatus: trial.signingPackage.consentStatus,
+      errorMessage: trial.signingPackage.errorMessage,
+      sentAt: trial.signingPackage.sentAt?.toISOString() ?? null,
+      checkedAt: trial.signingPackage.checkedAt?.toISOString() ?? null
+    } : null,
     comment: trial.comment,
     convertedAt: trial.convertedAt?.toISOString() ?? null,
     createdAt: trial.createdAt.toISOString(),
@@ -96,6 +106,22 @@ export async function listTrials(currentUser: CurrentUser) {
     orderBy: [{ status: "asc" }, { createdAt: "desc" }]
   });
 
+  return trials.map(serializeTrial);
+}
+
+export async function listCoachTrialFollowups(currentUser: CurrentUser) {
+  if (currentUser.role !== "COACH") throw new Error("Список доступен только тренеру.");
+  const trials = await getPrisma().trialParticipant.findMany({
+    where: {
+      schoolId: currentUser.schoolId,
+      status: { in: ["TRIAL_ATTENDED", "CONTACT_COLLECTED"] },
+      trialAttended: true,
+      convertedChild: { status: "TRIAL" },
+      OR: [{ coach: { userId: currentUser.id } }, { lesson: { substituteCoach: { userId: currentUser.id } } }]
+    },
+    include: trialInclude,
+    orderBy: { createdAt: "desc" }
+  });
   return trials.map(serializeTrial);
 }
 
@@ -174,6 +200,35 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
     assertCanAccessTrial(currentUser, existing);
 
     const nextStatus = input.status ?? existing.status;
+    const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
+    if (testJourney && nextStatus === "CONTACT_COLLECTED" && existing.trialAttended !== true) {
+      throw new Error("Контакт после пробного фиксируется только для присутствовавшего ребёнка.");
+    }
+    if (testJourney && nextStatus === "CONTACT_COLLECTED" && !input.comment?.trim() && !existing.comment?.trim()) {
+      throw new Error("Перед сохранением контакта добавьте краткий итог разговора в комментарий.");
+    }
+    if (testJourney && existing.status === "WANTS_TO_CONTINUE" && nextStatus !== "WANTS_TO_CONTINUE") {
+      throw new Error("После решения продолжать изменение статуса проверяет администратор.");
+    }
+    if ((nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING") && !testJourney) {
+      throw new Error("Это действие доступно только в новом пути записи на пробное.");
+    }
+    if (testJourney && (nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING")) {
+      if (existing.status !== "CONTACT_COLLECTED" || existing.trialAttended !== true) {
+        throw new Error("Сначала отметьте посещение и контакт с родителем.");
+      }
+      if (!input.comment?.trim() && !existing.comment?.trim()) throw new Error("Укажите краткий итог разговора с родителем.");
+      if (nextStatus === "WANTS_TO_CONTINUE") {
+        await tx.$queryRaw`SELECT "id" FROM "groups" WHERE "id" = ${existing.groupId}::uuid FOR UPDATE`;
+        const group = await tx.trainingGroup.findUniqueOrThrow({ where: { id: existing.groupId }, select: { capacityLimit: true } });
+        const [active, reserved] = await Promise.all([
+          tx.child.count({ where: { schoolId: currentUser.schoolId, currentGroupId: existing.groupId, status: "ACTIVE" } }),
+          tx.trialTestJourney.count({ where: { id: { not: testJourney.id }, paidAt: null, reserveExpiresAt: { gt: new Date() }, trial: { groupId: existing.groupId } } })
+        ]);
+        if (active + reserved >= group.capacityLimit) throw new Error("Свободных мест для резерва больше нет.");
+        await tx.trialTestJourney.update({ where: { id: testJourney.id }, data: { reserveExpiresAt: reservationDeadline(new Date()) } });
+      }
+    }
 
     if (currentUser.role === "COACH") {
       if (!canCoachEditTrial(existing.status)) {
@@ -231,14 +286,22 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
   });
 }
 
-export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput) {
+export async function convertTrial(currentUser: CurrentUser, trialId: string, input: ConvertTrialInput, options?: { initialChildStatus?: "ACTIVE" | "PAUSED" }) {
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    // Serialize a manual conversion racing with the test journey's status poll.
+    await tx.$queryRaw`SELECT "id" FROM "trial_participants" WHERE "id" = ${trialId}::uuid FOR UPDATE`;
     const existing = await tx.trialParticipant.findFirstOrThrow({
       where: { id: trialId, schoolId: currentUser.schoolId },
       include: trialInclude
     });
+
+    const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
+    if (testJourney) {
+      if (existing.signingPackage?.status !== "SIGNED") throw new Error("Для тестовой заявки сначала подпишите оба документа.");
+      if (options?.initialChildStatus !== "PAUSED") throw new Error("Тестовая заявка активируется только после тестовой оплаты.");
+    }
 
     assertTrialCanBeConverted(existing.status);
     if (existing.trialAttended === null) throw new Error("Сначала отметьте, был ли ребёнок на пробном занятии.");
@@ -270,7 +333,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       where: { id: input.existingChildId, schoolId: currentUser.schoolId },
       include: { groupMemberships: { where: { endDate: null }, orderBy: { startDate: "desc" }, take: 1 } }
     }) : null;
-    if (existingChild && existingChild.status !== "ACTIVE") throw new Error("Существующий ребёнок должен быть активным.");
+    const earlyTrialChild = Boolean(testJourney && existingChild && existing.convertedChildId === existingChild.id && existingChild.status === "TRIAL");
+    if (existingChild && existingChild.status !== "ACTIVE" && !earlyTrialChild) throw new Error("Существующий ребёнок должен быть активным.");
     if (existingChild?.currentGroupId && existingChild.currentGroupId !== currentGroupId) {
       throw new Error("Существующий ребёнок состоит в другой группе. Сначала исправьте историю перевода.");
     }
@@ -282,6 +346,10 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
     if (!parent && parentPhone) {
       const matches = await tx.parent.findMany({ where: { schoolId: currentUser.schoolId, phone: parentPhone, archivedAt: null }, take: 2 });
       if (matches.length > 1) throw new Error("По телефону найдено несколько родителей. Выберите нужную карточку вручную.");
+      if (testJourney && matches[0] && parentName &&
+          matches[0].fullName?.trim().toLocaleLowerCase("ru") !== parentName.trim().toLocaleLowerCase("ru")) {
+        throw new Error("Телефон уже есть у родителя с другим ФИО. Попросите администратора проверить совпадение.");
+      }
       parent = matches[0] ?? null;
     }
     if (!parent && (parentName || parentPhone || parentVkUrl)) {
@@ -293,10 +361,10 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 
     const child = existingChild ? await tx.child.update({
       where: { id: existingChild.id },
-      data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId }
+      data: { parentId: existingChild.parentId ?? parent?.id ?? null, currentGroupId, status: earlyTrialChild ? "PAUSED" : undefined }
     }) : await tx.child.create({ data: {
       schoolId: currentUser.schoolId, parentId: parent?.id ?? null, currentGroupId,
-      fullName: childFullName, status: "ACTIVE", coachComment: existing.comment,
+      fullName: childFullName, status: options?.initialChildStatus ?? "ACTIVE", coachComment: existing.comment,
       adminComment: input.adminComment ?? null, admissionStatus: "ADMITTED"
     } });
 
@@ -368,9 +436,12 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 }
 
 async function ensureTrialProcessingTask(tx: Prisma.TransactionClient, currentUser: CurrentUser, trial: TrialRecord) {
-  const adminUserId = await findAdminAssigneeUserId(tx, currentUser.schoolId);
+  const coachFollowup = trial.trialAttended === true && Boolean(await tx.trialTestJourney.findUnique({ where: { trialId: trial.id }, select: { id: true } }));
+  const assigneeUserId = coachFollowup ? trial.coach.userId : await findAdminAssigneeUserId(tx, currentUser.schoolId);
   const lessonDate = dateToKey(trial.lesson.lessonDate);
-  const description = trial.childName
+  const description = coachFollowup
+    ? `Пробное занятие ${trial.childName ?? "ребёнка"} прошло ${lessonDate}. Свяжитесь с родителем, запишите обратную связь и отметьте решение семьи.`
+    : trial.childName
     ? `Пробник ${trial.childName} был на пробном занятии ${lessonDate}. Нужно обработать результат и принять решение.`
     : `Пробник без имени был на пробном занятии ${lessonDate}. Нужно проверить контакты и обработать.`;
 
@@ -379,11 +450,11 @@ async function ensureTrialProcessingTask(tx: Prisma.TransactionClient, currentUs
     actorUserId: currentUser.id,
     type: "TRIAL_NEEDS_PROCESSING",
     priority: "HIGH",
-    assigneeUserId: adminUserId,
+    assigneeUserId,
     relatedEntityType: "TrialParticipant",
     relatedEntityId: trial.id,
     groupId: trial.groupId,
-    title: "Обработать пробника",
+    title: coachFollowup ? `Обратная связь после пробного: ${trial.childName ?? "ребёнок"}` : "Обработать пробника",
     description
   });
 }

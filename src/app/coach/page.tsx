@@ -7,11 +7,13 @@ import { labelForEnum } from "@/lib/labels";
 import { requireRole } from "@/server/auth/current-user";
 import { listCoachLessons } from "@/server/schedule/lesson-service";
 import { listMyTasks, requiresCloseComment } from "@/server/tasks/task-service";
+import { listCoachTrialFollowups } from "@/server/trials/trial-service";
+import { TrialTaskActions } from "./trial-followup-list";
 
 export default async function CoachPage() {
   const currentUser = await requireRole(["COACH"]);
   const lessons = await listCoachLessons(currentUser);
-  const tasks = await listMyTasks(currentUser);
+  const [tasks, trialFollowups] = await Promise.all([listMyTasks(currentUser), listCoachTrialFollowups(currentUser)]);
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
     year: "numeric",
@@ -46,10 +48,10 @@ export default async function CoachPage() {
       </section>
 
       <section className="grid gap-4">
+        <TaskPanel tasks={tasks} trialFollowups={trialFollowups} />
         <LessonPanel title="Сегодня" lessons={todayLessons} empty="На сегодня занятий нет." />
         <LessonPanel title="Будущие" lessons={futureLessons} empty="Будущих занятий пока нет." />
         <LessonPanel title="Прошедшие" lessons={pastLessons} empty="Прошедших занятий пока нет." />
-        <TaskPanel tasks={tasks} />
       </section>
     </div>
   );
@@ -94,7 +96,8 @@ function LessonPanel({
   );
 }
 
-function TaskPanel({ tasks }: { tasks: Awaited<ReturnType<typeof listMyTasks>> }) {
+function TaskPanel({ tasks, trialFollowups }: { tasks: Awaited<ReturnType<typeof listMyTasks>>; trialFollowups: Awaited<ReturnType<typeof listCoachTrialFollowups>> }) {
+  const followupsById = new Map(trialFollowups.map((trial) => [trial.id, trial]));
   return (
     <div className="panel">
       <div className="flex items-center gap-2 border-b border-[var(--line)] bg-[var(--panel-soft)] px-5 py-4">
@@ -117,9 +120,9 @@ function TaskPanel({ tasks }: { tasks: Awaited<ReturnType<typeof listMyTasks>> }
                 </div>
                 <StatusBadge status={task.priority} />
               </div>
-              <div className="mt-4">
-                <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} />
-              </div>
+              {task.type === "TRIAL_NEEDS_PROCESSING" && task.relatedEntityId && followupsById.has(task.relatedEntityId) ?
+                <TrialTaskActions trial={followupsById.get(task.relatedEntityId)!} /> :
+                <div className="mt-4"><TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} /></div>}
             </article>
           ))}
         </div>
