@@ -32,7 +32,19 @@ export function hasRole(user: Pick<CurrentUser, "role">, roles: UserRole[]) {
 }
 
 export function canCreateUser(user: Pick<CurrentUser, "role">) {
-  return user.role === "SUPER_ADMIN";
+  return hasRole(user, ADMIN_ROLES);
+}
+
+export function canCreateCoach(user: Pick<CurrentUser, "role">) {
+  return hasRole(user, ADMIN_ROLES);
+}
+
+export function canManageUserStatus(
+  actor: Pick<CurrentUser, "id" | "role">,
+  target: { id: string; role: UserRole }
+) {
+  return hasRole(actor, ADMIN_ROLES) && actor.id !== target.id &&
+    (actor.role === "SUPER_ADMIN" || target.role !== "SUPER_ADMIN");
 }
 
 export function canSeeAdminShell(user: Pick<CurrentUser, "role">) {

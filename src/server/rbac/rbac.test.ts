@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   assertNoCoachForbiddenFinancialFields,
+  canCreateCoach,
   canCreateUser,
+  canManageUserStatus,
   canSeeAdminShell,
   canSeeAuditLog,
   canSeeCoachShell,
@@ -10,10 +12,28 @@ import {
 } from "./rbac";
 
 describe("rbac", () => {
-  it("allows only SUPER_ADMIN to create users", () => {
+  it("allows administrators to create users", () => {
     expect(canCreateUser({ role: "SUPER_ADMIN" })).toBe(true);
-    expect(canCreateUser({ role: "ADMIN" })).toBe(false);
+    expect(canCreateUser({ role: "ADMIN" })).toBe(true);
     expect(canCreateUser({ role: "COACH" })).toBe(false);
+  });
+
+  it("allows administrators to create coaches", () => {
+    expect(canCreateCoach({ role: "SUPER_ADMIN" })).toBe(true);
+    expect(canCreateCoach({ role: "ADMIN" })).toBe(true);
+    expect(canCreateCoach({ role: "COACH" })).toBe(false);
+    expect(canCreateCoach({ role: "PARENT" })).toBe(false);
+  });
+
+  it("protects the superadmin and the actor's own account from status changes", () => {
+    const admin = { id: "admin-1", role: "ADMIN" as const };
+    const superadmin = { id: "super-1", role: "SUPER_ADMIN" as const };
+    expect(canManageUserStatus(admin, { id: "coach-1", role: "COACH" })).toBe(true);
+    expect(canManageUserStatus(admin, { id: "admin-2", role: "ADMIN" })).toBe(true);
+    expect(canManageUserStatus(admin, { id: "super-1", role: "SUPER_ADMIN" })).toBe(false);
+    expect(canManageUserStatus(admin, admin)).toBe(false);
+    expect(canManageUserStatus(superadmin, { id: "super-2", role: "SUPER_ADMIN" })).toBe(true);
+    expect(canManageUserStatus(superadmin, superadmin)).toBe(false);
   });
 
   it("separates admin and coach shells", () => {

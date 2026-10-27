@@ -10,7 +10,7 @@ import { listCoaches } from "@/server/coaches/coach-service";
 import { listGroups } from "@/server/groups/group-service";
 import { listParentAccounts } from "@/server/parents/parent-auth-service";
 import { listParents } from "@/server/parents/parent-service";
-import { ADMIN_ROLES } from "@/server/rbac/rbac";
+import { ADMIN_ROLES, canCreateCoach } from "@/server/rbac/rbac";
 import { listTasks } from "@/server/tasks/task-service";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTrials } from "@/server/trials/trial-service";
@@ -48,7 +48,7 @@ export default async function DirectoriesPage() {
 
       <DirectoryTables groups={groups} coaches={coaches} childRows={children}>
         <DirectoryForms
-          canCreateCoach={currentUser.role === "SUPER_ADMIN"}
+          canCreateCoach={canCreateCoach(currentUser)}
           branches={branches}
           coaches={coaches}
           groups={groups}

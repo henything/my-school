@@ -2,7 +2,7 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { hashPassword } from "@/server/auth/password";
 import { getPrisma } from "@/server/db/prisma";
-import { canCreateUser } from "@/server/rbac/rbac";
+import { canCreateCoach, canCreateUser } from "@/server/rbac/rbac";
 import type { CreateCoachInput, UpdateCoachInput } from "./schemas";
 
 type CoachRecord = {
@@ -53,8 +53,8 @@ export async function listCoaches(currentUser: CurrentUser) {
 }
 
 export async function createCoach(currentUser: CurrentUser, input: CreateCoachInput) {
-  if (!canCreateUser(currentUser)) {
-    throw new Error("Only SUPER_ADMIN can create coach users.");
+  if (!canCreateCoach(currentUser)) {
+    throw new Error("Создавать тренеров может только администратор.");
   }
 
   const passwordHash = await hashPassword(input.password);
@@ -101,7 +101,7 @@ export async function createCoach(currentUser: CurrentUser, input: CreateCoachIn
 
 export async function updateCoach(currentUser: CurrentUser, coachId: string, input: UpdateCoachInput) {
   if (input.status && !canCreateUser(currentUser)) {
-    throw new Error("Only SUPER_ADMIN can update coach user status.");
+    throw new Error("Менять статус тренера может только администратор.");
   }
 
   return getPrisma().$transaction(async (tx) => {

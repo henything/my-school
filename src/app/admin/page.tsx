@@ -3,13 +3,13 @@ import { UserStatusForm } from "@/app/admin/user-status-form";
 import { RoleBadge, StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
-import { ADMIN_ROLES } from "@/server/rbac/rbac";
+import { ADMIN_ROLES, canCreateUser, canManageUserStatus } from "@/server/rbac/rbac";
 import { listUsers } from "@/server/users/user-service";
 
 export default async function AdminPage() {
   const currentUser = await requireRole(ADMIN_ROLES);
   const users = await listUsers(currentUser);
-  const canManageUsers = currentUser.role === "SUPER_ADMIN";
+  const canManageUsers = canCreateUser(currentUser);
   const activeUsers = users.filter((user) => user.status === "ACTIVE").length;
   const coachUsers = users.filter((user) => user.role === "COACH").length;
 
@@ -77,7 +77,7 @@ export default async function AdminPage() {
                   </td>
                   <td>{formatDate(user.createdAt)}</td>
                   <td>
-                    <UserStatusForm userId={user.id} status={user.status} disabled={!canManageUsers || user.id === currentUser.id} />
+                    <UserStatusForm userId={user.id} status={user.status} disabled={!canManageUserStatus(currentUser, user)} />
                   </td>
                 </tr>
               ))}

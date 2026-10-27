@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const currentUser = await requireApiUser(["SUPER_ADMIN"]);
+  const currentUser = await requireApiUser(["SUPER_ADMIN", "ADMIN"]);
 
   if (!currentUser.ok) {
     return jsonError(currentUser.error, currentUser.status);

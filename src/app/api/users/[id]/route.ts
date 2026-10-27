@@ -11,7 +11,7 @@ type RouteContext = {
 };
 
 export async function PATCH(request: Request, context: RouteContext) {
-  const currentUser = await requireApiUser(["SUPER_ADMIN"]);
+  const currentUser = await requireApiUser(["SUPER_ADMIN", "ADMIN"]);
 
   if (!currentUser.ok) {
     return jsonError(currentUser.error, currentUser.status);

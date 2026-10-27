@@ -3,7 +3,7 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { hashPassword } from "@/server/auth/password";
 import { getPrisma } from "@/server/db/prisma";
-import { canCreateUser } from "@/server/rbac/rbac";
+import { canCreateUser, canManageUserStatus } from "@/server/rbac/rbac";
 import type { CreateUserInput } from "./schemas";
 
 export function serializeUser(user: {
@@ -35,7 +35,7 @@ export async function listUsers(currentUser: CurrentUser) {
 
 export async function createUser(currentUser: CurrentUser, input: CreateUserInput) {
   if (!canCreateUser(currentUser)) {
-    throw new Error("Only SUPER_ADMIN can create users.");
+    throw new Error("Создавать учётные записи может только администратор.");
   }
 
   const prisma = getPrisma();
@@ -92,10 +92,6 @@ export async function createUser(currentUser: CurrentUser, input: CreateUserInpu
 }
 
 export async function updateUserStatus(currentUser: CurrentUser, userId: string, status: "ACTIVE" | "INACTIVE" | "ARCHIVED") {
-  if (!canCreateUser(currentUser)) {
-    throw new Error("Only SUPER_ADMIN can update users.");
-  }
-
   const prisma = getPrisma();
 
   return prisma.$transaction(async (tx) => {
@@ -105,6 +101,10 @@ export async function updateUserStatus(currentUser: CurrentUser, userId: string,
         schoolId: currentUser.schoolId
       }
     });
+
+    if (!canManageUserStatus(currentUser, existing)) {
+      throw new Error("Нельзя изменить статус этой учётной записи.");
+    }
 
     const updated = await tx.user.update({
       where: { id: existing.id },
