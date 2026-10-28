@@ -9,7 +9,7 @@ import { legacyPhoneLogin, normalizeParentPhone } from "./phone";
 import type { ActivateParentInviteInput, ConfirmParentPasswordResetInput, CreateParentInviteInput } from "./schemas";
 
 const PARENT_INVITE_TTL_DAYS = 7;
-const PASSWORD_RESET_TTL_MINUTES = 60;
+const PASSWORD_RESET_TTL_DAYS = 7;
 
 const parentAccountInclude = {
   parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true, _count: { select: { children: true } } } },
@@ -270,7 +270,7 @@ export async function createParentPasswordReset(currentUser: CurrentUser, parent
         schoolId: currentUser.schoolId,
         userId: account.userId,
         tokenHash: hashSessionToken(token),
-        expiresAt: addMinutes(new Date(), PASSWORD_RESET_TTL_MINUTES),
+        expiresAt: addDays(new Date(), PASSWORD_RESET_TTL_DAYS),
         createdByUserId: currentUser.id
       }
     });
@@ -402,11 +402,5 @@ function assertAdmin(currentUser: CurrentUser) {
 function addDays(date: Date, days: number) {
   const next = new Date(date);
   next.setDate(next.getDate() + days);
-  return next;
-}
-
-function addMinutes(date: Date, minutes: number) {
-  const next = new Date(date);
-  next.setMinutes(next.getMinutes() + minutes);
   return next;
 }
