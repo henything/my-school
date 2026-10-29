@@ -26,6 +26,13 @@ export const testParentSignupSchema = z.object({ accessCode: z.string().min(1), 
 
 type JourneyMode = "TEST" | "PRODUCTION";
 
+const activeBookingGroup = {
+  status: "ACTIVE",
+  branch: { status: "ACTIVE" },
+  mainCoach: { user: { status: "ACTIVE" } },
+  name: { not: "Группа F.Doc ТЕСТ" }
+} as const;
+
 export const productionParentSignupSchema = z.object(parentSignupFields).refine((input) => input.password === input.passwordConfirm, {
   message: "Пароли не совпадают.", path: ["passwordConfirm"]
 });
@@ -33,11 +40,17 @@ export const productionParentSignupSchema = z.object(parentSignupFields).refine(
 async function contextFor(mode: JourneyMode) {
   if (mode === "TEST") return { ...assertTestMode(), groupId: null };
   if (process.env.FDOC_PROD_ENABLED !== "true" || process.env.APP_BASE_URL !== "https://azbukadvizheniya.ru" ||
-      process.env.FDOC_ENVIRONMENT !== "PRODUCTION" || !process.env.FDOC_PILOT_GROUP_ID) {
+      process.env.FDOC_ENVIRONMENT !== "PRODUCTION") {
     throw new Error("Запись на пробное сейчас закрыта.");
   }
+  if (process.env.FDOC_BOOKING_ALL_GROUPS === "true") {
+    const schoolId = z.uuid().parse(process.env.FDOC_PRODUCTION_SCHOOL_ID);
+    const school = await getPrisma().school.findUniqueOrThrow({ where: { id: schoolId }, select: { id: true } });
+    return { schoolId: school.id, groupId: null, accessCode: null };
+  }
+  if (!process.env.FDOC_PILOT_GROUP_ID) throw new Error("Запись на пробное сейчас закрыта.");
   const group = await getPrisma().trainingGroup.findFirstOrThrow({
-    where: { id: process.env.FDOC_PILOT_GROUP_ID, status: "ACTIVE" },
+    where: { id: process.env.FDOC_PILOT_GROUP_ID, ...activeBookingGroup },
     select: { id: true, schoolId: true }
   });
   return { schoolId: group.schoolId, groupId: group.id, accessCode: null };
@@ -93,7 +106,7 @@ async function bookableLessons(mode: JourneyMode) {
   const today = new Date();
   const latest = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const rows = await prisma.lesson.findMany({
-    where: { schoolId, ...(groupId ? { groupId } : {}), lessonDate: { gte: new Date(today.toISOString().slice(0, 10)), lte: latest }, status: { not: "CANCELLED" }, group: { status: "ACTIVE" } },
+    where: { schoolId, ...(groupId ? { groupId } : {}), lessonDate: { gte: new Date(today.toISOString().slice(0, 10)), lte: latest }, status: { not: "CANCELLED" }, group: activeBookingGroup },
     orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }],
     take: 400,
     include: { group: { select: {
@@ -142,7 +155,7 @@ async function bookingGroups(mode: JourneyMode) {
   const { schoolId, groupId } = await contextFor(mode);
   const [groups, lessons] = await Promise.all([
     getPrisma().trainingGroup.findMany({
-      where: { schoolId, status: "ACTIVE", ...(groupId ? { id: groupId } : { name: { not: "Группа F.Doc ТЕСТ" } }) },
+      where: { schoolId, ...activeBookingGroup, ...(groupId ? { id: groupId } : {}) },
       orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
       include: {
         branch: { select: { name: true, address: true } },
@@ -197,7 +210,7 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
   const token = randomBytes(32).toString("base64url");
   const registration = await getPrisma().$transaction(async (tx) => {
     const lesson = await tx.lesson.findFirstOrThrow({
-      where: { id: input.lessonId, schoolId, ...(groupId ? { groupId } : {}), status: { not: "CANCELLED" }, group: { status: "ACTIVE" } },
+      where: { id: input.lessonId, schoolId, ...(groupId ? { groupId } : {}), status: { not: "CANCELLED" }, group: activeBookingGroup },
       include: { group: true }
     });
     if (lessonStartsAt(lesson) <= today) throw new Error("Пробное занятие уже началось. Выберите будущую дату.");
