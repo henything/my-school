@@ -6,7 +6,31 @@ const responseSchema = z.object({
 
 const statusSchema = z.object({ status: z.string() });
 
-type SigningNames = { parentName: string; parentPhone: string; childName: string; childBirth?: string; groupName?: string };
+type SigningNames = {
+  parentName: string;
+  parentPhone: string;
+  childName: string;
+  childBirth?: string;
+  groupName?: string;
+  weeklySchedule?: string;
+  lessonPriceRub?: string;
+};
+
+function parentFillParamIds(prefix: "CONTRACT" | "CONSENT") {
+  const key = `FDOC_${prefix}_PARENT_FILL_PARAM_IDS`;
+  const raw = process.env[key];
+  if (!raw) return [];
+  const parts = raw.split(",").map((part) => part.trim());
+  const ids = parts.map(Number);
+  if (parts.some((part) => !/^\d+$/.test(part)) || ids.some((id) => !Number.isSafeInteger(id) || id <= 0) || new Set(ids).size !== ids.length) {
+    throw new Error(`Неверные ID полей для заполнения родителем: ${key}.`);
+  }
+  const lockedIds = Object.entries(process.env)
+    .filter(([name]) => name.startsWith(`FDOC_${prefix}_`) && name.endsWith("_PARAM_ID"))
+    .map(([, value]) => Number(value));
+  if (ids.some((id) => lockedIds.includes(id))) throw new Error(`Поля родителя пересекаются с автозаполнением: ${key}.`);
+  return ids;
+}
 
 function config() {
   if (process.env.FDOC_MVP_ENABLED !== "true") throw new Error("Подписание F.Doc не настроено.");
@@ -34,12 +58,22 @@ function config() {
   ] as const;
   for (const key of required) if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
   const realDocumentFields = ["FDOC_CONTRACT_CHILD_BIRTH_PARAM_ID", "FDOC_CONTRACT_GROUP_NAME_PARAM_ID"] as const;
+  const dynamicTermFields = ["FDOC_CONTRACT_WEEKLY_SCHEDULE_PARAM_ID", "FDOC_CONTRACT_LESSON_PRICE_PARAM_ID"] as const;
   if (process.env.FDOC_REAL_DOCUMENTS === "true") {
     for (const key of realDocumentFields) {
       if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
     }
   }
-  for (const key of [...required.filter((item) => item.endsWith("_PARAM_ID")), ...(process.env.FDOC_REAL_DOCUMENTS === "true" ? realDocumentFields : [])]) {
+  if (process.env.FDOC_CONTRACT_DYNAMIC_TERMS === "true") {
+    for (const key of dynamicTermFields) {
+      if (!process.env[key]) throw new Error(`Не задана настройка ${key}.`);
+    }
+    if (!parentFillParamIds("CONTRACT").length) throw new Error("Не заданы паспортные поля для заполнения родителем в F.Doc.");
+  }
+  parentFillParamIds("CONTRACT");
+  parentFillParamIds("CONSENT");
+  for (const key of [...required.filter((item) => item.endsWith("_PARAM_ID")), ...(process.env.FDOC_REAL_DOCUMENTS === "true" ? realDocumentFields : []),
+    ...dynamicTermFields.filter((key) => process.env[key])]) {
     if (!Number.isSafeInteger(Number(process.env[key])) || Number(process.env[key]) <= 0) throw new Error(`Неверный ID параметра ${key}.`);
   }
   return {
@@ -82,7 +116,9 @@ function templateParams(prefix: "CONTRACT" | "CONSENT", names: SigningNames) {
     ["PARENT_PHONE", names.parentPhone],
     ["CHILD_NAME", names.childName],
     ["CHILD_BIRTH", names.childBirth],
-    ["GROUP_NAME", names.groupName]
+    ["GROUP_NAME", names.groupName],
+    ["WEEKLY_SCHEDULE", names.weeklySchedule],
+    ["LESSON_PRICE", names.lessonPriceRub]
   ] as const;
   return fields.flatMap(([field, value]) => {
     const id = Number(process.env[`FDOC_${prefix}_${field}_PARAM_ID`]);
@@ -92,6 +128,21 @@ function templateParams(prefix: "CONTRACT" | "CONSENT", names: SigningNames) {
 
 export async function sendFdocPackage(packageId: string, names: SigningNames) {
   const c = config();
+  if (process.env.FDOC_CONTRACT_DYNAMIC_TERMS === "true" && (!names.weeklySchedule?.trim() || !names.lessonPriceRub?.trim())) {
+    throw new Error("Для договора нужны выбранный график и стоимость занятия.");
+  }
+  const parentId = `${packageId}-parent`;
+  const documentTemplate = (prefix: "CONTRACT" | "CONSENT", id: string) => {
+    const fillIds = parentFillParamIds(prefix);
+    return {
+      id, autoSendToFill: true, templateParams: templateParams(prefix, names),
+      ...(fillIds.length ? { templateFillers: [{
+        priority: 1, actionType: "CLIENT", externalId: parentId,
+        name: names.parentName, phone: names.parentPhone,
+        params: fillIds.map((documentTemplateParamId) => ({ documentTemplateParamId }))
+      }] } : {})
+    };
+  };
   const token = await accessToken();
   const response = await fetch(`${c.base}/paperless-gateway/api/v1/document/withSigners`, {
     method: "POST",
@@ -99,14 +150,14 @@ export async function sendFdocPackage(packageId: string, names: SigningNames) {
     body: JSON.stringify({
       documents: [],
       documentTemplates: [
-        { id: c.contractTemplateId, autoSendToFill: true, templateParams: templateParams("CONTRACT", names) },
-        { id: c.consentTemplateId, autoSendToFill: true, templateParams: templateParams("CONSENT", names) }
+        documentTemplate("CONTRACT", c.contractTemplateId),
+        documentTemplate("CONSENT", c.consentTemplateId)
       ],
       package: {
         id: packageId,
         name: `Договор и согласие — ${names.childName}`,
         signers: [
-          { id: `${packageId}-parent`, name: names.parentName, phone: names.parentPhone, type: "client", priority: 1 },
+          { id: parentId, name: names.parentName, phone: names.parentPhone, type: "client", priority: 1 },
           ...(c.employeeId ? [{ id: c.employeeId, type: "corp", priority: 2, operatorAutoSign: true }] : [])
         ]
       }

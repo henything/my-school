@@ -4,9 +4,11 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
+import { DEFAULT_LESSON_PRICE_KOPEKS } from "@/server/billing/calculations";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
 import { reservationDeadline } from "./test-journey-rules";
 import { finalizeSignedTestJourneyByTrialId } from "./fdoc-full-cycle-test";
+import { describeWeeklySchedule } from "./weekly-schedule";
 
 function assertAccess(user: CurrentUser, coachUserId: string, parentUserId?: string | null) {
   if (!hasRole(user, ADMIN_ROLES) && !(user.role === "COACH" && user.id === coachUserId) && !(user.role === "PARENT" && user.id === parentUserId)) {
@@ -28,7 +30,7 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   const prisma = getPrisma();
   const trial = await prisma.trialParticipant.findFirstOrThrow({
     where: { id: trialId, schoolId: user.schoolId },
-    include: { coach: { select: { userId: true } }, group: { select: { name: true } }, convertedChild: { select: { birthDate: true, parent: { select: { account: { select: { userId: true } } } } } } }
+    include: { coach: { select: { userId: true } }, group: { select: { name: true, scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true } } } }, convertedChild: { select: { birthDate: true, parent: { select: { account: { select: { userId: true } } } } } } }
   });
   assertAccess(user, trial.coach.userId, trial.convertedChild?.parent?.account?.userId);
   const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
@@ -46,6 +48,13 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   }
   assertFdocConfigured();
   const parentPhone = normalizePhone(trial.parentPhone);
+  const dynamicTerms = process.env.FDOC_CONTRACT_DYNAMIC_TERMS === "true";
+  if (dynamicTerms && (!testJourney || !testJourney.scheduleChosenAt)) {
+    throw new Error("Для нового договора родителю нужно выбрать график в заявке после пробного.");
+  }
+  const weeklySchedule = testJourney && process.env.FDOC_CONTRACT_WEEKLY_SCHEDULE_PARAM_ID ?
+    describeWeeklySchedule(trial.group.scheduleTemplates.map((item) => item.weekday), testJourney.attendanceWeekday) : undefined;
+  const lessonPriceRub = testJourney && process.env.FDOC_CONTRACT_LESSON_PRICE_PARAM_ID ? String(DEFAULT_LESSON_PRICE_KOPEKS / 100) : undefined;
 
   if (testJourney?.reserveExpiresAt && testJourney.reserveExpiresAt < new Date()) {
     throw new Error("Срок резерва места истёк. Администратор должен проверить доступность группы.");
@@ -96,7 +105,9 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
       parentName: trial.parentName,
       parentPhone,
       childBirth: (testJourney?.childBirthDate ?? trial.convertedChild?.birthDate)?.toLocaleDateString("ru-RU", { timeZone: "UTC" }),
-      groupName: trial.group.name
+      groupName: trial.group.name,
+      weeklySchedule,
+      lessonPriceRub
     });
     const updated = await prisma.trialSigningPackage.update({
       where: { id: signing.id },
