@@ -1,5 +1,6 @@
 "use client";
 
+import { DirectoryLifecycle } from "./directory-lifecycle";
 import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
 import { type FormEvent, type ReactNode, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -43,13 +44,14 @@ type Child = {
 };
 
 type DirectoryTablesProps = {
+  branches?: Array<{ id: string; name: string; address: string | null; status: string; groupsCount: number }>;
   groups: Group[];
   coaches: Coach[];
   childRows: Child[];
   children?: ReactNode;
 };
 
-export function DirectoryTables({ groups, coaches, childRows, children }: DirectoryTablesProps) {
+export function DirectoryTables({ branches = [], groups, coaches, childRows, children }: DirectoryTablesProps) {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
@@ -172,6 +174,19 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
       </div>
 
       <div className="grid gap-4">
+        <section className="panel p-5" aria-label="Филиалы">
+          <h2 className="text-lg font-bold">Филиалы</h2>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {branches.map((branch) => <div key={branch.id} className="rounded-lg border border-[var(--line)] p-4">
+              <h3 className="font-bold">{branch.name}</h3>
+              <p className="mt-1 text-sm text-[var(--muted)]">{branch.address ?? "Адрес не указан"} · Групп: {branch.groupsCount}</p>
+              <div className="my-3"><StatusBadge status={branch.status} /></div>
+              <DirectoryLifecycle kind="branches" entry={branch} />
+            </div>)}
+            {!branches.length ? <p className="text-sm text-[var(--muted)]">Филиалов пока нет.</p> : null}
+          </div>
+        </section>
+
         <div className="panel">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--line)] px-5 py-4">
             <h2 className="flex items-center gap-2 text-lg font-bold">
@@ -190,6 +205,7 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                   <th>Тренер</th>
                   <th>Статус</th>
                   <th>Заполненность</th>
+                  <th>Действия</th>
                 </tr>
               </thead>
               <tbody>
@@ -211,9 +227,10 @@ export function DirectoryTables({ groups, coaches, childRows, children }: Direct
                         {group.activeChildrenCount}/{group.capacityLimit}
                       </span>
                     </td>
+                    <td><DirectoryLifecycle kind="groups" entry={group} /></td>
                   </tr>
                 ))}
-                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={6} label="Группы по фильтрам не найдены." /> : null}
+                {filteredGroups.length === 0 ? <EmptyTableRow colSpan={7} label="Группы по фильтрам не найдены." /> : null}
               </tbody>
             </table>
           </div>

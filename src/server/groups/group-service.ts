@@ -1,3 +1,4 @@
+import { validateDirectoryStatus } from "@/server/directories/lifecycle-service";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { ensureCurrentMonthSubscriptionForChild } from "@/server/billing/billing-service";
@@ -167,6 +168,8 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
 
     const mainCoachChanged = Boolean(input.mainCoachId && input.mainCoachId !== existing.mainCoachId);
 
+    await validateDirectoryStatus(tx, currentUser, "groups", existing.id, input.status);
+
     const group = await tx.trainingGroup.update({
       where: { id: existing.id },
       data: input,
@@ -215,7 +218,7 @@ export async function updateGroup(currentUser: CurrentUser, groupId: string, inp
     });
 
     return serializeGroup(group);
-  });
+  }, { isolationLevel: "Serializable" });
 }
 
 async function applyPermanentCoachChange(tx: Prisma.TransactionClient, schoolId: string, groupId: string, coachId: string) {

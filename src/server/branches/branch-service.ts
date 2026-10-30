@@ -1,3 +1,4 @@
+import { validateDirectoryStatus } from "@/server/directories/lifecycle-service";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
@@ -73,6 +74,8 @@ export async function updateBranch(currentUser: CurrentUser, branchId: string, i
       }
     });
 
+    await validateDirectoryStatus(tx, currentUser, "branches", existing.id, input.status);
+
     const branch = await tx.branch.update({
       where: { id: existing.id },
       data: input,
@@ -101,5 +104,5 @@ export async function updateBranch(currentUser: CurrentUser, branchId: string, i
     );
 
     return serializeBranch(branch);
-  });
+  }, { isolationLevel: "Serializable" });
 }

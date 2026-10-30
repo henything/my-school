@@ -369,6 +369,7 @@ async function findTemplatesForGeneration(tx: Prisma.TransactionClient, schoolId
     where: {
       schoolId,
       status: "ACTIVE",
+      group: { status: { not: "ARCHIVED" }, branch: { status: { not: "ARCHIVED" } } },
       ...(groupId ? { groupId } : {})
     },
     select: {
