@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { CalendarDays, ListChecks, ShieldCheck } from "lucide-react";
 import { LoginForm } from "@/app/login/login-form";
+import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/server/auth/current-user";
 
 export default async function LoginPage() {
@@ -67,6 +69,15 @@ export default async function LoginPage() {
             <p className="mt-2 text-sm leading-6 text-[var(--muted)]">Для администраторов, тренеров и родителей.</p>
           </div>
           <LoginForm />
+          <div className="border-t border-[var(--line)] pt-6">
+            <p className="text-center text-sm text-[var(--muted)]">Первый раз у нас?</p>
+            <Button asChild variant="secondary" className="mt-3 w-full py-3 text-center">
+              <Link href="/join">
+                <CalendarDays aria-hidden="true" className="shrink-0" size={18} />
+                <span>Записаться на пробное занятие</span>
+              </Link>
+            </Button>
+          </div>
         </div>
       </section>
     </main>
