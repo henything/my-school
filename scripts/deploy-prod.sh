@@ -194,6 +194,7 @@ sync_source() {
       --exclude='node_modules/' \
       --exclude='.next/' \
       --exclude='.env' \
+      --exclude='.env.*' \
       --exclude='.cache/' \
       --exclude='.config/' \
       --exclude='.local/' \
