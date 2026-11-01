@@ -1,4 +1,5 @@
 "use client";
+import { BenefitBreakdown } from "@/components/benefit-breakdown";
 
 import { Search, WalletCards } from "lucide-react";
 import { type ReactNode, useMemo, useState } from "react";
@@ -32,6 +33,7 @@ type Subscription = {
 };
 
 type Invoice = {
+  discountPercent?: number; discountCategory?: string | null; discountAmountKopeks?: number; amountBeforeDiscountKopeks?: number | null;
   id: string;
   subscriptionId: string | null;
   issuedAt: string;
@@ -331,7 +333,7 @@ export function BillingTables({ childRows, subscriptions, invoices, payments, tr
                   <div>{invoice.parent.fullName ?? "-"}</div>
                   {invoice.parent.phone ? <div className="text-xs text-[var(--muted)]">{invoice.parent.phone}</div> : null}
                 </td>
-                <td className="font-semibold">{formatKopeks(invoice.amountKopeks)}</td>
+                <td className="font-semibold">{formatKopeks(invoice.amountKopeks)}<BenefitBreakdown invoice={invoice} /></td>
                 <td>{formatKopeks(invoice.paidAmountKopeks)}</td>
                 <td>{formatDate(invoice.dueDate)}</td>
                 <td>

@@ -1,3 +1,4 @@
+import { benefitLabel, benefitStatusLabels } from "@/lib/benefits";
 import { Phone, UserCircle } from "lucide-react";
 import { requireRole } from "@/server/auth/current-user";
 import { getParentDashboard } from "@/server/parents/parent-portal-service";
@@ -27,6 +28,7 @@ export default async function ParentProfilePage() {
           </div>
         </div>
 
+        {dashboard.parent.benefitCategory ? <div className="mt-5 rounded-lg border border-[var(--line)] p-4 text-sm"><h3 className="font-bold">Скидка на абонемент</h3><p>{benefitLabel(dashboard.parent.benefitCategory)} · {benefitStatusLabels[dashboard.parent.benefitStatus]}</p><p className="mt-2 text-[var(--muted)]">10%, без срока окончания. Применяется к новым счетам после подтверждения администратором.</p>{dashboard.parent.benefitReviewComment ? <p className="mt-2">Комментарий администратора: {dashboard.parent.benefitReviewComment}</p> : null}</div> : null}
         <div className="mt-6 grid gap-3">
           <h3 className="font-bold">Дети</h3>
           {dashboard.children.map((child) => (

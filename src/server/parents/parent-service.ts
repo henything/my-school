@@ -9,11 +9,19 @@ export function serializeParent(parent: {
   phone: string | null;
   vkProfileUrl: string | null;
   comment: string | null;
+  benefitCategory?: string | null;
+  benefitStatus?: string;
+  benefitReviewComment?: string | null;
+  updatedAt?: Date;
   createdAt: Date;
   _count?: { children: number };
 }) {
   return {
     id: parent.id,
+    benefitCategory: parent.benefitCategory ?? null,
+    benefitStatus: parent.benefitStatus ?? "NONE",
+    benefitReviewComment: parent.benefitReviewComment ?? null,
+    updatedAt: parent.updatedAt?.toISOString() ?? parent.createdAt.toISOString(),
     fullName: parent.fullName,
     phone: parent.phone,
     vkProfileUrl: parent.vkProfileUrl,

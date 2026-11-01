@@ -1,3 +1,4 @@
+import { benefitPricing } from "./benefit-pricing";
 import type {
   AdmissionStatus,
   BalanceTransactionType,
@@ -26,7 +27,6 @@ import {
   calculateBillableLessons,
   calculateCurrentMonthSubscriptionPeriod,
   calculateDefaultInvoiceDueDate,
-  calculateSubscriptionInvoiceAmount,
   calculateSubscriptionTotal,
   canUseCreditLesson,
   DEFAULT_LESSON_PRICE_KOPEKS
@@ -94,6 +94,10 @@ type SubscriptionListRecord = {
   periodEnd: Date;
   plannedLessonsCount: number;
   lessonPriceKopeks: number;
+  baseLessonPriceKopeks?: number | null;
+  baseTotalAmountKopeks?: number | null;
+  discountPercent?: number;
+  discountCategory?: string | null;
   totalAmountKopeks: number;
   paymentStatus: PaymentStatus;
   paymentStatusChangedAt: Date | null;
@@ -168,6 +172,10 @@ export function serializeSubscription(subscription: SubscriptionListRecord) {
     periodEnd: dateToKey(subscription.periodEnd),
     plannedLessonsCount: subscription.plannedLessonsCount,
     lessonPriceKopeks: subscription.lessonPriceKopeks,
+    baseLessonPriceKopeks: subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks,
+    baseTotalAmountKopeks: subscription.baseTotalAmountKopeks ?? subscription.totalAmountKopeks,
+    discountPercent: subscription.discountPercent ?? 0,
+    discountCategory: subscription.discountCategory ?? null,
     totalAmountKopeks: subscription.totalAmountKopeks,
     appliedMakeupCount: subscription._count?.balanceTransactions ?? 0,
     paymentStatus: subscription.paymentStatus,
@@ -204,6 +212,10 @@ export function serializeInvoice(invoice: InvoiceRecord) {
     number: invoice.number,
     status: invoice.status,
     amountKopeks: invoice.amountKopeks,
+    amountBeforeDiscountKopeks: invoice.amountBeforeDiscountKopeks,
+    discountAmountKopeks: invoice.discountAmountKopeks,
+    discountPercent: invoice.discountPercent,
+    discountCategory: invoice.discountCategory,
     paidAmountKopeks: invoice.paidAmountKopeks,
     remainingAmountKopeks: invoice.amountKopeks - invoice.paidAmountKopeks,
     currency: invoice.currency,
@@ -330,6 +342,7 @@ async function createInvoiceForSubscription(
   subscriptionId: string,
   dueDate: Date
 ) {
+  await tx.$queryRaw`SELECT "id" FROM "subscriptions" WHERE "id" = ${subscriptionId}::uuid FOR UPDATE`;
   const subscription = await tx.subscription.findFirstOrThrow({
     where: {
       id: subscriptionId,
@@ -363,7 +376,9 @@ async function createInvoiceForSubscription(
   const applicableMakeups = await findApplicableMakeupCredits(tx, currentUser.schoolId, subscription);
   const appliedMakeupCredits = applicableMakeups.slice(0, subscription.plannedLessonsCount);
   const billableLessonsCount = calculateBillableLessons(subscription.plannedLessonsCount, appliedMakeupCredits.length);
-  const amountKopeks = calculateSubscriptionInvoiceAmount(subscription.totalAmountKopeks, subscription.plannedLessonsCount, appliedMakeupCredits.length);
+  const previousInvoice = await tx.invoice.findFirst({ where: { schoolId: currentUser.schoolId, subscriptionId: subscription.id }, select: { id: true } });
+  const pricing = benefitPricing(subscription, subscription.child.parent, Boolean(previousInvoice), appliedMakeupCredits.length);
+  const { amountKopeks } = pricing;
   const issuedAt = new Date();
   const invoiceNumber = await createInvoiceNumber(tx, currentUser.schoolId, subscription.child.parent.fullName, issuedAt);
   const isFullyCoveredByMakeups = amountKopeks === 0;
@@ -375,6 +390,10 @@ async function createInvoiceForSubscription(
       childId: subscription.childId,
       subscriptionId: subscription.id,
       number: invoiceNumber,
+      amountBeforeDiscountKopeks: pricing.amountBeforeDiscountKopeks,
+      discountAmountKopeks: pricing.discountAmountKopeks,
+      discountPercent: pricing.discountPercent,
+      discountCategory: pricing.discountCategory,
       status: isFullyCoveredByMakeups ? "PAID" : "ISSUED",
       amountKopeks,
       paidAmountKopeks: 0,
@@ -403,7 +422,12 @@ async function createInvoiceForSubscription(
   await tx.subscription.update({
     where: { id: subscription.id },
     data: {
-      totalAmountKopeks: subscription.totalAmountKopeks,
+      totalAmountKopeks: pricing.totalAmountKopeks,
+      lessonPriceKopeks: pricing.lessonPriceKopeks,
+      baseLessonPriceKopeks: pricing.baseLessonPriceKopeks,
+      baseTotalAmountKopeks: pricing.baseTotalAmountKopeks,
+      discountPercent: pricing.discountPercent,
+      discountCategory: pricing.discountCategory,
       paymentStatus: finalInvoiceAmountKopeks === 0 ? "PAID" : "INVOICED",
       paymentStatusChangedAt: issuedAt,
       paymentStatusComment
@@ -628,7 +652,7 @@ export async function ensureCurrentMonthSubscriptionForChild(
   const previousSubscription = await tx.subscription.findFirst({
     where: { schoolId: currentUser.schoolId, childId, periodEnd: { lt: periodStart } },
     orderBy: { periodEnd: "desc" },
-    select: { lessonPriceKopeks: true }
+    select: { lessonPriceKopeks: true, baseLessonPriceKopeks: true }
   });
 
   return createSubscriptionInTransaction(tx, currentUser, {
@@ -636,7 +660,7 @@ export async function ensureCurrentMonthSubscriptionForChild(
     periodStart,
     periodEnd,
     plannedLessonsCount,
-    lessonPriceKopeks: previousSubscription?.lessonPriceKopeks ?? DEFAULT_LESSON_PRICE_KOPEKS,
+    lessonPriceKopeks: previousSubscription?.baseLessonPriceKopeks ?? previousSubscription?.lessonPriceKopeks ?? DEFAULT_LESSON_PRICE_KOPEKS,
     paymentStatus: "NOT_INVOICED"
   });
 }
@@ -874,6 +898,8 @@ async function createSubscriptionInTransaction(
       periodStart: input.periodStart,
       periodEnd: input.periodEnd,
       plannedLessonsCount,
+      baseLessonPriceKopeks: lessonPriceKopeks,
+      baseTotalAmountKopeks: totalAmountKopeks,
       lessonPriceKopeks,
       totalAmountKopeks,
       paymentStatus: input.paymentStatus,

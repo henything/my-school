@@ -387,7 +387,24 @@ model Branch {
   @@map("branches")
 }
 
+enum BenefitCategory {
+  LARGE_FAMILY
+  MILITARY_FAMILY
+  TWO_CHILDREN
+}
+
+enum BenefitStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model Parent {
+  benefitCategory BenefitCategory? @map("benefit_category")
+  benefitStatus BenefitStatus @default(NONE) @map("benefit_status")
+  benefitReviewComment String? @map("benefit_review_comment")
+  benefitReviewedAt DateTime? @map("benefit_reviewed_at")
   id           String   @id @default(uuid()) @db.Uuid
   schoolId     String   @map("school_id") @db.Uuid
   fullName     String?  @map("full_name")
@@ -735,6 +752,10 @@ model VacationRequest {
 }
 
 model Subscription {
+  baseLessonPriceKopeks Int? @map("base_lesson_price_kopeks")
+  baseTotalAmountKopeks Int? @map("base_total_amount_kopeks")
+  discountPercent Int @default(0) @map("discount_percent")
+  discountCategory BenefitCategory? @map("discount_category")
   id                     String        @id @default(uuid()) @db.Uuid
   schoolId               String        @map("school_id") @db.Uuid
   childId                String        @map("child_id") @db.Uuid
@@ -974,6 +995,10 @@ model PasswordResetToken {
 }
 
 model Invoice {
+  amountBeforeDiscountKopeks Int? @map("amount_before_discount_kopeks")
+  discountAmountKopeks Int @default(0) @map("discount_amount_kopeks")
+  discountPercent Int @default(0) @map("discount_percent")
+  discountCategory BenefitCategory? @map("discount_category")
   id               String        @id @default(uuid()) @db.Uuid
   schoolId         String        @map("school_id") @db.Uuid
   parentId         String        @map("parent_id") @db.Uuid

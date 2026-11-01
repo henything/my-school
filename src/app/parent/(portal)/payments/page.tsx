@@ -1,3 +1,4 @@
+import { BenefitBreakdown } from "@/components/benefit-breakdown";
 import { CreditCard } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/date-format";
@@ -47,7 +48,7 @@ export default async function ParentPaymentsPage() {
                 <tr key={invoice.id}>
                   <td className="font-semibold">{invoice.number}</td>
                   <td>{invoice.child.fullName}</td>
-                  <td>{formatKopeks(invoice.amountKopeks)}</td>
+                  <td>{formatKopeks(invoice.amountKopeks)}<BenefitBreakdown invoice={invoice} /></td>
                   <td className="font-bold">{formatKopeks(invoice.remainingAmountKopeks)}</td>
                   <td>{formatDate(invoice.dueDate)}</td>
                   <td>

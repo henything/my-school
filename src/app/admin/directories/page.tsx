@@ -1,3 +1,4 @@
+import { ParentBenefitPanel } from "./components/parent-benefit-panel";
 import { DirectoryForms } from "@/app/admin/directories/components/directory-forms";
 import Link from "next/link";
 import { DirectoryTables } from "@/app/admin/directories/components/directory-tables";
@@ -38,6 +39,8 @@ export default async function DirectoriesPage() {
         <Link href="/admin/parent-access" className="mt-2 inline-block text-sm font-bold text-[var(--accent-strong)]">Доступ родителей к ЛК →</Link>
         <Link href="/admin/cleanup" className="ml-4 mt-2 inline-block text-sm font-bold text-[var(--accent-strong)]">Дубли и тестовые записи →</Link>
       </section>
+
+      <ParentBenefitPanel parents={parents} />
 
       <WorkQueuePanel
         title="Переполненные группы"

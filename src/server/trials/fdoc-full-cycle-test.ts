@@ -1,3 +1,5 @@
+import { requestBenefit } from "@/server/parents/benefit-service";
+import { BENEFIT_CATEGORIES } from "@/lib/benefits";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { CurrentUser } from "@/server/auth/current-user";
@@ -65,6 +67,7 @@ function assertBookingOpen(mode: JourneyMode) {
 
 const registrationSchema = z.object({
   lessonId: z.uuid(),
+  benefitCategory: z.enum(BENEFIT_CATEGORIES).nullable().optional(),
   parentName: z.string().trim().min(2).max(150).regex(/^[\p{L}\s-]+$/u, "Укажите имя и фамилию буквами."),
   parentVkUrl: z.string().trim().max(500).refine((value) => !value || /^https:\/\/(vk\.ru|vk\.com)\//i.test(value), "Укажите ссылку на vk.ru или vk.com.").optional(),
   childName: z.string().trim().min(2).max(150),
@@ -228,6 +231,7 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
     const parent = await tx.parent.update({ where: { id: account.parentId }, data: {
       fullName: input.parentName, vkProfileUrl: input.parentVkUrl || account.parent.vkProfileUrl
     } });
+    await requestBenefit(tx, currentUser, parent.id, input.benefitCategory);
     await tx.user.update({ where: { id: account.userId }, data: { displayName: input.parentName } });
     const phone = normalizeParentPhone(parent.phone);
     const existingChild = await tx.child.findFirst({ where: { schoolId, parentId: parent.id, fullName: input.childName, birthDate, status: { not: "ARCHIVED" } }, select: { id: true, status: true } });
@@ -269,7 +273,7 @@ async function invoiceForChild(schoolId: string, childId: string | null) {
   return getPrisma().invoice.findFirst({
     where: { schoolId, childId, status: { not: "CANCELLED" } },
     orderBy: { createdAt: "desc" },
-    select: { id: true, number: true, amountKopeks: true, paidAmountKopeks: true, status: true, dueDate: true,
+    select: { id: true, number: true, amountKopeks: true, amountBeforeDiscountKopeks: true, discountPercent: true, discountCategory: true, discountAmountKopeks: true, paidAmountKopeks: true, status: true, dueDate: true,
       subscription: { select: { lessonSnapshots: { select: { lessonDate: true }, orderBy: { lessonDate: "asc" } } } } }
   });
 }
@@ -279,7 +283,7 @@ export async function getTestJourney(token: string, user: CurrentUser, mode: Jou
   const trial = journey.trial;
   const invoice = journey.invoiceId ? await getPrisma().invoice.findUnique({
     where: { id: journey.invoiceId },
-    select: { id: true, number: true, amountKopeks: true, paidAmountKopeks: true, status: true, dueDate: true,
+    select: { id: true, number: true, amountKopeks: true, amountBeforeDiscountKopeks: true, discountPercent: true, discountCategory: true, discountAmountKopeks: true, paidAmountKopeks: true, status: true, dueDate: true,
       subscription: { select: { lessonSnapshots: { select: { lessonDate: true }, orderBy: { lessonDate: "asc" } } } } }
   }) : mode === "TEST" ? await invoiceForChild(journey.schoolId, trial.convertedChildId) : null;
   return {
@@ -299,7 +303,7 @@ export async function getTestJourney(token: string, user: CurrentUser, mode: Jou
     paymentDueAt: journey.paymentDueAt?.toISOString() ?? null,
     firstPaidLessonDate: journey.firstPaidLessonDate ? dateToKey(journey.firstPaidLessonDate) : null,
     invoice: invoice ? {
-      id: invoice.id, number: invoice.number, amountKopeks: invoice.amountKopeks,
+      id: invoice.id, number: invoice.number, amountKopeks: invoice.amountKopeks, amountBeforeDiscountKopeks: invoice.amountBeforeDiscountKopeks, discountPercent: invoice.discountPercent, discountCategory: invoice.discountCategory, discountAmountKopeks: invoice.discountAmountKopeks,
       paidAmountKopeks: invoice.paidAmountKopeks, status: invoice.status,
       dueDate: dateToKey(invoice.dueDate), paidDates: invoice.subscription?.lessonSnapshots.map((snapshot) => dateToKey(snapshot.lessonDate)) ?? []
     } : null

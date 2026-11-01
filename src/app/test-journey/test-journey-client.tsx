@@ -1,11 +1,14 @@
 "use client";
+import { BenefitSelection } from "@/components/benefit-selection";
+import { BenefitBreakdown } from "@/components/benefit-breakdown";
+import { benefitLabel, benefitStatusLabels, type BenefitCategory } from "@/lib/benefits";
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 type Group = { id: string; name: string; branch: string; address: string; schedule: { weekday: number; startTime: string; endTime: string }[]; lessons: { id: string; date: string; time: string }[] };
-type Parent = { fullName: string | null; phone: string | null; vkProfileUrl: string | null };
+type Parent = { benefitCategory?: BenefitCategory | null; benefitStatus?: string; fullName: string | null; phone: string | null; vkProfileUrl: string | null };
 type Journey = {
   trialId: string;
   trialDate: string;
@@ -22,7 +25,7 @@ type Journey = {
   reserveExpiresAt: string | null;
   paymentDueAt: string | null;
   firstPaidLessonDate: string | null;
-  invoice: { id: string; number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string; paidDates: string[] } | null;
+  invoice: { id: string; number: string; amountKopeks: number; paidAmountKopeks: number; status: string; dueDate: string; paidDates: string[]; discountPercent?: number; discountCategory?: string | null; discountAmountKopeks?: number; amountBeforeDiscountKopeks?: number | null } | null;
 };
 
 const weekdayLabels = ["", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
@@ -58,6 +61,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
   const [phone, setPhone] = useState(parent?.phone ?? "");
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [benefitCategory, setBenefitCategory] = useState<BenefitCategory | null>(parent?.benefitCategory ?? null);
   const [parentName, setParentName] = useState(parent?.fullName ?? "");
   const [parentVkUrl, setParentVkUrl] = useState(parent?.vkProfileUrl ?? "");
   const [childName, setChildName] = useState("");
@@ -115,7 +119,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
     try {
       const response = await fetch(`${apiBase}/register`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate })
+        body: JSON.stringify({ lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate, benefitCategory })
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Не удалось записаться.");
@@ -170,6 +174,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
           <label className="label">Ссылка на страницу ВК (необязательно)<input className="field" value={parentVkUrl} onChange={(event) => setParentVkUrl(event.target.value)} type="url" placeholder="https://vk.ru/id..." /></label>
           <label className="label">Имя и фамилия ребёнка<input className="field" value={childName} onChange={(event) => setChildName(event.target.value)} required /></label>
           <label className="label">Дата рождения ребёнка<input className="field" value={childBirthDate} onChange={(event) => setChildBirthDate(event.target.value)} type="date" required /></label>
+          {parent?.benefitStatus === "APPROVED" ? <p className="rounded-lg bg-[var(--surface)] p-4 text-sm">{benefitStatusLabels.APPROVED}: {benefitLabel(parent.benefitCategory)}. Скидка 10% применяется к новым счетам.</p> : <BenefitSelection value={benefitCategory} onChange={setBenefitCategory} />}
           <Button type="submit">Выбрать группу</Button>
         </form> : null}
         {stage === 3 ? <section className="mt-6 grid gap-4">
@@ -204,6 +209,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
             <p className="mt-2 font-semibold">{dateLabel(selectedLesson.date)} в {selectedLesson.time}</p>
             <p className="mt-1 text-sm">{selectedGroup.address}</p>
             <p className="mt-4 text-sm text-[var(--muted)]">Тренер отметит посещение после занятия. Дальнейшие шаги появятся в вашем кабинете.</p>
+            {benefitCategory && parent?.benefitStatus !== "APPROVED" ? <p className="mt-3 text-sm">Заявка на скидку 10% отправлена администратору. Скидка появится в новых счетах после подтверждения.</p> : null}
             <div className="mt-6"><Button type="button" autoFocus onClick={() => router.push(`${pageBase}?token=${encodeURIComponent(createdToken)}`)}>Перейти в кабинет</Button></div>
           </div>
         </div> : null}
@@ -281,7 +287,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
                 </div>
                 {journey.invoice ? <div className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-4">
                   <p className="font-semibold">Счёт {journey.invoice.number}</p>
-                  <p className="mt-1 text-2xl font-bold">{(journey.invoice.amountKopeks / 100).toLocaleString("ru-RU")} ₽</p>
+                  <p className="mt-1 text-2xl font-bold">{(journey.invoice.amountKopeks / 100).toLocaleString("ru-RU")} ₽</p><BenefitBreakdown invoice={journey.invoice} />
                   <p className="mt-1 text-sm">{invoiceLabel(journey.invoice.status)}</p>
                   {journey.invoice.paidDates.length ? <p className="mt-2 text-sm">Занятия в счёте: {journey.invoice.paidDates.map((date) => dateLabel(date)).join(" · ")}</p> : null}
                 </div> : <div className="grid gap-3"><p className="text-sm">Счёт формируется. Обычно это занимает несколько секунд.</p>

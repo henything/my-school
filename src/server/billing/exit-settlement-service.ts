@@ -202,6 +202,8 @@ export async function leaveChild(currentUser: CurrentUser, childId: string, reas
         }
         await tx.invoice.update({ where: { id: invoice.id }, data: {
           amountKopeks: nextAmount,
+          amountBeforeDiscountKopeks: Math.max(0, nextCount - period.appliedMakeupDiscountCount) * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks),
+          discountAmountKopeks: subscription.discountPercent ? Math.max(0, Math.max(0, nextCount - period.appliedMakeupDiscountCount) * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks) - nextAmount) : 0,
           status: nextAmount === 0 ? "CANCELLED" : "ISSUED",
           cancelledAt: nextAmount === 0 ? new Date() : undefined
         } });
@@ -210,6 +212,7 @@ export async function leaveChild(currentUser: CurrentUser, childId: string, reas
       balanceDelta += delta;
       await tx.subscription.update({ where: { id: subscription.id }, data: {
         plannedLessonsCount: nextCount, totalAmountKopeks: period.earnedAmountKopeks,
+        baseTotalAmountKopeks: nextCount * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks),
         paymentStatus: invoice.status === "PAID" ? "PAID" : nextAmount === 0 ? "NOT_INVOICED" : "INVOICED",
         paymentStatusComment: `Уход ${settlement.lastDate}: ${reason}`
       } });

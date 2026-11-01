@@ -54,6 +54,7 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
       data: {
         plannedLessonsCount: preview.nextLessonsCount,
         totalAmountKopeks: preview.nextTotalKopeks,
+        baseTotalAmountKopeks: preview.nextBaseTotalKopeks,
         paymentStatus: preview.canApply && preview.nextInvoiceAmountKopeks === 0 ? "NOT_INVOICED" : preview.canApply && preview.invoiceStatus === "CANCELLED" ? "INVOICED" : undefined,
         paymentStatusComment: `Пересчёт: ${input.reason}`
       }
@@ -63,6 +64,8 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         where: { id: preview.invoiceId! },
         data: {
           amountKopeks: preview.nextInvoiceAmountKopeks,
+          amountBeforeDiscountKopeks: preview.nextBaseInvoiceKopeks,
+          discountAmountKopeks: preview.discountPercent ? Math.max(0, preview.nextBaseInvoiceKopeks - preview.nextInvoiceAmountKopeks) : 0,
           dueDate: preview.nextDueDate ? new Date(`${preview.nextDueDate}T00:00:00.000Z`) : undefined,
           status: preview.nextInvoiceAmountKopeks === 0 ? "CANCELLED" : preview.invoiceStatus === "CANCELLED" || (preview.nextDueDate && preview.invoiceStatus === "OVERDUE") ? "ISSUED" : undefined,
           cancelledAt: preview.nextInvoiceAmountKopeks === 0 ? new Date() : preview.invoiceStatus === "CANCELLED" ? null : undefined
@@ -219,6 +222,8 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     nextLessonsCount,
     appliedMakeupCount
   });
+  const nextBaseTotalKopeks = subscription.baseLessonPriceKopeks != null ? subscription.baseLessonPriceKopeks * nextLessonsCount : nextTotalKopeks;
+  const nextBaseInvoiceKopeks = nextLessonsCount > 0 ? Math.round(nextBaseTotalKopeks * Math.max(0, nextLessonsCount - appliedMakeupCount) / nextLessonsCount) : 0;
   const invoice = subscription.invoices.find((item) => item.status !== "CANCELLED") ?? subscription.invoices.find((item) => item.status === "CANCELLED" && item.amountKopeks === 0) ?? null;
   const activeInvoicesCount = subscription.invoices.filter((item) => item.status !== "CANCELLED").length;
   const delta = nextLessonsCount - subscription.plannedLessonsCount;
@@ -275,6 +280,9 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     removedLessonDates: snapshotComplete ? subscription.lessonSnapshots.filter((snapshot) => !nextIds.has(snapshot.lessonId)).map((snapshot) => snapshot.lessonDate.toISOString().slice(0, 10)).sort() : null,
     previousTotalKopeks: subscription.totalAmountKopeks,
     nextTotalKopeks,
+    nextBaseTotalKopeks,
+    nextBaseInvoiceKopeks,
+    discountPercent: subscription.discountPercent,
     previousInvoiceAmountKopeks: invoice?.amountKopeks ?? null,
     nextInvoiceAmountKopeks,
     paidAmountKopeks: invoice?.paidAmountKopeks ?? 0,

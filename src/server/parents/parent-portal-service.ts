@@ -68,7 +68,10 @@ export async function getParentDashboard(currentUser: CurrentUser) {
       id: account.parent.id,
       fullName: account.parent.fullName,
       phone: account.parent.phone,
-      vkProfileUrl: account.parent.vkProfileUrl
+      vkProfileUrl: account.parent.vkProfileUrl,
+      benefitCategory: account.parent.benefitCategory,
+      benefitStatus: account.parent.benefitStatus,
+      benefitReviewComment: account.parent.benefitReviewComment
     },
     children: childSummaries
   };
@@ -349,6 +352,10 @@ function serializeInvoiceSummary(invoice: {
   number: string;
   status: InvoiceStatus;
   amountKopeks: number;
+  amountBeforeDiscountKopeks?: number | null;
+  discountAmountKopeks?: number;
+  discountPercent?: number;
+  discountCategory?: string | null;
   paidAmountKopeks: number;
   dueDate: Date;
 }) {
@@ -357,6 +364,10 @@ function serializeInvoiceSummary(invoice: {
     number: invoice.number,
     status: invoice.status,
     amountKopeks: invoice.amountKopeks,
+    amountBeforeDiscountKopeks: invoice.amountBeforeDiscountKopeks ?? null,
+    discountAmountKopeks: invoice.discountAmountKopeks ?? 0,
+    discountPercent: invoice.discountPercent ?? 0,
+    discountCategory: invoice.discountCategory ?? null,
     paidAmountKopeks: invoice.paidAmountKopeks,
     remainingAmountKopeks: invoice.amountKopeks - invoice.paidAmountKopeks,
     dueDate: dateToKey(invoice.dueDate)
@@ -368,6 +379,10 @@ function serializeInvoice(invoice: {
   number: string;
   status: InvoiceStatus;
   amountKopeks: number;
+  amountBeforeDiscountKopeks?: number | null;
+  discountAmountKopeks?: number;
+  discountPercent?: number;
+  discountCategory?: string | null;
   paidAmountKopeks: number;
   dueDate: Date;
   issuedAt: Date;
