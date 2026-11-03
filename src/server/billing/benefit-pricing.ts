@@ -6,12 +6,25 @@ type Snapshot = {
   baseLessonPriceKopeks: number | null; baseTotalAmountKopeks: number | null;
   discountPercent: number; discountCategory: BenefitCategory | null;
 };
-/** Freeze the approved benefit when the first invoice is issued, never when an old bill is read. */
-export function benefitPricing(subscription: Snapshot, parent: { benefitStatus: string; benefitCategory: BenefitCategory | null }, hasPreviousInvoice: boolean, makeups: number) {
+type BenefitParent = {
+  benefitStatus: string; benefitCategory: BenefitCategory | null;
+  benefitEvidenceSubmittedAt?: Date | null; benefitFirstInvoiceMonth?: Date | null;
+  benefitProvisionalCategory?: BenefitCategory | null;
+};
+
+export function benefitMonth(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+}
+
+/** Freeze the invoice price; a provisional claim covers only its anchored calendar month. */
+export function benefitPricing(subscription: Snapshot, parent: BenefitParent, hasPreviousInvoice: boolean, makeups: number, periodStart?: Date) {
   const baseLessonPriceKopeks = subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks;
   const baseTotalAmountKopeks = subscription.baseTotalAmountKopeks ?? subscription.totalAmountKopeks;
-  const discountPercent = hasPreviousInvoice ? subscription.discountPercent : parent.benefitStatus === "APPROVED" && parent.benefitCategory ? BENEFIT_PERCENT : 0;
-  const discountCategory = hasPreviousInvoice ? subscription.discountCategory : discountPercent ? parent.benefitCategory : null;
+  const provisional = Boolean(parent.benefitEvidenceSubmittedAt && parent.benefitProvisionalCategory && periodStart && parent.benefitFirstInvoiceMonth &&
+    benefitMonth(periodStart).getTime() === benefitMonth(parent.benefitFirstInvoiceMonth).getTime());
+  const category = parent.benefitStatus === "APPROVED" && parent.benefitCategory ? parent.benefitCategory : provisional ? parent.benefitProvisionalCategory : null;
+  const discountPercent = hasPreviousInvoice ? subscription.discountPercent : category ? BENEFIT_PERCENT : 0;
+  const discountCategory = hasPreviousInvoice ? subscription.discountCategory : category ?? null;
   const lessonPriceKopeks = hasPreviousInvoice ? subscription.lessonPriceKopeks : discountedPrice(baseLessonPriceKopeks, discountPercent);
   const totalAmountKopeks = hasPreviousInvoice ? subscription.totalAmountKopeks : discountedPrice(baseTotalAmountKopeks, discountPercent);
   const amountBeforeDiscountKopeks = calculateSubscriptionInvoiceAmount(baseTotalAmountKopeks, subscription.plannedLessonsCount, makeups);

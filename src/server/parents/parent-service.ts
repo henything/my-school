@@ -12,6 +12,8 @@ export function serializeParent(parent: {
   benefitCategory?: string | null;
   benefitStatus?: string;
   benefitReviewComment?: string | null;
+  benefitEvidenceId?: string | null;
+  benefitFirstInvoiceMonth?: Date | null;
   updatedAt?: Date;
   createdAt: Date;
   _count?: { children: number };
@@ -21,6 +23,8 @@ export function serializeParent(parent: {
     benefitCategory: parent.benefitCategory ?? null,
     benefitStatus: parent.benefitStatus ?? "NONE",
     benefitReviewComment: parent.benefitReviewComment ?? null,
+    benefitEvidenceId: parent.benefitEvidenceId ?? null,
+    benefitFirstInvoiceMonth: parent.benefitFirstInvoiceMonth?.toISOString().slice(0, 10) ?? null,
     updatedAt: parent.updatedAt?.toISOString() ?? parent.createdAt.toISOString(),
     fullName: parent.fullName,
     phone: parent.phone,

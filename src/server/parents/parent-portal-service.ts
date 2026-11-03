@@ -71,6 +71,8 @@ export async function getParentDashboard(currentUser: CurrentUser) {
       vkProfileUrl: account.parent.vkProfileUrl,
       benefitCategory: account.parent.benefitCategory,
       benefitStatus: account.parent.benefitStatus,
+      benefitEvidenceId: account.parent.benefitEvidenceId,
+      benefitFirstInvoiceMonth: account.parent.benefitFirstInvoiceMonth?.toISOString().slice(0, 10) ?? null,
       benefitReviewComment: account.parent.benefitReviewComment
     },
     children: childSummaries

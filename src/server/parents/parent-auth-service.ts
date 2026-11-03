@@ -12,7 +12,7 @@ const PARENT_INVITE_TTL_DAYS = 7;
 const PASSWORD_RESET_TTL_DAYS = 7;
 
 const parentAccountInclude = {
-  parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true, benefitCategory: true, benefitStatus: true, benefitReviewComment: true, _count: { select: { children: true } } } },
+  parent: { select: { id: true, fullName: true, phone: true, vkProfileUrl: true, benefitCategory: true, benefitStatus: true, benefitReviewComment: true, benefitEvidenceId: true, benefitFirstInvoiceMonth: true, _count: { select: { children: true } } } },
   user: { select: { id: true, login: true, displayName: true, status: true, role: true } }
 } as const;
 

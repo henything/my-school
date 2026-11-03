@@ -1,4 +1,5 @@
 import { AlertTriangle, ArrowRightCircle, Clock3, UserRound } from "lucide-react";
+import { BenefitReviewLink } from "@/components/benefit-review-link";
 import { TaskCloseForm } from "@/components/task-close-form";
 import { cn } from "@/lib/cn";
 import { formatDateTime } from "@/lib/date-format";
@@ -88,7 +89,7 @@ export function WorkQueuePanel({ title, subtitle, tasks, tone = "critical" }: Wo
                 <span className="inline-flex min-h-8 items-center rounded-md bg-[var(--panel-soft)] px-2">{relatedLabel(task)}</span>
               </div>
             </div>
-            <TaskCloseForm taskId={task.id} requiresComment={requiresWorkQueueComment(task)} allowCancel />
+            {task.type === "BENEFIT_REVIEW_REQUIRED" ? <BenefitReviewLink parentId={task.relatedEntityId} /> : <TaskCloseForm taskId={task.id} requiresComment={requiresWorkQueueComment(task)} allowCancel />}
           </article>
         ))}
       </div>
@@ -106,6 +107,7 @@ function requiresWorkQueueComment(task: Pick<WorkQueueTask, "priority" | "type">
 }
 
 function relatedLabel(task: WorkQueueTask) {
+  if (task.type === "BENEFIT_REVIEW_REQUIRED") return "Льгота родителя";
   if (task.child) {
     return `Ребёнок: ${task.child.fullName}`;
   }

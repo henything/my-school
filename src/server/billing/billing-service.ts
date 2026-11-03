@@ -1,4 +1,4 @@
-import { benefitPricing } from "./benefit-pricing";
+import { benefitMonth, benefitPricing } from "./benefit-pricing";
 import type {
   AdmissionStatus,
   BalanceTransactionType,
@@ -377,7 +377,13 @@ async function createInvoiceForSubscription(
   const appliedMakeupCredits = applicableMakeups.slice(0, subscription.plannedLessonsCount);
   const billableLessonsCount = calculateBillableLessons(subscription.plannedLessonsCount, appliedMakeupCredits.length);
   const previousInvoice = await tx.invoice.findFirst({ where: { schoolId: currentUser.schoolId, subscriptionId: subscription.id }, select: { id: true } });
-  const pricing = benefitPricing(subscription, subscription.child.parent, Boolean(previousInvoice), appliedMakeupCredits.length);
+  // Share one immutable provisional month across siblings, even when their invoices race.
+  await tx.$queryRaw`SELECT "id" FROM "parents" WHERE "id" = ${subscription.child.parentId}::uuid FOR UPDATE`;
+  let benefitParent = await tx.parent.findFirstOrThrow({ where: { id: subscription.child.parentId, schoolId: currentUser.schoolId } });
+  if (!previousInvoice && benefitParent.benefitEvidenceSubmittedAt && benefitParent.benefitProvisionalCategory && !benefitParent.benefitFirstInvoiceMonth) {
+    benefitParent = await tx.parent.update({ where: { id: benefitParent.id }, data: { benefitFirstInvoiceMonth: benefitMonth(subscription.periodStart) } });
+  }
+  const pricing = benefitPricing(subscription, benefitParent, Boolean(previousInvoice), appliedMakeupCredits.length, subscription.periodStart);
   const { amountKopeks } = pricing;
   const issuedAt = new Date();
   const invoiceNumber = await createInvoiceNumber(tx, currentUser.schoolId, subscription.child.parent.fullName, issuedAt);

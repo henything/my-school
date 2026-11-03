@@ -16,7 +16,7 @@ import { listTasks } from "@/server/tasks/task-service";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTrials } from "@/server/trials/trial-service";
 
-export default async function DirectoriesPage() {
+export default async function DirectoriesPage({ searchParams }: { searchParams: Promise<{ benefitParentId?: string }> }) {
   const currentUser = await requireRole(ADMIN_ROLES);
   const [branches, coaches, groups, parents, parentAccounts, children, tasks, lessons, trials] = await Promise.all([
     listBranches(currentUser),
@@ -40,7 +40,7 @@ export default async function DirectoriesPage() {
         <Link href="/admin/cleanup" className="ml-4 mt-2 inline-block text-sm font-bold text-[var(--accent-strong)]">Дубли и тестовые записи →</Link>
       </section>
 
-      <ParentBenefitPanel parents={parents} />
+      <ParentBenefitPanel parents={parents} initialParentId={(await searchParams).benefitParentId} />
 
       <WorkQueuePanel
         title="Переполненные группы"

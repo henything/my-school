@@ -16,6 +16,7 @@ const OPERATIONAL_TASK_TYPES: TaskType[] = [
   "CHILD_NOT_ADMITTED",
   "SICKNESS_FOLLOW_UP",
   "CERTIFICATE_PENDING",
+  "BENEFIT_REVIEW_REQUIRED",
   "MAKEUP_NEEDS_ASSIGNMENT",
   "GROUP_OVER_CAPACITY",
   "TRIAL_NEEDS_PROCESSING",
@@ -262,6 +263,8 @@ export async function closeTask(currentUser: CurrentUser, taskId: string, input:
     });
 
     assertCanCloseTask(currentUser, existing);
+
+    if (existing.type === "BENEFIT_REVIEW_REQUIRED") throw new Error("Сначала примите решение по льготе в справочниках. Задача закроется автоматически.");
 
     if (!OPEN_TASK_STATUSES.includes(existing.status)) {
       throw new Error("Задача уже закрыта.");
