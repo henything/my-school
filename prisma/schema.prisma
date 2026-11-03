@@ -179,6 +179,7 @@ enum TaskType {
   CHILD_NOT_ADMITTED
   SICKNESS_FOLLOW_UP
   CERTIFICATE_PENDING
+  BENEFIT_REVIEW_REQUIRED
   MAKEUP_NEEDS_ASSIGNMENT
   GROUP_OVER_CAPACITY
   TRIAL_NEEDS_PROCESSING
@@ -401,6 +402,12 @@ enum BenefitStatus {
 }
 
 model Parent {
+  benefitEvidenceId String? @unique @map("benefit_evidence_id") @db.Uuid
+  benefitEvidenceSubmittedAt DateTime? @map("benefit_evidence_submitted_at")
+  benefitFirstInvoiceMonth DateTime? @map("benefit_first_invoice_month") @db.Date
+  benefitProvisionalCategory BenefitCategory? @map("benefit_provisional_category")
+  benefitEvidence ParentBenefitEvidence? @relation("ActiveBenefitEvidence", fields: [benefitEvidenceId], references: [id], onDelete: SetNull)
+  benefitEvidenceFiles ParentBenefitEvidence[] @relation("BenefitEvidenceOwner")
   benefitCategory BenefitCategory? @map("benefit_category")
   benefitStatus BenefitStatus @default(NONE) @map("benefit_status")
   benefitReviewComment String? @map("benefit_review_comment")
@@ -431,6 +438,24 @@ model Parent {
   @@index([phone])
   @@index([archivedAt])
   @@map("parents")
+}
+
+model ParentBenefitEvidence {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  parentId String @map("parent_id") @db.Uuid
+  category BenefitCategory
+  originalFileName String @map("original_file_name")
+  mimeType String @map("mime_type")
+  fileSizeBytes Int @map("file_size_bytes")
+  content Bytes
+  uploadedByUserId String @map("uploaded_by_user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  parent Parent @relation("BenefitEvidenceOwner", fields: [parentId], references: [id], onDelete: Restrict)
+  activeFor Parent? @relation("ActiveBenefitEvidence")
+
+  @@index([schoolId, parentId])
+  @@map("parent_benefit_evidence")
 }
 
 model ParentAccount {

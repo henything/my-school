@@ -41,3 +41,32 @@ describe("approved family benefit", () => {
     expect(price.amountKopeks - next.nextInvoiceAmountKopeks).toBe(162000);
   });
 });
+
+describe("first month with supporting evidence", () => {
+  const claim = { benefitStatus: "PENDING", benefitCategory: "LARGE_FAMILY", benefitProvisionalCategory: "LARGE_FAMILY", benefitEvidenceSubmittedAt: new Date("2026-10-31"), benefitFirstInvoiceMonth: new Date("2026-11-01") } as const;
+  it("uses the invoiced month even when registration was in the previous month", () => {
+    expect(benefitPricing(subscription, claim, false, 0, new Date("2026-11-06")).amountKopeks).toBe(324000);
+    expect(benefitPricing(subscription, claim, false, 0, new Date("2026-12-01")).amountKopeks).toBe(360000);
+  });
+  it("preserves the first month after rejection and removes the next month's discount", () => {
+    const rejected = { ...claim, benefitStatus: "REJECTED" };
+    expect(benefitPricing(subscription, rejected, false, 0, new Date("2026-11-20")).amountKopeks).toBe(324000);
+    expect(benefitPricing(subscription, rejected, false, 0, new Date("2026-12-01")).amountKopeks).toBe(360000);
+  });
+  it("continues indefinitely after approval without compounding", () => {
+    const approved = { ...claim, benefitStatus: "APPROVED" };
+    expect(benefitPricing(subscription, approved, false, 0, new Date("2027-01-01")).amountKopeks).toBe(324000);
+  });
+  it("covers both siblings within the same provisional month", () => {
+    expect([1, 2].map(() => benefitPricing(subscription, claim, false, 0, new Date("2026-11-10")).amountKopeks)).toEqual([324000, 324000]);
+  });
+  it("does not grant a provisional discount without proof or in another year", () => {
+    expect(benefitPricing(subscription, { ...claim, benefitEvidenceSubmittedAt: null }, false, 0, new Date("2026-11-01")).discountPercent).toBe(0);
+    expect(benefitPricing(subscription, claim, false, 0, new Date("2027-11-01")).discountPercent).toBe(0);
+  });
+  it("keeps old invoices unchanged when the review changes", () => {
+    const first = benefitPricing(subscription, claim, false, 0, new Date("2026-11-01"));
+    expect(benefitPricing({ ...subscription, ...first }, { ...claim, benefitStatus: "REJECTED" }, true, 0, new Date("2026-12-01")).amountKopeks).toBe(324000);
+    expect(benefitPricing(subscription, { ...claim, benefitStatus: "APPROVED" }, true, 0, new Date("2026-12-01")).amountKopeks).toBe(360000);
+  });
+});

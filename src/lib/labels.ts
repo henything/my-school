@@ -96,6 +96,7 @@ const enumLabels: Record<string, string> = {
   CHILD_NOT_ADMITTED: "Недопуск ребёнка",
   SICKNESS_FOLLOW_UP: "Проверить болезнь",
   CERTIFICATE_PENDING: "Ожидается справка",
+  BENEFIT_REVIEW_REQUIRED: "Проверить льготу родителя",
   MAKEUP_NEEDS_ASSIGNMENT: "Назначить отработку",
   GROUP_OVER_CAPACITY: "Группа переполнена",
   TRIAL_NEEDS_PROCESSING: "Обработать пробник",

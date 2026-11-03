@@ -1,4 +1,5 @@
 import { requestBenefit } from "@/server/parents/benefit-service";
+import { readBenefitEvidence } from "@/server/parents/benefit-evidence";
 import { BENEFIT_CATEGORIES } from "@/lib/benefits";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
@@ -201,7 +202,7 @@ async function signupParent(raw: unknown, mode: JourneyMode) {
 export async function signupTestParent(raw: unknown) { return signupParent(raw, "TEST"); }
 export async function signupProductionParent(raw: unknown) { return signupParent(raw, "PRODUCTION"); }
 
-async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: JourneyMode) {
+async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: JourneyMode, file?: File) {
   assertBookingOpen(mode);
   const { schoolId, groupId } = await contextFor(mode);
   const input = registrationSchema.parse(raw);
@@ -210,6 +211,8 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
   if (birthDate > today || birthDate.getUTCFullYear() < today.getUTCFullYear() - 18) throw new Error("Проверьте дату рождения ребёнка.");
   const age = today.getUTCFullYear() - birthDate.getUTCFullYear();
   if (currentUser.role !== "PARENT" || currentUser.schoolId !== schoolId) throw new Error("Запись доступна только родителю.");
+  if (file && !input.benefitCategory) throw new Error("Выберите категорию льготы для документа.");
+  const evidence = file ? await readBenefitEvidence(file) : undefined;
   const token = randomBytes(32).toString("base64url");
   const registration = await getPrisma().$transaction(async (tx) => {
     const lesson = await tx.lesson.findFirstOrThrow({
@@ -231,7 +234,7 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
     const parent = await tx.parent.update({ where: { id: account.parentId }, data: {
       fullName: input.parentName, vkProfileUrl: input.parentVkUrl || account.parent.vkProfileUrl
     } });
-    await requestBenefit(tx, currentUser, parent.id, input.benefitCategory);
+    await requestBenefit(tx, currentUser, parent.id, input.benefitCategory, evidence);
     await tx.user.update({ where: { id: account.userId }, data: { displayName: input.parentName } });
     const phone = normalizeParentPhone(parent.phone);
     const existingChild = await tx.child.findFirst({ where: { schoolId, parentId: parent.id, fullName: input.childName, birthDate, status: { not: "ARCHIVED" } }, select: { id: true, status: true } });
@@ -250,8 +253,8 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
   return { token: registration.journeyId };
 }
 
-export async function registerTestJourney(raw: unknown, user: CurrentUser) { return registerJourney(raw, user, "TEST"); }
-export async function registerProductionJourney(raw: unknown, user: CurrentUser) { return registerJourney(raw, user, "PRODUCTION"); }
+export async function registerTestJourney(raw: unknown, user: CurrentUser, file?: File) { return registerJourney(raw, user, "TEST", file); }
+export async function registerProductionJourney(raw: unknown, user: CurrentUser, file?: File) { return registerJourney(raw, user, "PRODUCTION", file); }
 
 async function findJourney(token: string, user: CurrentUser, mode: JourneyMode) {
   const { schoolId } = await contextFor(mode);

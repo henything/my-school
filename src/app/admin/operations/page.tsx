@@ -1,4 +1,5 @@
 import { type ReactNode } from "react";
+import { BenefitReviewLink } from "@/components/benefit-review-link";
 import Image from "next/image";
 import {
   AlertTriangle,
@@ -128,7 +129,7 @@ export default async function OperationsPage() {
                   </div>
                   <div className="rounded-lg border border-[var(--line)] bg-white/85 p-3">
                     <div className="mb-3 text-sm font-bold text-[var(--muted)]">Закрытие задачи</div>
-                    <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} allowCancel />
+                    {task.type === "BENEFIT_REVIEW_REQUIRED" ? <BenefitReviewLink parentId={task.relatedEntityId} /> : <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} allowCancel />}
                   </div>
                 </article>
               ))}
@@ -204,6 +205,7 @@ function AccordionPanel({
 }
 
 function relatedLabel(task: OperationalTask) {
+  if (task.type === "BENEFIT_REVIEW_REQUIRED") return "Льгота родителя";
   if (task.child) {
     return `Ребёнок: ${task.child.fullName}`;
   }

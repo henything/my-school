@@ -13,7 +13,7 @@ export default async function TestJourneyPage({ searchParams }: { searchParams: 
   const user = await getCurrentUser();
   const parent = user?.role === "PARENT" ? await getPrisma().parentAccount.findFirst({
     where: { schoolId: user.schoolId, userId: user.id, status: "ACTIVE" },
-    select: { parent: { select: { fullName: true, phone: true, vkProfileUrl: true, benefitCategory: true, benefitStatus: true } } }
+    select: { parent: { select: { fullName: true, phone: true, vkProfileUrl: true, benefitCategory: true, benefitStatus: true, benefitEvidenceId: true } } }
   }) : null;
   return <TestJourneyClient groups={groups} token={token} parent={parent?.parent ?? null} staffSession={Boolean(user && user.role !== "PARENT")} />;
 }

@@ -8,7 +8,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 
 type Group = { id: string; name: string; branch: string; address: string; schedule: { weekday: number; startTime: string; endTime: string }[]; lessons: { id: string; date: string; time: string }[] };
-type Parent = { benefitCategory?: BenefitCategory | null; benefitStatus?: string; fullName: string | null; phone: string | null; vkProfileUrl: string | null };
+type Parent = { benefitCategory?: BenefitCategory | null; benefitStatus?: string; benefitEvidenceId?: string | null; fullName: string | null; phone: string | null; vkProfileUrl: string | null };
 type Journey = {
   trialId: string;
   trialDate: string;
@@ -62,6 +62,8 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [benefitCategory, setBenefitCategory] = useState<BenefitCategory | null>(parent?.benefitCategory ?? null);
+  const [benefitFile, setBenefitFile] = useState<File | null>(null);
+  const hasBenefitEvidence = Boolean(parent?.benefitEvidenceId && parent.benefitCategory === benefitCategory);
   const [parentName, setParentName] = useState(parent?.fullName ?? "");
   const [parentVkUrl, setParentVkUrl] = useState(parent?.vkProfileUrl ?? "");
   const [childName, setChildName] = useState("");
@@ -110,16 +112,20 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
   }
 
   function saveDetails(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault(); setError(""); setStage(3);
+    event.preventDefault(); setError("");
+    if (benefitFile && benefitFile.size > 5 * 1024 * 1024) { setError("Документ должен быть не больше 5 МБ."); return; }
+    setStage(3);
   }
 
   async function register() {
     if (!selectedLessonId || !selectedGroup) { setError("Выберите группу и дату пробного занятия."); return; }
     setBusy(true); setError("");
     try {
+      const data = { lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate, benefitCategory };
+      const form = new FormData(); form.set("payload", JSON.stringify(data));
+      if (benefitCategory && benefitFile) form.set("benefitFile", benefitFile);
       const response = await fetch(`${apiBase}/register`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate, benefitCategory })
+        method: "POST", body: form
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Не удалось записаться.");
@@ -174,7 +180,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
           <label className="label">Ссылка на страницу ВК (необязательно)<input className="field" value={parentVkUrl} onChange={(event) => setParentVkUrl(event.target.value)} type="url" placeholder="https://vk.ru/id..." /></label>
           <label className="label">Имя и фамилия ребёнка<input className="field" value={childName} onChange={(event) => setChildName(event.target.value)} required /></label>
           <label className="label">Дата рождения ребёнка<input className="field" value={childBirthDate} onChange={(event) => setChildBirthDate(event.target.value)} type="date" required /></label>
-          {parent?.benefitStatus === "APPROVED" ? <p className="rounded-lg bg-[var(--surface)] p-4 text-sm">{benefitStatusLabels.APPROVED}: {benefitLabel(parent.benefitCategory)}. Скидка 10% применяется к новым счетам.</p> : <BenefitSelection value={benefitCategory} onChange={setBenefitCategory} />}
+          {parent?.benefitStatus === "APPROVED" ? <p className="rounded-lg bg-[var(--surface)] p-4 text-sm">{benefitStatusLabels.APPROVED}: {benefitLabel(parent.benefitCategory)}. Скидка 10% применяется к новым счетам.</p> : <BenefitSelection value={benefitCategory} onChange={category => { setBenefitCategory(category); setBenefitFile(null); }} onFileChange={setBenefitFile} hasEvidence={hasBenefitEvidence} selectedFileName={benefitFile?.name} />}
           <Button type="submit">Выбрать группу</Button>
         </form> : null}
         {stage === 3 ? <section className="mt-6 grid gap-4">
@@ -209,7 +215,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
             <p className="mt-2 font-semibold">{dateLabel(selectedLesson.date)} в {selectedLesson.time}</p>
             <p className="mt-1 text-sm">{selectedGroup.address}</p>
             <p className="mt-4 text-sm text-[var(--muted)]">Тренер отметит посещение после занятия. Дальнейшие шаги появятся в вашем кабинете.</p>
-            {benefitCategory && parent?.benefitStatus !== "APPROVED" ? <p className="mt-3 text-sm">Заявка на скидку 10% отправлена администратору. Скидка появится в новых счетах после подтверждения.</p> : null}
+            {benefitCategory && parent?.benefitStatus !== "APPROVED" ? <p className="mt-3 text-sm">Документ отправлен администратору на проверку. За первый расчётный месяц скидка 10% будет предоставлена сразу. Для следующих месяцев потребуется подтверждение.</p> : null}
             <div className="mt-6"><Button type="button" autoFocus onClick={() => router.push(`${pageBase}?token=${encodeURIComponent(createdToken)}`)}>Перейти в кабинет</Button></div>
           </div>
         </div> : null}
