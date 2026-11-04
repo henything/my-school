@@ -9,6 +9,8 @@ import { listParents } from "@/server/parents/parent-service";
 import { ADMIN_ROLES } from "@/server/rbac/rbac";
 import { listLessons } from "@/server/schedule/lesson-service";
 import { listTrials } from "@/server/trials/trial-service";
+import { TrialTaskActions } from "@/app/coach/trial-followup-list";
+import { TrialEnrollmentLink } from "@/components/trial-enrollment-link";
 import { TrialSigningControls } from "@/components/trial-signing-controls";
 
 export default async function TrialsPage() {
@@ -65,12 +67,14 @@ export default async function TrialsPage() {
                     </div>
                     <StatusBadge status={trial.status} />
                   </div>
-                  <TrialAttendanceButtons trialId={trial.id} status={trial.status} />
+                  {!isClosed && trial.status !== "WANTS_TO_CONTINUE" && trial.status !== "NOT_PLANNING" ? <TrialAttendanceButtons trialId={trial.id} status={trial.status} /> : null}
+                  {trial.trialAttended === true && ["TRIAL_ATTENDED", "CONTACT_COLLECTED"].includes(trial.status) ? <TrialTaskActions trial={trial} /> : null}
+                  {trial.status === "WANTS_TO_CONTINUE" && !trial.convertedChild && !trial.signingPackage ? <div className="mt-4"><TrialEnrollmentLink trialId={trial.id} /></div> : null}
                   {process.env.FDOC_MVP_ENABLED === "true" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} canDownload canManual={trial.status === "WANTS_TO_CONTINUE" && trial.convertedChild?.status === "TRIAL"} /> : null}
-                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+                  {!trial.journey && trial.status !== "WANTS_TO_CONTINUE" ? <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
                     <ConvertTrialForm trial={trial} groups={activeGroups} childRows={children} parents={parents} />
                     <TransferTrialForm trialId={trial.id} disabled={isClosed} />
-                  </div>
+                  </div> : null}
                 </article>
               );
             })}

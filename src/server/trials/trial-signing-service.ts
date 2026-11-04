@@ -6,6 +6,7 @@ import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import { DEFAULT_LESSON_PRICE_KOPEKS } from "@/server/billing/calculations";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
+import { countUnclaimedInvites } from "./enrollment-reservations";
 import { reservationDeadline } from "./test-journey-rules";
 import { finalizeSignedTestJourneyByTrialId } from "./fdoc-full-cycle-test";
 import { describeWeeklySchedule } from "./weekly-schedule";
@@ -74,7 +75,8 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
           trial: { groupId: trial.groupId }
         }
       });
-      if (group.children.length + reserves >= group.capacityLimit) {
+      const invited = await countUnclaimedInvites(tx, trial.groupId);
+      if (group.children.length + reserves + invited >= group.capacityLimit) {
         throw new Error("В группе больше нет свободного места для резерва.");
       }
       await tx.trialTestJourney.update({

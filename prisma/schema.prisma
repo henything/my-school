@@ -438,6 +438,8 @@ model Parent {
   @@index([phone])
   @@index([archivedAt])
   @@map("parents")
+  trialEnrollmentInvites TrialEnrollmentInvite[]
+
 }
 
 model ParentBenefitEvidence {
@@ -1220,6 +1222,7 @@ model TrialParticipant {
   createdBy      User?         @relation("TrialParticipantCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   signingPackage TrialSigningPackage?
   testJourney    TrialTestJourney?
+  enrollmentInvite TrialEnrollmentInvite?
 
   @@index([schoolId])
   @@index([lessonId])
@@ -1230,6 +1233,22 @@ model TrialParticipant {
   @@index([createdByUserId])
   @@index([schoolId, status])
   @@map("trial_participants")
+}
+
+model TrialEnrollmentInvite {
+  id              String   @id @default(uuid()) @db.Uuid
+  trialId         String   @unique @map("trial_id") @db.Uuid
+  expiresAt       DateTime @map("expires_at")
+  claimedParentId String?  @map("claimed_parent_id") @db.Uuid
+  claimedAt       DateTime? @map("claimed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  trial TrialParticipant @relation(fields: [trialId], references: [id], onDelete: Cascade)
+  parent Parent? @relation(fields: [claimedParentId], references: [id], onDelete: Restrict)
+
+  @@index([expiresAt, claimedAt])
+  @@map("trial_enrollment_invites")
 }
 
 model TrialSigningPackage {

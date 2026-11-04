@@ -69,6 +69,7 @@ export async function mergeParents(currentUser: CurrentUser, sourceId: string, t
     await tx.payment.updateMany({ where: { parentId: sourceId }, data: { parentId: targetId } });
     await tx.paymentAttempt.updateMany({ where: { parentId: sourceId }, data: { parentId: targetId } });
     await tx.billingAdjustment.updateMany({ where: { parentId: sourceId }, data: { parentId: targetId } });
+    await tx.trialEnrollmentInvite.updateMany({ where: { claimedParentId: sourceId }, data: { claimedParentId: targetId } });
     if (source.account && !target.account && source.phone && source.phone === target.phone) {
       await tx.parentAccount.update({ where: { parentId: sourceId }, data: { parentId: targetId } });
       await tx.parentInvite.updateMany({ where: { parentId: sourceId, usedAt: null }, data: { usedAt: new Date() } });

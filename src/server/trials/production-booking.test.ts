@@ -8,6 +8,7 @@ const db = vi.hoisted(() => ({
   child: { groupBy: vi.fn() },
   trialTestJourney: { findMany: vi.fn() },
   trialParticipant: { groupBy: vi.fn() },
+  trialEnrollmentInvite: { findMany: vi.fn() },
   $transaction: vi.fn(),
   requestedLesson: vi.fn()
 }));
@@ -34,6 +35,7 @@ beforeEach(() => {
   db.child.groupBy.mockResolvedValue([]);
   db.trialTestJourney.findMany.mockResolvedValue([]);
   db.trialParticipant.groupBy.mockResolvedValue([]);
+  db.trialEnrollmentInvite.findMany.mockResolvedValue([]);
   db.$transaction.mockImplementation((callback) => callback({ lesson: { findFirstOrThrow: db.requestedLesson } }));
 });
 afterEach(() => { vi.clearAllMocks(); vi.unstubAllEnvs(); });
@@ -66,4 +68,13 @@ it("fails closed when all-group booking has no configured school", async () => {
   vi.stubEnv("FDOC_PRODUCTION_SCHOOL_ID", "");
   await expect(productionBookingGroups()).rejects.toThrow();
   expect(db.trainingGroup.findMany).not.toHaveBeenCalled();
+});
+
+it("does not offer the final seat already reserved by an unclaimed after-trial link", async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date("2026-11-04T10:00:00Z"));
+  const group = { name: "Группа", capacityLimit: 1, branch: { name: "Сад" }, scheduleTemplates: [] };
+  db.lesson.findMany.mockResolvedValue([6, 13].map(day => ({ id: `lesson-${day}`, groupId: "group-0", lessonDate: new Date(`2026-11-${day.toString().padStart(2, "0")}`), startTime: "16:00", group })));
+  db.trialEnrollmentInvite.findMany.mockResolvedValue([{ trial: { groupId: "group-0" } }]);
+  try { expect((await productionBookingGroups())[0].lessons).toEqual([]); }
+  finally { vi.useRealTimers(); }
 });

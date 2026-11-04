@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { TrialEnrollmentLink } from "@/components/trial-enrollment-link";
 import { Button } from "@/components/ui/button";
 
 type Followup = {
@@ -12,6 +13,7 @@ type Followup = {
   parentName: string | null;
   parentPhone: string | null;
   status: string;
+  convertedChild?: { id: string } | null;
   comment: string | null;
   lesson: { lessonDate: string };
   group: { name: string };
@@ -21,6 +23,7 @@ export function TrialTaskActions({ trial }: { trial: Followup }) {
   const router = useRouter();
   const [comment, setComment] = useState(trial.comment ?? "");
   const [busy, setBusy] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [error, setError] = useState("");
 
   async function update(status: "CONTACT_COLLECTED" | "WANTS_TO_CONTINUE" | "NOT_PLANNING") {
@@ -38,7 +41,8 @@ export function TrialTaskActions({ trial }: { trial: Followup }) {
       });
       const body = await response.json() as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Не удалось сохранить решение.");
-      router.refresh();
+      if (status === "WANTS_TO_CONTINUE" && !trial.convertedChild) setContinuing(true);
+      else router.refresh();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Не удалось сохранить решение.");
     } finally {
@@ -55,7 +59,7 @@ export function TrialTaskActions({ trial }: { trial: Followup }) {
       </div>
       <Link className="text-sm font-semibold text-[var(--accent-strong)] underline" href={`/coach/lessons/${trial.lessonId}`}>Открыть занятие</Link>
     </div>
-    {trial.status === "TRIAL_ATTENDED" ? <div className="mt-4 grid gap-2">
+    {continuing ? <div className="mt-4"><p className="mb-3 font-semibold">Решение сохранено: будет ходить.</p><TrialEnrollmentLink trialId={trial.id} /></div> : trial.status === "TRIAL_ATTENDED" ? <div className="mt-4 grid gap-2">
       <label className="label">Итог разговора с родителем
         <textarea className="field min-h-20" value={comment} onChange={(event) => setComment(event.target.value)} placeholder="Что сообщили родителю и когда ждать решение" />
       </label>
