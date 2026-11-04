@@ -18,7 +18,8 @@ import {
   trialClosesProcessingTask,
   trialNeedsProcessingTask
 } from "./rules";
-import { reservationDeadline } from "./test-journey-rules";
+import { reservationDeadline, lessonStartsAt } from "./test-journey-rules";
+import { countUnclaimedInvites, ensureWalkInInvite } from "./enrollment-reservations";
 
 const trialInclude = {
   lesson: {
@@ -126,8 +127,8 @@ export async function listCoachTrialFollowups(currentUser: CurrentUser) {
       schoolId: currentUser.schoolId,
       status: { in: ["TRIAL_ATTENDED", "CONTACT_COLLECTED"] },
       trialAttended: true,
-      convertedChild: { status: "TRIAL" },
-      OR: [{ coach: { userId: currentUser.id } }, { lesson: { substituteCoach: { userId: currentUser.id } } }]
+      OR: [{ convertedChildId: null }, { convertedChild: { status: "TRIAL" } }],
+      AND: [{ OR: [{ coach: { userId: currentUser.id } }, { lesson: { substituteCoach: { userId: currentUser.id } } }] }]
     },
     include: trialInclude,
     orderBy: { createdAt: "desc" }
@@ -202,6 +203,7 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
   assertAdminOrCoach(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT "id" FROM "trial_participants" WHERE "id" = ${trialId}::uuid FOR UPDATE`;
     const existing = await tx.trialParticipant.findFirstOrThrow({
       where: { id: trialId, schoolId: currentUser.schoolId },
       include: trialInclude
@@ -211,31 +213,35 @@ export async function updateTrialStatus(currentUser: CurrentUser, trialId: strin
 
     const nextStatus = input.status ?? existing.status;
     const testJourney = await tx.trialTestJourney.findUnique({ where: { trialId } });
-    if (testJourney && nextStatus === "CONTACT_COLLECTED" && existing.trialAttended !== true) {
+    if (nextStatus === "CONTACT_COLLECTED" && existing.trialAttended !== true) {
       throw new Error("Контакт после пробного фиксируется только для присутствовавшего ребёнка.");
     }
-    if (testJourney && nextStatus === "CONTACT_COLLECTED" && !input.comment?.trim() && !existing.comment?.trim()) {
+    if (nextStatus === "CONTACT_COLLECTED" && !input.comment?.trim() && !existing.comment?.trim()) {
       throw new Error("Перед сохранением контакта добавьте краткий итог разговора в комментарий.");
     }
-    if (testJourney && existing.status === "WANTS_TO_CONTINUE" && nextStatus !== "WANTS_TO_CONTINUE") {
+    if (existing.status === "WANTS_TO_CONTINUE" && nextStatus !== "WANTS_TO_CONTINUE") {
       throw new Error("После решения продолжать изменение статуса проверяет администратор.");
     }
-    if ((nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING") && !testJourney) {
-      throw new Error("Это действие доступно только в новом пути записи на пробное.");
-    }
-    if (testJourney && (nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING")) {
+    if (nextStatus !== existing.status && (nextStatus === "WANTS_TO_CONTINUE" || nextStatus === "NOT_PLANNING")) {
       if (existing.status !== "CONTACT_COLLECTED" || existing.trialAttended !== true) {
         throw new Error("Сначала отметьте посещение и контакт с родителем.");
       }
       if (!input.comment?.trim() && !existing.comment?.trim()) throw new Error("Укажите краткий итог разговора с родителем.");
-      if (nextStatus === "WANTS_TO_CONTINUE") {
+      if (nextStatus === "WANTS_TO_CONTINUE" && !testJourney) {
+        if (existing.convertedChildId || existing.signingPackage) throw new Error("Для ребёнка уже начато оформление. Обратитесь к администратору.");
+        if (lessonStartsAt(existing.lesson) > new Date()) throw new Error("Сначала должно состояться пробное занятие.");
+        if (existing.lesson.status === "CANCELLED") throw new Error("Пробное занятие отменено.");
+        await ensureWalkInInvite(tx, trialId, existing.groupId);
+      }
+      if (nextStatus === "WANTS_TO_CONTINUE" && testJourney) {
         await tx.$queryRaw`SELECT "id" FROM "groups" WHERE "id" = ${existing.groupId}::uuid FOR UPDATE`;
         const group = await tx.trainingGroup.findUniqueOrThrow({ where: { id: existing.groupId }, select: { capacityLimit: true } });
         const [active, reserved] = await Promise.all([
           tx.child.count({ where: { schoolId: currentUser.schoolId, currentGroupId: existing.groupId, status: "ACTIVE" } }),
           tx.trialTestJourney.count({ where: { id: { not: testJourney.id }, paidAt: null, reserveExpiresAt: { gt: new Date() }, trial: { groupId: existing.groupId } } })
         ]);
-        if (active + reserved >= group.capacityLimit) throw new Error("Свободных мест для резерва больше нет.");
+        const invited = await countUnclaimedInvites(tx, existing.groupId);
+        if (active + reserved + invited >= group.capacityLimit) throw new Error("Свободных мест для резерва больше нет.");
         await tx.trialTestJourney.update({ where: { id: testJourney.id }, data: { reserveExpiresAt: reservationDeadline(new Date()) } });
       }
     }
@@ -313,6 +319,8 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
       if (options?.initialChildStatus !== "PAUSED") throw new Error("Заявка активируется только после подтверждения оплаты.");
     }
 
+    const enrollmentInvite = await tx.trialEnrollmentInvite.findUnique({ where: { trialId } });
+    if (enrollmentInvite && !enrollmentInvite.claimedAt) throw new Error("Сначала родитель должен заполнить анкету по персональной ссылке.");
     assertTrialCanBeConverted(existing.status);
     if (existing.trialAttended === null) throw new Error("Сначала отметьте, был ли ребёнок на пробном занятии.");
 
@@ -446,7 +454,7 @@ export async function convertTrial(currentUser: CurrentUser, trialId: string, in
 }
 
 async function ensureTrialProcessingTask(tx: Prisma.TransactionClient, currentUser: CurrentUser, trial: TrialRecord) {
-  const coachFollowup = trial.trialAttended === true && Boolean(await tx.trialTestJourney.findUnique({ where: { trialId: trial.id }, select: { id: true } }));
+  const coachFollowup = trial.trialAttended === true;
   const assigneeUserId = coachFollowup ? trial.coach.userId : await findAdminAssigneeUserId(tx, currentUser.schoolId);
   const lessonDate = dateToKey(trial.lesson.lessonDate);
   const description = coachFollowup

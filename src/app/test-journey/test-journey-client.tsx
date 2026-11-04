@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 
 type Group = { id: string; name: string; branch: string; address: string; schedule: { weekday: number; startTime: string; endTime: string }[]; lessons: { id: string; date: string; time: string }[] };
 type Parent = { benefitCategory?: BenefitCategory | null; benefitStatus?: string; benefitEvidenceId?: string | null; fullName: string | null; phone: string | null; vkProfileUrl: string | null };
+type AfterTrialInvitation = { token: string; childName: string; trialDate: string; trialTime: string; group: string; branch: string; address: string; expiresAt: string };
 type Journey = {
   trialId: string;
   trialDate: string;
@@ -49,7 +50,7 @@ function dateLabel(date: string) {
   return new Date(`${date}T12:00:00Z`).toLocaleDateString("ru-RU", { day: "numeric", month: "long", year: "numeric", weekday: "long", timeZone: "UTC" });
 }
 
-export function TestJourneyClient({ groups, token, parent, staffSession, mode = "TEST" }: { groups: Group[]; token: string; parent: Parent | null; staffSession: boolean; mode?: "TEST" | "PRODUCTION" }) {
+export function TestJourneyClient({ groups, token, parent, staffSession, mode = "TEST", invitation }: { groups: Group[]; token: string; parent: Parent | null; staffSession: boolean; mode?: "TEST" | "PRODUCTION"; invitation?: AfterTrialInvitation }) {
   const router = useRouter();
   const apiBase = mode === "TEST" ? "/api/test-journey" : "/api/join";
   const pageBase = mode === "TEST" ? "/test-journey" : "/join";
@@ -60,13 +61,14 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
   const [accessCode, setAccessCode] = useState("");
   const [phone, setPhone] = useState(parent?.phone ?? "");
   const [password, setPassword] = useState("");
+  const [existingLogin, setExistingLogin] = useState(false);
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [benefitCategory, setBenefitCategory] = useState<BenefitCategory | null>(parent?.benefitCategory ?? null);
   const [benefitFile, setBenefitFile] = useState<File | null>(null);
   const hasBenefitEvidence = Boolean(parent?.benefitEvidenceId && parent.benefitCategory === benefitCategory);
   const [parentName, setParentName] = useState(parent?.fullName ?? "");
   const [parentVkUrl, setParentVkUrl] = useState(parent?.vkProfileUrl ?? "");
-  const [childName, setChildName] = useState("");
+  const [childName, setChildName] = useState(invitation?.childName ?? "");
   const [childBirthDate, setChildBirthDate] = useState("");
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [selectedLessonId, setSelectedLessonId] = useState("");
@@ -96,12 +98,20 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
 
   async function signup(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (password !== passwordConfirm) { setError("Пароли не совпадают."); return; }
+    if (!existingLogin && password !== passwordConfirm) { setError("Пароли не совпадают."); return; }
     setBusy(true); setError("");
     try {
-      const response = await fetch(`${apiBase}/signup`, {
+      if (invitation && existingLogin) {
+        const response = await fetch("/api/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ login: phone, password }) });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ?? "Не удалось войти.");
+        if (body.user?.role !== "PARENT") throw new Error("Нужен кабинет родителя.");
+        window.location.reload();
+        return;
+      }
+      const response = await fetch(invitation ? "/api/join/after-trial/signup" : `${apiBase}/signup`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...(mode === "TEST" ? { accessCode } : {}), parentPhone: phone, password, passwordConfirm })
+        body: JSON.stringify({ ...(invitation ? { invite: invitation.token } : mode === "TEST" ? { accessCode } : {}), parentPhone: phone, password, passwordConfirm })
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Не удалось создать кабинет.");
@@ -114,21 +124,23 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
   function saveDetails(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setError("");
     if (benefitFile && benefitFile.size > 5 * 1024 * 1024) { setError("Документ должен быть не больше 5 МБ."); return; }
+    if (invitation) { void register(); return; }
     setStage(3);
   }
 
   async function register() {
-    if (!selectedLessonId || !selectedGroup) { setError("Выберите группу и дату пробного занятия."); return; }
+    if (!invitation && (!selectedLessonId || !selectedGroup)) { setError("Выберите группу и дату пробного занятия."); return; }
     setBusy(true); setError("");
     try {
-      const data = { lessonId: selectedLessonId, parentName, parentVkUrl, childName, childBirthDate, benefitCategory };
+      const data = { ...(invitation ? { invite: invitation.token } : { lessonId: selectedLessonId }), parentName, parentVkUrl, childName, childBirthDate, benefitCategory };
       const form = new FormData(); form.set("payload", JSON.stringify(data));
       if (benefitCategory && benefitFile) form.set("benefitFile", benefitFile);
-      const response = await fetch(`${apiBase}/register`, {
+      const response = await fetch(invitation ? "/api/join/after-trial" : `${apiBase}/register`, {
         method: "POST", body: form
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? "Не удалось записаться.");
+      if (invitation) { router.push(`${pageBase}?token=${encodeURIComponent(body.token as string)}`); return; }
       setCreatedToken(body.token as string);
       setStage(4);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Ошибка записи."); }
@@ -153,25 +165,26 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
-      <h1 className="text-2xl font-bold">{token ? "Ваш путь после пробного занятия" : "Запись на пробное занятие"}</h1>
-      {mode === "TEST" ? <p className="mt-2 text-sm text-[var(--muted)]">Тестовый стенд: используйте вымышленные данные ребёнка и паспорта. Деньги при тестовой оплате не списываются.</p> : <p className="mt-2 text-sm text-[var(--muted)]">Запишитесь на бесплатное пробное занятие. После него тренер расскажет, как прошло занятие, и поможет с дальнейшими шагами.</p>}
+      <h1 className="text-2xl font-bold">{token || invitation ? "Ваш путь после пробного занятия" : "Запись на пробное занятие"}</h1>
+      {invitation ? <div className="panel mt-4 p-5"><p className="font-semibold">Рады, что вы решили продолжить!</p><p className="mt-2 text-sm">Пробное уже состоялось: {dateLabel(invitation.trialDate)}, {invitation.trialTime} · {invitation.branch} · {invitation.group}.</p><p className="mt-1 text-sm">{invitation.address}</p><p className="mt-3 text-sm text-[var(--muted)]">Создайте кабинет и заполните данные семьи. Затем выберите график, подпишите документы через F.Doc и оплатите занятия. Повторно записываться на пробное не нужно.</p></div> : null}
+      {mode === "TEST" ? <p className="mt-2 text-sm text-[var(--muted)]">Тестовый стенд: используйте вымышленные данные ребёнка и паспорта. Деньги при тестовой оплате не списываются.</p> : !invitation ? <p className="mt-2 text-sm text-[var(--muted)]">Запишитесь на бесплатное пробное занятие. После него тренер расскажет, как прошло занятие, и поможет с дальнейшими шагами.</p> : null}
       {!token ? <>
-        <nav className="mt-7 grid grid-cols-4 gap-2" aria-label="Шаги записи">
-          {stageLabels.map((label, index) => <div key={label} aria-current={stage === index + 1 ? "step" : undefined}
+        <nav className={`mt-7 grid ${invitation ? "grid-cols-2" : "grid-cols-4"} gap-2`} aria-label="Шаги записи">
+          {(invitation ? stageLabels.slice(0, 2) : stageLabels).map((label, index) => <div key={label} aria-current={stage === index + 1 ? "step" : undefined}
             className={`rounded-lg px-2 py-3 text-center text-xs font-semibold sm:text-sm ${stage >= index + 1 ? "bg-[var(--accent)] text-white" : "bg-[var(--surface)] text-[var(--muted)]"}`}>
             <span className="block">{index + 1}</span>{label}
           </div>)}
         </nav>
         {stage === 1 ? <form className="panel mt-6 grid gap-4 p-5" onSubmit={signup}>
-          <h2 className="text-lg font-bold">Создайте кабинет родителя</h2>
+          <h2 className="text-lg font-bold">{existingLogin ? "Войдите в кабинет родителя" : "Создайте кабинет родителя"}</h2>
           {staffSession ? <p className="text-sm text-[var(--muted)]">Сейчас вы вошли как сотрудник. После регистрации это окно переключится в кабинет родителя. Кабинет тренера откройте в приватном окне.</p> : null}
-          {mode === "TEST" ? <label className="label">Код доступа к тесту<input className="field" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required autoComplete="off" /></label> : null}
+          {mode === "TEST" && !invitation ? <label className="label">Код доступа к тесту<input className="field" value={accessCode} onChange={(event) => setAccessCode(event.target.value)} required autoComplete="off" /></label> : null}
           <label className="label">Номер телефона<input className="field" value={phone} onChange={(event) => setPhone(event.target.value)} type="tel" inputMode="tel" required placeholder="+7 999 123-45-67" autoComplete="tel" /></label>
-          <label className="label">Придумайте пароль<input className="field" value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={10} maxLength={128} required autoComplete="new-password" /></label>
-          <label className="label">Повторите пароль<input className="field" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} type="password" minLength={10} maxLength={128} required autoComplete="new-password" aria-invalid={Boolean(passwordConfirm && password !== passwordConfirm)} /></label>
-          {passwordConfirm && password !== passwordConfirm ? <p className="text-sm text-red-700">Пароли не совпадают.</p> : null}
-          <Button type="submit" disabled={busy || Boolean(passwordConfirm && password !== passwordConfirm)}>Продолжить</Button>
-          <p className="text-sm text-[var(--muted)]">Уже есть кабинет? <a className="underline" href="/login">Войти</a></p>
+          <label className="label">{existingLogin ? "Пароль" : "Придумайте пароль"}<input className="field" value={password} onChange={(event) => setPassword(event.target.value)} type="password" minLength={existingLogin ? 1 : 10} maxLength={128} required autoComplete={existingLogin ? "current-password" : "new-password"} /></label>
+          {!existingLogin ? <label className="label">Повторите пароль<input className="field" value={passwordConfirm} onChange={(event) => setPasswordConfirm(event.target.value)} type="password" minLength={10} maxLength={128} required autoComplete="new-password" aria-invalid={Boolean(passwordConfirm && password !== passwordConfirm)} /></label> : null}
+          {!existingLogin && passwordConfirm && password !== passwordConfirm ? <p className="text-sm text-red-700">Пароли не совпадают.</p> : null}
+          <Button type="submit" disabled={busy || (!existingLogin && Boolean(passwordConfirm && password !== passwordConfirm))}>Продолжить</Button>
+          {invitation ? <button className="text-left text-sm underline" type="button" onClick={() => { setExistingLogin(!existingLogin); setError(""); }}>{existingLogin ? "Создать новый кабинет" : "Уже есть кабинет? Войти"}</button> : <p className="text-sm text-[var(--muted)]">Уже есть кабинет? <a className="underline" href="/login">Войти</a></p>}
         </form> : null}
         {stage === 2 ? <form className="panel mt-6 grid gap-4 p-5" onSubmit={saveDetails}>
           <h2 className="text-lg font-bold">Расскажите о себе и ребёнке</h2>
@@ -181,7 +194,7 @@ export function TestJourneyClient({ groups, token, parent, staffSession, mode = 
           <label className="label">Имя и фамилия ребёнка<input className="field" value={childName} onChange={(event) => setChildName(event.target.value)} required /></label>
           <label className="label">Дата рождения ребёнка<input className="field" value={childBirthDate} onChange={(event) => setChildBirthDate(event.target.value)} type="date" required /></label>
           {parent?.benefitStatus === "APPROVED" ? <p className="rounded-lg bg-[var(--surface)] p-4 text-sm">{benefitStatusLabels.APPROVED}: {benefitLabel(parent.benefitCategory)}. Скидка 10% применяется к новым счетам.</p> : <BenefitSelection value={benefitCategory} onChange={category => { setBenefitCategory(category); setBenefitFile(null); }} onFileChange={setBenefitFile} hasEvidence={hasBenefitEvidence} selectedFileName={benefitFile?.name} />}
-          <Button type="submit">Выбрать группу</Button>
+          <Button type="submit" disabled={busy}>{invitation ? "Продолжить к выбору графика" : "Выбрать группу"}</Button>
         </form> : null}
         {stage === 3 ? <section className="mt-6 grid gap-4">
           <div className="panel p-5"><h2 className="text-lg font-bold">Выберите группу и пробное занятие</h2>

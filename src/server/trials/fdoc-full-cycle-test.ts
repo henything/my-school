@@ -16,7 +16,8 @@ import { ensureGroupOverCapacityTask } from "@/server/tasks/task-service";
 import { firstPaidLessonAfter, lessonStartsAt, paymentDeadline, reservationDeadline } from "./test-journey-rules";
 import { convertTrial } from "./trial-service";
 import { syncTrialSigningByPackageId } from "./trial-signing-service";
-import { assertFdocConfigured } from "./fdoc-client";
+import { countUnclaimedInvites } from "./enrollment-reservations";
+import { activeBookingGroup, contextFor, assertBookingOpen, type JourneyMode } from "./journey-context";
 
 const parentSignupFields = {
   parentPhone: z.string().trim().min(10).max(30),
@@ -27,46 +28,11 @@ export const testParentSignupSchema = z.object({ accessCode: z.string().min(1), 
   message: "Пароли не совпадают.", path: ["passwordConfirm"]
 });
 
-type JourneyMode = "TEST" | "PRODUCTION";
-
-const activeBookingGroup = {
-  status: "ACTIVE",
-  branch: { status: "ACTIVE" },
-  mainCoach: { user: { status: "ACTIVE" } },
-  name: { not: "Группа F.Doc ТЕСТ" }
-} as const;
-
 export const productionParentSignupSchema = z.object(parentSignupFields).refine((input) => input.password === input.passwordConfirm, {
   message: "Пароли не совпадают.", path: ["passwordConfirm"]
 });
 
-async function contextFor(mode: JourneyMode) {
-  if (mode === "TEST") return { ...assertTestMode(), groupId: null };
-  if (process.env.FDOC_PROD_ENABLED !== "true" || process.env.APP_BASE_URL !== "https://azbukadvizheniya.ru" ||
-      process.env.FDOC_ENVIRONMENT !== "PRODUCTION") {
-    throw new Error("Запись на пробное сейчас закрыта.");
-  }
-  if (process.env.FDOC_BOOKING_ALL_GROUPS === "true") {
-    const schoolId = z.uuid().parse(process.env.FDOC_PRODUCTION_SCHOOL_ID);
-    const school = await getPrisma().school.findUniqueOrThrow({ where: { id: schoolId }, select: { id: true } });
-    return { schoolId: school.id, groupId: null, accessCode: null };
-  }
-  if (!process.env.FDOC_PILOT_GROUP_ID) throw new Error("Запись на пробное сейчас закрыта.");
-  const group = await getPrisma().trainingGroup.findFirstOrThrow({
-    where: { id: process.env.FDOC_PILOT_GROUP_ID, ...activeBookingGroup },
-    select: { id: true, schoolId: true }
-  });
-  return { schoolId: group.schoolId, groupId: group.id, accessCode: null };
-}
-
-function assertBookingOpen(mode: JourneyMode) {
-  if (mode === "PRODUCTION" && process.env.FDOC_PUBLIC_BOOKING_ENABLED !== "true") {
-    throw new Error("Запись на пробное сейчас закрыта.");
-  }
-  if (mode === "PRODUCTION") assertFdocConfigured();
-}
-
-const registrationSchema = z.object({
+export const registrationSchema = z.object({
   lessonId: z.uuid(),
   benefitCategory: z.enum(BENEFIT_CATEGORIES).nullable().optional(),
   parentName: z.string().trim().min(2).max(150).regex(/^[\p{L}\s-]+$/u, "Укажите имя и фамилию буквами."),
@@ -74,17 +40,6 @@ const registrationSchema = z.object({
   childName: z.string().trim().min(2).max(150),
   childBirthDate: z.iso.date()
 });
-
-function assertTestMode() {
-  if (
-    process.env.FDOC_FULL_CYCLE_TEST_ENABLED !== "true" ||
-    (process.env.FDOC_BASE_URL ?? "https://demo.fdoc.ru") !== "https://demo.fdoc.ru" ||
-    process.env.APP_BASE_URL !== "https://test.195.133.56.68.sslip.io" ||
-    !process.env.FDOC_TEST_SCHOOL_ID ||
-    !process.env.FDOC_TEST_SIGNUP_CODE
-  ) throw new Error("Полный тестовый сценарий не настроен.");
-  return { schoolId: process.env.FDOC_TEST_SCHOOL_ID, accessCode: process.env.FDOC_TEST_SIGNUP_CODE };
-}
 
 function equalSecret(actual: string, expected: string) {
   const a = createHash("sha256").update(actual).digest();
@@ -120,7 +75,7 @@ async function bookableLessons(mode: JourneyMode) {
     } } }
   });
   const groupIds = [...new Set(rows.map((row) => row.groupId))];
-  const [activeChildren, openReservations, bookedTrials] = await Promise.all([
+  const [activeChildren, openReservations, bookedTrials, enrollmentInvites] = await Promise.all([
     prisma.child.groupBy({
       by: ["currentGroupId"], where: { schoolId, status: "ACTIVE", currentGroupId: { in: groupIds } },
       _count: { id: true }
@@ -132,12 +87,13 @@ async function bookableLessons(mode: JourneyMode) {
     prisma.trialParticipant.groupBy({
       by: ["lessonId"], where: { schoolId, lessonId: { in: rows.map((row) => row.id) }, status: "TRIAL_BOOKED" },
       _count: { id: true }
-    })
+    }),
+    prisma.trialEnrollmentInvite.findMany({ where: { claimedAt: null, expiresAt: { gt: today }, trial: { schoolId, groupId: { in: groupIds }, status: "WANTS_TO_CONTINUE" } }, select: { trial: { select: { groupId: true } } } })
   ]);
   const activeByGroup = new Map(activeChildren.map((row) => [row.currentGroupId, row._count.id]));
   const reservedByGroup = new Map<string, number>();
   const bookedByLesson = new Map(bookedTrials.map((row) => [row.lessonId, row._count.id]));
-  for (const reservation of openReservations) {
+  for (const reservation of [...openReservations, ...enrollmentInvites]) {
     reservedByGroup.set(reservation.trial.groupId, (reservedByGroup.get(reservation.trial.groupId) ?? 0) + 1);
   }
   return rows
@@ -179,7 +135,7 @@ async function bookingGroups(mode: JourneyMode) {
 export async function testBookingGroups() { return bookingGroups("TEST"); }
 export async function productionBookingGroups() { return bookingGroups("PRODUCTION"); }
 
-async function signupParent(raw: unknown, mode: JourneyMode) {
+export async function signupParent(raw: unknown, mode: JourneyMode) {
   assertBookingOpen(mode);
   const { schoolId, accessCode } = await contextFor(mode);
   const input = mode === "TEST" ? testParentSignupSchema.parse(raw) : productionParentSignupSchema.parse(raw);
@@ -226,7 +182,8 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
       tx.trialTestJourney.count({ where: { schoolId, paidAt: null, reserveExpiresAt: { gt: today }, trial: { groupId: lesson.groupId } } }),
       tx.trialParticipant.count({ where: { schoolId, lessonId: lesson.id, status: "TRIAL_BOOKED" } })
     ]);
-    if (activeChildren + reservations + bookedTrials >= lesson.group.capacityLimit) throw new Error("В выбранной группе сейчас нет свободного места.");
+    const invited = await countUnclaimedInvites(tx, lesson.groupId, today);
+    if (activeChildren + reservations + bookedTrials + invited >= lesson.group.capacityLimit) throw new Error("В выбранной группе сейчас нет свободного места.");
     const account = await tx.parentAccount.findFirstOrThrow({ where: { schoolId, userId: currentUser.id, status: "ACTIVE" }, include: { parent: true, user: true } });
     if (account.parent.fullName && account.parent.fullName.trim().toLocaleLowerCase("ru") !== input.parentName.trim().toLocaleLowerCase("ru")) {
       throw new Error("Используйте имя и фамилию своего кабинета.");
@@ -361,7 +318,8 @@ export async function finalizeSignedTestJourneyByTrialId(trialId: string) {
         tx.child.count({ where: { schoolId: updated.schoolId, currentGroupId: updated.trial.groupId, status: "ACTIVE" } }),
         tx.trialTestJourney.count({ where: { id: { not: updated.id }, paidAt: null, reserveExpiresAt: { gt: now }, trial: { groupId: updated.trial.groupId } } })
       ]);
-      if (active + reserved >= group.capacityLimit) throw new Error("Подпись получена после окончания резерва, но свободных мест сейчас нет. Нужна проверка администратора.");
+      const invited = await countUnclaimedInvites(tx, updated.trial.groupId, now);
+      if (active + reserved + invited >= group.capacityLimit) throw new Error("Подпись получена после окончания резерва, но свободных мест сейчас нет. Нужна проверка администратора.");
       await tx.trialTestJourney.update({ where: { id: updated.id }, data: { reserveExpiresAt: dueAt } });
     });
   }

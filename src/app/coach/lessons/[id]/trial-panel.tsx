@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ClipboardCheck, Loader2, Phone, UserRoundPlus } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { Button } from "@/components/ui/button";
+import { TrialEnrollmentLink } from "@/components/trial-enrollment-link";
 import { TrialSigningControls } from "@/components/trial-signing-controls";
 
 type TrialStatus = "TRIAL_BOOKED" | "TRIAL_ATTENDED" | "TRIAL_NO_SHOW" | "CONTACT_COLLECTED" | "WANTS_TO_CONTINUE" | "NOT_PLANNING" | "TRANSFERRED_TO_ADMIN" | "CONVERTED_TO_ACTIVE";
@@ -292,12 +293,13 @@ function TrialCard({ trial, signingEnabled }: { trial: Trial; signingEnabled: bo
         <Button type="button" variant="danger" size="sm" disabled={disabled || isSubmitting} onClick={() => submitFromButton("TRIAL_NO_SHOW")}>
           Не пришёл
         </Button>
-        {trial.convertedChild?.status === "TRIAL" && trial.status === "CONTACT_COLLECTED" && trial.trialAttended === true ? <>
+        {(!trial.convertedChild || trial.convertedChild.status === "TRIAL") && trial.status === "CONTACT_COLLECTED" && trial.trialAttended === true ? <>
           <Button type="button" size="sm" disabled={isSubmitting} onClick={() => submitFromButton("WANTS_TO_CONTINUE")}>Будет ходить</Button>
           <Button type="button" variant="secondary" size="sm" disabled={isSubmitting} onClick={() => submitFromButton("NOT_PLANNING")}>Пока не планирует ходить</Button>
         </> : null}
         {message ? <span className="text-xs font-semibold text-[var(--muted)]">{message}</span> : null}
       </div>
+      {trial.status === "WANTS_TO_CONTINUE" && !trial.convertedChild && !trial.signingPackage ? <TrialEnrollmentLink trialId={trial.id} /> : null}
       {signingEnabled && trial.convertedChild?.status !== "TRIAL" ? <TrialSigningControls trialId={trial.id} attended={trial.trialAttended === true} signing={trial.signingPackage} /> : null}
     </form>
   );

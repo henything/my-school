@@ -53,6 +53,8 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 | `12_DEVELOPMENT_SPECS_RU.md` | Backlog-ready development specs |
 | `13_TECH_STACK_DECISIONS_RU.md` | Accepted tech stack decision |
 | `14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md` | MVP-2 spec for parent cabinet and payments |
+| [Регистрация после пробного](docs/features/after-trial-registration.md) | Инструкция для тренера, администратора и родителя: персональная ссылка после состоявшегося пробного |
+| [Спецификация регистрации после пробного](docs/specs/after-trial-parent-registration.md) | Правила приглашения, привязки карточек, резерва места и критерии проверки |
 
 ## Accepted Stack
 
