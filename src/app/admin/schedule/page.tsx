@@ -1,3 +1,4 @@
+import { ScheduleChangePanel } from "@/app/admin/schedule/components/schedule-change-panel";
 import { ScheduleForms } from "@/app/admin/schedule/components/schedule-forms";
 import { ScheduleTables } from "@/app/admin/schedule/components/schedule-tables";
 import { requireRole } from "@/server/auth/current-user";
@@ -20,6 +21,8 @@ export default async function SchedulePage() {
       <section>
         <h1 className="mt-2 text-2xl font-bold">Расписание и занятия</h1>
       </section>
+
+      <ScheduleChangePanel groups={groups} />
 
       <ScheduleTables scheduleTemplates={scheduleTemplates} lessons={lessons}>
         <ScheduleForms groups={groups} coaches={coaches} lessons={lessons} />

@@ -6,6 +6,7 @@ vi.mock("@/server/audit/audit-service", () => ({ writeAuditLog: vi.fn() }));
 vi.mock("@/server/db/prisma", () => ({
   getPrisma: () => ({
     $transaction: async (callback: (tx: unknown) => Promise<unknown>) => callback({
+      $queryRaw: async () => [],
       scheduleTemplate: { findMany: async () => [] }
     })
   })

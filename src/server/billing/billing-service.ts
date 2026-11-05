@@ -807,23 +807,26 @@ async function syncMonthlyBillingIssues(
     // Prevent simultaneous timer and admin runs from creating duplicate tasks.
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${currentUser.schoolId}::text), hashtext(${relatedEntityType}::text))`;
     const openTasks = await tx.task.findMany({
-      where: { schoolId: currentUser.schoolId, type: "BILLING_RECONCILIATION_REQUIRED", relatedEntityType, status: { in: OPEN_TASK_STATUSES } },
-      select: { id: true, relatedEntityId: true, description: true }
+      where: { schoolId: currentUser.schoolId, type: "BILLING_RECONCILIATION_REQUIRED", relatedEntityType,
+        relatedEntityId: { in: children.map(child => child.id) }, status: { in: OPEN_TASK_STATUSES } },
+      select: { id: true, relatedEntityId: true, description: true, assigneeUserId: true, dueAt: true, createdAt: true }
     });
 
     for (const issue of issues) {
       const description = `${month}: ${issue.reason}`;
       const existing = openTasks.find((task) => task.relatedEntityId === issue.childId);
       if (existing) {
-        if (existing.description !== description) {
-          await tx.task.update({ where: { id: existing.id }, data: { description } });
-        }
+        const dueAt = existing.dueAt ?? new Date((existing.createdAt?.getTime() ?? Date.now()) + 86400000);
+        await tx.task.update({ where: { id: existing.id }, data: { description, dueAt,
+          assigneeUserId: existing.assigneeUserId ?? currentUser.id, priority: dueAt < new Date() ? "CRITICAL" : "HIGH" } });
       } else {
         await createTaskIfNotExists(tx, {
           schoolId: currentUser.schoolId,
           actorUserId: currentUser.id,
           type: "BILLING_RECONCILIATION_REQUIRED",
           priority: "HIGH",
+          assigneeUserId: currentUser.id,
+          dueAt: new Date(Date.now() + 86400000),
           relatedEntityType,
           relatedEntityId: issue.childId,
           childId: issue.childId,

@@ -31,11 +31,18 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       tone: "info"
     },
     {
-      label: "Должники",
-      value: analytics.totals.debtorCount.toString(),
-      detail: "родители с непогашенными счетами",
+      label: "Ожидают оплаты",
+      value: analytics.totals.waitingCount.toString(),
+      detail: `срок ещё не истёк · ${money(analytics.totals.waitingAmountKopeks)}`,
+      icon: WalletCards,
+      tone: "info"
+    },
+    {
+      label: "Просрочили оплату",
+      value: analytics.totals.overdueCount.toString(),
+      detail: `срок истёк · ${money(analytics.totals.overdueAmountKopeks)}`,
       icon: UserRoundX,
-      tone: analytics.totals.debtorCount > 0 ? "danger" : "success"
+      tone: analytics.totals.overdueCount > 0 ? "danger" : "success"
     },
     {
       label: "Конверсия пробников",
@@ -76,7 +83,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <MetricCard label="Оплатили родители" value={money(analytics.receipt.grossKopeks)} detail="успешные платежи за выбранный период" icon={Coins} tone="success" />
         <MetricCard label="Удержала ЮKassa" value={analytics.receipt.feeKopeks === null ? "Нет данных" : money(analytics.receipt.feeKopeks)} detail="комиссия по платежам ЮKassa, включая НДС" icon={Percent} tone="warning" />
         <MetricCard label="После удержаний" value={analytics.receipt.netKopeks === null ? "Нет данных" : money(analytics.receipt.netKopeks)} detail="платежи за вычетом комиссии ЮKassa; дата выплаты на счёт может отличаться" icon={WalletCards} tone="info" />
-        <MetricCard label="Общая сумма долга" value={money(analytics.totals.totalDebtAmountKopeks)} detail="текущий остаток, вне выбранного периода" icon={WalletCards} tone={analytics.totals.totalDebtAmountKopeks > 0 ? "danger" : "success"} />
+        <MetricCard label="Общая непогашенная сумма" value={money(analytics.totals.totalDebtAmountKopeks)} detail="ожидает оплаты и просрочено · за все месяцы" icon={WalletCards} tone={analytics.totals.totalDebtAmountKopeks > 0 ? "danger" : "success"} />
         <MetricCard label="Общее кол-во человек" value={analytics.totals.totalActiveChildren.toString()} detail="активные дети сейчас" icon={UsersRound} tone="info" />
         <MetricCard label="Наполняемость групп" value={`${analytics.totals.fillPercent}%`} detail="текущая загрузка" icon={Percent} tone="warning" />
       </section>
@@ -84,7 +91,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <Link href="/admin/attendance-report" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Отчёт по посещаемости и выгрузка Excel →</Link>
       <Link href="/admin/discrepancies" className="w-fit rounded-lg border border-[var(--line)] bg-white px-4 py-3 text-sm font-bold">Расхождения, требующие проверки →</Link>
 
-      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+      <p className="text-sm text-[var(--muted)]">Ожидающие и просроченные оплаты учитывают все непогашенные счета на сегодня. Один родитель может быть в обеих категориях, если у него счета с разными сроками.</p>
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {topMetrics.map((metric) => (
           <MetricCard key={metric.label} label={metric.label} value={metric.value} detail={metric.detail} icon={metric.icon} tone={metric.tone} compact />
         ))}

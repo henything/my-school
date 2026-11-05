@@ -3,6 +3,7 @@ import { todayInMoscow } from "../src/server/children/attendance-plan";
 import { ensureMonthlySubscriptionsForGroup } from "../src/server/billing/billing-service";
 import { getPrisma } from "../src/server/db/prisma";
 import { generateLessonsForMonth } from "../src/server/schedule/lesson-service";
+import { syncBillingControlTasks } from "../src/server/billing/control-service";
 
 const prisma = getPrisma();
 const today = todayInMoscow();
@@ -32,6 +33,7 @@ for (const school of schools) {
       console.error(`[monthly-cycle] Требует проверки: ${issue.childName}: ${issue.reason}`);
       failed = true;
     }
+    await syncBillingControlTasks(user);
   } catch (error) {
     console.error(`[monthly-cycle] ${school.name}:`, error);
     failed = true;

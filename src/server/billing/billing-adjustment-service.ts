@@ -25,7 +25,13 @@ export async function applyAvailableCreditsToInvoice(tx: Prisma.TransactionClien
     const amount = Math.min(remaining, fresh.amountKopeks - fresh.appliedAmountKopeks);
     if (amount <= 0) continue;
     await tx.billingAdjustment.update({ where: { id: credit.id }, data: { appliedAmountKopeks: { increment: amount } } });
-    await tx.billingAdjustmentApplication.create({ data: { adjustmentId: credit.id, invoiceId, amountKopeks: amount } });
+    // A schedule increase can reopen an invoice that already consumed part of this credit.
+    // Keep the original application and append the newly consumed value under the same unique pair.
+    await tx.billingAdjustmentApplication.upsert({
+      where: { adjustmentId_invoiceId: { adjustmentId: credit.id, invoiceId } },
+      create: { adjustmentId: credit.id, invoiceId, amountKopeks: amount },
+      update: { amountKopeks: { increment: amount } }
+    });
     remaining -= amount;
     applied += amount;
   }

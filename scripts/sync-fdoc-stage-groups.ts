@@ -34,11 +34,10 @@ for (const entry of groups) {
     update: { address: entry.address, capacityLimit: entry.capacityLimit, status: "ACTIVE" }
   });
   for (const slot of entry.schedule) {
-    const template = await prisma.scheduleTemplate.upsert({
-      where: { groupId_weekday_startTime: { groupId: group.id, weekday: slot.weekday, startTime: slot.startTime } },
-      create: { schoolId, groupId: group.id, branchId: branch.id, coachId: testGroup.mainCoachId,
-        weekday: slot.weekday, startTime: slot.startTime, endTime: slot.endTime },
-      update: { endTime: slot.endTime, status: "ACTIVE" }
+    const oldTemplate = await prisma.scheduleTemplate.findFirst({ where: { groupId: group.id, weekday: slot.weekday, startTime: slot.startTime, validUntil: null } });
+    const template = oldTemplate ? await prisma.scheduleTemplate.update({ where: { id: oldTemplate.id }, data: { endTime: slot.endTime, status: "ACTIVE" } }) : await prisma.scheduleTemplate.create({
+      data: { schoolId, groupId: group.id, branchId: branch.id, coachId: testGroup.mainCoachId,
+        weekday: slot.weekday, startTime: slot.startTime, endTime: slot.endTime }
     });
     for (let timestamp = Date.UTC(2026, 9, 22); timestamp <= Date.UTC(2026, 10, 30); timestamp += 86400000) {
       const date = new Date(timestamp);

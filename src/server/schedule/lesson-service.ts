@@ -45,6 +45,8 @@ type TemplateRecord = {
   endTime: string;
   status: string;
   createdAt: Date;
+  validFrom?: Date | null;
+  validUntil?: Date | null;
   group: { id: string; name: string };
   branch: { id: string; name: string };
   coach: { id: string; userId: string; user: { displayName: string; login: string; status: string } };
@@ -91,7 +93,9 @@ export function serializeScheduleTemplate(template: TemplateRecord) {
     group: template.group,
     branch: template.branch,
     coach: serializeCoach(template.coach),
-    createdAt: template.createdAt.toISOString()
+    createdAt: template.createdAt.toISOString(),
+    validFrom: template.validFrom?.toISOString().slice(0, 10) ?? null,
+    validUntil: template.validUntil?.toISOString().slice(0, 10) ?? null
   };
 }
 
@@ -127,6 +131,14 @@ export async function createScheduleTemplate(currentUser: CurrentUser, input: Cr
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM groups WHERE id = ${input.groupId}::uuid AND school_id = ${currentUser.schoolId}::uuid FOR UPDATE`;
+    if (await tx.lesson.count({ where: { schoolId: currentUser.schoolId, groupId: input.groupId, status: { not: "CANCELLED" }, lessonDate: { gte: todayInMoscow() } } })) {
+      throw new Error("У группы уже сформированы занятия. Используйте «Изменить расписание с даты», чтобы пересчитать занятия и счета вместе.");
+    }
+    if (await tx.scheduleTemplate.count({ where: { schoolId: currentUser.schoolId, groupId: input.groupId, weekday: input.weekday,
+      startTime: input.startTime, status: "ACTIVE", OR: [{ validUntil: null }, { validUntil: { gt: todayInMoscow() } }] } })) {
+      throw new Error("Такой день и время уже есть в расписании группы.");
+    }
     const group = await tx.trainingGroup.findFirstOrThrow({
       where: {
         id: input.groupId,
@@ -144,7 +156,8 @@ export async function createScheduleTemplate(currentUser: CurrentUser, input: Cr
         coachId: group.mainCoachId,
         weekday: input.weekday,
         startTime: input.startTime,
-        endTime: input.endTime
+        endTime: input.endTime,
+        validFrom: todayInMoscow()
       },
       include: templateInclude
     });
@@ -174,6 +187,11 @@ export async function deleteScheduleTemplate(currentUser: CurrentUser, templateI
       include: templateInclude
     });
     if (!template) throw new Error("Шаблон расписания не найден.");
+
+    await tx.$queryRaw`SELECT id FROM groups WHERE id = ${template.group.id}::uuid FOR UPDATE`;
+    if (await tx.lesson.count({ where: { schoolId: currentUser.schoolId, groupId: template.group.id, status: { not: "CANCELLED" }, lessonDate: { gte: todayInMoscow() } } })) {
+      throw new Error("У группы уже сформированы занятия. Используйте «Изменить расписание с даты»: удаление шаблона отдельно оставит старые занятия и счета.");
+    }
 
     await tx.scheduleTemplate.delete({ where: { id: template.id } });
     await writeAuditLog({
@@ -365,6 +383,7 @@ export async function generateLessonsForAcademicYear(currentUser: CurrentUser, i
 }
 
 async function findTemplatesForGeneration(tx: Prisma.TransactionClient, schoolId: string, groupId?: string | null) {
+  await tx.$queryRaw`SELECT id FROM groups WHERE school_id = ${schoolId}::uuid AND (${groupId ?? null}::uuid IS NULL OR id = ${groupId ?? null}::uuid) ORDER BY id FOR UPDATE`;
   return tx.scheduleTemplate.findMany({
     where: {
       schoolId,
@@ -379,7 +398,9 @@ async function findTemplatesForGeneration(tx: Prisma.TransactionClient, schoolId
       coachId: true,
       weekday: true,
       startTime: true,
-      endTime: true
+      endTime: true,
+      validFrom: true,
+      validUntil: true
     }
   });
 }

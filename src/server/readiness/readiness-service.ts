@@ -3,6 +3,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
+import { templatePeriodWhere } from "@/server/schedule/template-period";
 
 export type ReadinessGateStatus = "READY" | "NEEDS_ATTENTION" | "BLOCKED";
 
@@ -196,7 +197,7 @@ export async function getReadinessDashboard(currentUser: CurrentUser): Promise<R
     prisma.branch.count({ where: { schoolId, status: "ACTIVE" } }),
     prisma.trainingGroup.count({ where: { schoolId, status: "ACTIVE" } }),
     prisma.child.count({ where: { schoolId, status: "ACTIVE", currentGroupId: { not: null } } }),
-    prisma.scheduleTemplate.count({ where: { schoolId, status: "ACTIVE" } }),
+    prisma.scheduleTemplate.count({ where: { schoolId, status: "ACTIVE", ...templatePeriodWhere(todayDate) } }),
     prisma.lesson.count({ where: { schoolId, status: { not: "CANCELLED" } } }),
     prisma.lesson.count({ where: { schoolId, status: { not: "CANCELLED" }, lessonDate: { gt: todayDate } } }),
     prisma.lesson.count({ where: { schoolId, status: { not: "CANCELLED" }, lessonDate: { lte: todayDate } } }),

@@ -1,3 +1,4 @@
+import { BillingControlPanel } from "@/components/billing-control-panel";
 import { type ReactNode } from "react";
 import { BenefitReviewLink } from "@/components/benefit-review-link";
 import Image from "next/image";
@@ -94,6 +95,8 @@ export default async function OperationsPage() {
           );
         })}
       </section>
+
+      <BillingControlPanel currentUser={currentUser} />
 
       <section className="grid min-w-0 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <AccordionPanel

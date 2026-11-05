@@ -1,3 +1,5 @@
+import { isTemplateActiveOnDate, signingScheduleReferenceDate, templateMatchesLesson, templatesOnDate } from "@/server/schedule/template-period";
+import { todayInMoscow } from "@/server/children/attendance-plan";
 import { requestBenefit } from "@/server/parents/benefit-service";
 import { readBenefitEvidence } from "@/server/parents/benefit-evidence";
 import { BENEFIT_CATEGORIES } from "@/lib/benefits";
@@ -71,10 +73,11 @@ async function bookableLessons(mode: JourneyMode) {
     include: { group: { select: {
       name: true, capacityLimit: true,
       branch: { select: { name: true } },
-      scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true } }
+      scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true, startTime: true, validFrom: true, validUntil: true } }
     } } }
   });
-  const groupIds = [...new Set(rows.map((row) => row.groupId))];
+  const availableRows = rows.filter((row) => row.group.scheduleTemplates.some((template) => templateMatchesLesson(template, row)));
+  const groupIds = [...new Set(availableRows.map((row) => row.groupId))];
   const [activeChildren, openReservations, bookedTrials, enrollmentInvites] = await Promise.all([
     prisma.child.groupBy({
       by: ["currentGroupId"], where: { schoolId, status: "ACTIVE", currentGroupId: { in: groupIds } },
@@ -96,15 +99,15 @@ async function bookableLessons(mode: JourneyMode) {
   for (const reservation of [...openReservations, ...enrollmentInvites]) {
     reservedByGroup.set(reservation.trial.groupId, (reservedByGroup.get(reservation.trial.groupId) ?? 0) + 1);
   }
-  return rows
+  return availableRows
     .filter((row) => lessonStartsAt(row) > today && row.lessonDate <= latest &&
       (activeByGroup.get(row.groupId) ?? 0) + (reservedByGroup.get(row.groupId) ?? 0) + (bookedByLesson.get(row.id) ?? 0) < row.group.capacityLimit &&
-      rows.some((next) => next.groupId === row.groupId && next.lessonDate > row.lessonDate))
+      availableRows.some((next) => next.groupId === row.groupId && next.lessonDate > row.lessonDate))
     .slice(0, 400)
     .map((row) => ({
       id: row.id, groupId: row.groupId, date: dateToKey(row.lessonDate), time: row.startTime,
       group: row.group.name, branch: row.group.branch.name,
-      weekdays: [...new Set(row.group.scheduleTemplates.map((template) => template.weekday))].sort()
+      weekdays: [...new Set(templatesOnDate(row.group.scheduleTemplates, row.lessonDate).map((template) => template.weekday))].sort()
     }));
 }
 
@@ -119,7 +122,7 @@ async function bookingGroups(mode: JourneyMode) {
       orderBy: [{ branch: { name: "asc" } }, { name: "asc" }],
       include: {
         branch: { select: { name: true, address: true } },
-        scheduleTemplates: { where: { status: "ACTIVE" }, orderBy: [{ weekday: "asc" }, { startTime: "asc" }], select: { weekday: true, startTime: true, endTime: true } }
+        scheduleTemplates: { where: { status: "ACTIVE" }, orderBy: [{ weekday: "asc" }, { startTime: "asc" }], select: { weekday: true, startTime: true, endTime: true, validFrom: true, validUntil: true } }
       }
     }),
     bookableLessons(mode)
@@ -127,7 +130,7 @@ async function bookingGroups(mode: JourneyMode) {
   return groups.map((group) => ({
     id: group.id, name: group.name, branch: group.branch.name,
     address: group.address ?? group.branch.address ?? "Адрес уточняется",
-    schedule: group.scheduleTemplates,
+    schedule: templatesOnDate(group.scheduleTemplates, todayInMoscow()).map(({ weekday, startTime, endTime }) => ({ weekday, startTime, endTime })),
     lessons: lessons.filter((lesson) => lesson.groupId === group.id).map(({ id, date, time }) => ({ id, date, time }))
   }));
 }
@@ -173,8 +176,11 @@ async function registerJourney(raw: unknown, currentUser: CurrentUser, mode: Jou
   const registration = await getPrisma().$transaction(async (tx) => {
     const lesson = await tx.lesson.findFirstOrThrow({
       where: { id: input.lessonId, schoolId, ...(groupId ? { groupId } : {}), status: { not: "CANCELLED" }, group: activeBookingGroup },
-      include: { group: true }
+      include: { group: true, scheduleTemplate: { select: { status: true, validFrom: true, validUntil: true } } }
     });
+    if (lesson.scheduleTemplate && (lesson.scheduleTemplate.status !== "ACTIVE" || !isTemplateActiveOnDate(lesson.scheduleTemplate, lesson.lessonDate))) {
+      throw new Error("Расписание изменилось. Выберите другое пробное занятие.");
+    }
     if (lessonStartsAt(lesson) <= today) throw new Error("Пробное занятие уже началось. Выберите будущую дату.");
     await tx.$queryRaw`SELECT "id" FROM "groups" WHERE "id" = ${lesson.groupId}::uuid FOR UPDATE`;
     const [activeChildren, reservations, bookedTrials] = await Promise.all([
@@ -219,7 +225,7 @@ async function findJourney(token: string, user: CurrentUser, mode: JourneyMode) 
   if (!isId && !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new Error("Ссылка на заявку недействительна.");
   const journey = await getPrisma().trialTestJourney.findFirst({
     where: { schoolId, mode, ...(isId ? { id: token } : { tokenHash: hashToken(token) }) },
-    include: { trial: { include: { lesson: true, signingPackage: true, convertedChild: { include: { parent: { include: { account: true } } } }, group: { include: { scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true } } } } } } }
+    include: { trial: { include: { lesson: true, signingPackage: true, convertedChild: { include: { parent: { include: { account: true } } } }, group: { include: { scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true, startTime: true, validFrom: true, validUntil: true } } } } } } }
   });
   if (!journey || user.schoolId !== schoolId || (user.role === "PARENT" && journey.trial.convertedChild?.parent?.account?.userId !== user.id)) {
     throw new Error("Заявка не найдена в этом кабинете.");
@@ -258,7 +264,7 @@ export async function getTestJourney(token: string, user: CurrentUser, mode: Jou
     childStatus: trial.convertedChild?.status ?? null,
     attendanceWeekday: journey.attendanceWeekday,
     scheduleChosen: Boolean(journey.scheduleChosenAt),
-    weekdays: [...new Set(trial.group.scheduleTemplates.map((template) => template.weekday))].sort(),
+    weekdays: [...new Set(templatesOnDate(trial.group.scheduleTemplates, signingScheduleReferenceDate(journey)).map((template) => template.weekday))].sort(),
     reserveExpiresAt: journey.reserveExpiresAt?.toISOString() ?? null,
     paymentDueAt: journey.paymentDueAt?.toISOString() ?? null,
     firstPaidLessonDate: journey.firstPaidLessonDate ? dateToKey(journey.firstPaidLessonDate) : null,
@@ -285,7 +291,9 @@ export async function chooseTestSchedule(token: string, user: CurrentUser, weekd
   if (!journey.reserveExpiresAt || journey.reserveExpiresAt <= new Date()) throw new Error("Резерв места истёк. Обратитесь к администратору.");
   if (journey.scheduleChosenAt) throw new Error("График уже выбран. Для изменения обратитесь к администратору.");
   const weekday = z.union([z.literal(0), z.number().int().min(1).max(7)]).parse(weekdayRaw);
-  if (weekday !== 0 && !journey.trial.group.scheduleTemplates.some((template) => template.weekday === weekday)) {
+  const templates = templatesOnDate(journey.trial.group.scheduleTemplates, signingScheduleReferenceDate(journey));
+  if (!templates.length) throw new Error("Для начала платных занятий нет действующего расписания. Обратитесь к администратору.");
+  if (weekday !== 0 && !templates.some((template) => template.weekday === weekday)) {
     throw new Error("В группе нет занятия в выбранный день.");
   }
   await getPrisma().trialTestJourney.update({ where: { id: journey.id }, data: { attendanceWeekday: weekday === 0 ? null : weekday, scheduleChosenAt: new Date() } });
@@ -328,10 +336,12 @@ export async function finalizeSignedTestJourneyByTrialId(trialId: string) {
       schoolId: updated.schoolId, groupId: updated.trial.groupId,
       lessonDate: { gt: updated.trial.lesson.lessonDate }, status: { not: "CANCELLED" }
     },
+    include: { scheduleTemplate: { select: { status: true, validFrom: true, validUntil: true } } },
     orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }],
     take: 80
   });
-  const nextLesson = firstPaidLessonAfter(lessons, dueAt, updated.attendanceWeekday);
+  const nextLesson = firstPaidLessonAfter(lessons.filter((lesson) => !lesson.scheduleTemplate ||
+    (lesson.scheduleTemplate.status === "ACTIVE" && isTemplateActiveOnDate(lesson.scheduleTemplate, lesson.lessonDate))), dueAt, updated.attendanceWeekday);
   if (!nextLesson) throw new Error("Документы подписаны, но следующее занятие ещё не создано. Добавьте его в расписание тестовой группы.");
   const admin = await testAdmin(updated.schoolId);
   try {
@@ -418,9 +428,11 @@ export async function simulateTestPayment(token: string, user: CurrentUser) {
     const future = await tx.lesson.findMany({
       where: { schoolId: journey.schoolId, groupId: journey.trial.groupId,
         lessonDate: { gte: new Date(paidAt.toISOString().slice(0, 10)) }, status: { not: "CANCELLED" } },
+      include: { scheduleTemplate: { select: { status: true, validFrom: true, validUntil: true } } },
       orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }], take: 60
     });
-    const nextLesson = firstPaidLessonAfter(future, paidAt, latest.attendanceWeekday);
+    const nextLesson = firstPaidLessonAfter(future.filter((lesson) => !lesson.scheduleTemplate ||
+      (lesson.scheduleTemplate.status === "ACTIVE" && isTemplateActiveOnDate(lesson.scheduleTemplate, lesson.lessonDate))), paidAt, latest.attendanceWeekday);
     if (nextLesson && latest.firstPaidLessonDate && nextLesson.lessonDate > latest.firstPaidLessonDate) {
       await tx.childGroupMembership.updateMany({
         where: { childId, endDate: null }, data: { startDate: nextLesson.lessonDate }
@@ -496,9 +508,11 @@ export async function activatePaidProductionJourney(invoiceId: string) {
     const future = await tx.lesson.findMany({
       where: { schoolId: journey.schoolId, groupId: journey.trial.groupId,
         lessonDate: { gte: new Date(paidAt.toISOString().slice(0, 10)) }, status: { not: "CANCELLED" } },
+      include: { scheduleTemplate: { select: { status: true, validFrom: true, validUntil: true } } },
       orderBy: [{ lessonDate: "asc" }, { startTime: "asc" }], take: 60
     });
-    const next = firstPaidLessonAfter(future, paidAt, latest.attendanceWeekday);
+    const next = firstPaidLessonAfter(future.filter((lesson) => !lesson.scheduleTemplate ||
+      (lesson.scheduleTemplate.status === "ACTIVE" && isTemplateActiveOnDate(lesson.scheduleTemplate, lesson.lessonDate))), paidAt, latest.attendanceWeekday);
     if (!next) throw new Error("Оплата получена, но будущих занятий по выбранному графику нет. Создайте расписание и повторите сверку зачисления.");
     if (next && latest.firstPaidLessonDate && next.lessonDate > latest.firstPaidLessonDate) {
       await tx.childGroupMembership.updateMany({ where: { childId: invoice.childId, endDate: null }, data: { startDate: next.lessonDate } });

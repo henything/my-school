@@ -55,6 +55,9 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 | `14_PRD_MVP2_PARENT_PORTAL_AND_PAYMENTS_RU.md` | MVP-2 spec for parent cabinet and payments |
 | [Регистрация после пробного](docs/features/after-trial-registration.md) | Инструкция для тренера, администратора и родителя: персональная ссылка после состоявшегося пробного |
 | [Спецификация регистрации после пробного](docs/specs/after-trial-parent-registration.md) | Правила приглашения, привязки карточек, резерва места и критерии проверки |
+| [Смена расписания и контроль начислений](docs/features/schedule-change-and-billing-control.md) | Пошаговая инструкция, финансовые сценарии и локальная проверка |
+| [Сверка абонементов и счетов](docs/billing-reconciliation.md) | Ежедневный цикл, задачи администратору и работа со справками |
+| [Спецификация смены расписания](docs/specs/schedule-change-and-billing-control.md) | Периоды шаблонов, безопасный пересчёт, ограничения и критерии приёмки |
 
 ## Accepted Stack
 
