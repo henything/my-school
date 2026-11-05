@@ -675,7 +675,8 @@ export async function ensureCurrentMonthSubscriptionForChild(
 export async function ensureMonthlySubscriptionsForGroup(
   currentUser: CurrentUser,
   month: string,
-  groupId?: string | null
+  groupId?: string | null,
+  childIds?: string[]
 ) {
   assertAdmin(currentUser);
   const monthStart = new Date(`${month}-01T00:00:00.000Z`);
@@ -685,7 +686,8 @@ export async function ensureMonthlySubscriptionsForGroup(
     where: {
       schoolId: currentUser.schoolId,
       status: "ACTIVE",
-      currentGroupId: groupId ?? { not: null }
+      currentGroupId: groupId ?? { not: null },
+      ...(childIds ? { id: { in: childIds } } : {})
     },
     select: { id: true, fullName: true, parentId: true, currentGroupId: true, attendancePlans: { select: { effectiveFrom: true, weekday: true } } },
     orderBy: { fullName: "asc" }
@@ -729,7 +731,7 @@ export async function ensureMonthlySubscriptionsForGroup(
             childId: child.id,
             status: "ABSENT_SICK_PENDING",
             finalStatus: null,
-            lesson: { lessonDate: { lt: monthStart } }
+            lesson: { schoolId: currentUser.schoolId, status: { not: "CANCELLED" }, lessonDate: { lt: monthStart } }
           },
           select: { id: true }
         });

@@ -4,6 +4,7 @@ import { ensureMonthlySubscriptionsForGroup } from "../src/server/billing/billin
 import { getPrisma } from "../src/server/db/prisma";
 import { generateLessonsForMonth } from "../src/server/schedule/lesson-service";
 import { syncBillingControlTasks } from "../src/server/billing/control-service";
+import { reconcileApprovedMedicalCertificates } from "../src/server/medical-certificates/period-service";
 
 const prisma = getPrisma();
 const today = todayInMoscow();
@@ -25,6 +26,12 @@ for (const school of schools) {
   }
 
   try {
+    const certificates = await reconcileApprovedMedicalCertificates(user);
+    console.log(`[monthly-cycle] ${school.name}: по одобренным справкам подтверждено занятий ${certificates.finalizedCount}, переносов ${certificates.makeupCount}`);
+    for (const issue of certificates.errors) {
+      console.error(`[monthly-cycle] Справка требует проверки (${issue.childId}): ${issue.message}`);
+      failed = true;
+    }
     const billing = prepareSchedule
       ? (await generateLessonsForMonth(user, { month })).billing
       : await ensureMonthlySubscriptionsForGroup(user, month);

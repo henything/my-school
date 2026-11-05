@@ -332,7 +332,7 @@ function MedicalCertificatePanel({
             <FileText aria-hidden="true" size={18} />
             Справки
           </h2>
-          <p className="mt-1 text-sm text-[var(--muted)]">Одобрение привязанной справки подтверждает болезнь и создаёт перенос.</p>
+          <p className="mt-1 text-sm text-[var(--muted)]">Одобрение подтверждает отмеченные болезни за весь период справки, создаёт переносы и проверяет недостающий счёт. Уже выставленные счета сохраняются. Дни вне периода требуют отдельного решения.</p>
         </div>
         <span className="badge bg-[var(--blue-soft)] text-[var(--accent-strong)]">{pendingCount}</span>
       </div>
@@ -345,7 +345,7 @@ function MedicalCertificatePanel({
               <th>Период</th>
               <th>Статус</th>
               <th>Файл</th>
-              <th>Болезнь</th>
+              <th>Привязанное занятие</th>
               <th>Решение</th>
             </tr>
           </thead>
@@ -370,7 +370,7 @@ function MedicalCertificatePanel({
                 </td>
                 <td>{certificate.attendanceRecord ? formatLesson(certificate.attendanceRecord.lesson) : "—"}</td>
                 <td>
-                  {certificate.status === "PENDING" ? (
+                  {certificate.status === "PENDING" || certificate.status === "APPROVED" ? (
                     <CertificateReviewControls certificate={certificate} />
                   ) : (
                     <div className="text-sm text-[var(--muted)]">
@@ -534,7 +534,7 @@ function AdminCertificateUploadForm({ childOptions, pendingSickness }: { childOp
   );
 }
 
-function CertificateReviewControls({ certificate }: { certificate: MedicalCertificate }) {
+export function CertificateReviewControls({ certificate }: { certificate: MedicalCertificate }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [adminComment, setAdminComment] = useState("");
@@ -545,12 +545,26 @@ function CertificateReviewControls({ certificate }: { certificate: MedicalCertif
     setIsSubmitting(true);
 
     try {
-      await submitJson(`/api/admin/medical-certificates/${certificate.id}/review`, {
+      const payload = await submitJson<{ result: {
+        application: { finalizedCount: number; makeupCount: number; remainingPendingCount: number } | null;
+        reconciliation: { createdCount: number; issues: Array<{ reason: string }> } | null;
+        warning: string | null;
+      } }>(`/api/admin/medical-certificates/${certificate.id}/review`, {
         status,
         adminComment: nullableText(adminComment)
       });
       setAdminComment("");
-      setMessage(status === "APPROVED" ? "Одобрено." : "Отклонено.");
+      if (status === "APPROVED") {
+        const { application, reconciliation, warning } = payload.result;
+        setMessage([
+          certificate.status === "APPROVED" ? "Период проверен." : "Справка одобрена.",
+          `Подтверждено занятий: ${application?.finalizedCount ?? 0}. Переносов: ${application?.makeupCount ?? 0}.`,
+          reconciliation?.createdCount ? `Создано счетов: ${reconciliation.createdCount}.` : null,
+          application?.remainingPendingCount ? `Остались неразобранные болезни: ${application.remainingPendingCount}.` : null,
+          ...(warning ? [] : reconciliation?.issues.map(issue => issue.reason) ?? []),
+          warning
+        ].filter(Boolean).join(" "));
+      } else setMessage("Отклонено.");
       router.refresh();
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Не удалось сохранить решение.");
@@ -561,21 +575,25 @@ function CertificateReviewControls({ certificate }: { certificate: MedicalCertif
 
   return (
     <div className="grid min-w-[220px] gap-2">
-      <input
+      {certificate.status === "APPROVED" ? <div className="text-sm text-[var(--muted)]">
+        {certificate.adminComment ?? "Справка одобрена"}
+        {certificate.reviewedAt ? <div>{formatDateTime(certificate.reviewedAt)}</div> : null}
+        <p className="mt-1">Повторное применение подхватит пропущенные дни за одобренный период. Переносы не дублируются.</p>
+      </div> : <input
         className="field min-h-9"
         value={adminComment}
         onChange={(event) => setAdminComment(event.target.value)}
         placeholder="Комментарий"
-      />
+      />}
       <div className="flex flex-wrap gap-2">
         <Button type="button" size="sm" onClick={() => void review("APPROVED")} disabled={isSubmitting}>
           {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <CheckCircle2 aria-hidden="true" size={14} />}
-          Одобрить
+          {certificate.status === "APPROVED" ? "Применить к занятиям" : "Одобрить"}
         </Button>
-        <Button type="button" size="sm" variant="secondary" onClick={() => void review("REJECTED")} disabled={isSubmitting}>
+        {certificate.status === "PENDING" ? <Button type="button" size="sm" variant="secondary" onClick={() => void review("REJECTED")} disabled={isSubmitting}>
           <XCircle aria-hidden="true" size={14} />
           Отклонить
-        </Button>
+        </Button> : null}
       </div>
       {message ? <span className="text-sm font-semibold text-[var(--muted)]">{message}</span> : null}
     </div>

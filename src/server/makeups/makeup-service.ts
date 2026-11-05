@@ -197,6 +197,14 @@ export async function finalizeAttendanceInTransaction(
 ) {
   assertAdmin(currentUser);
 
+  const initial = await tx.attendanceRecord.findFirstOrThrow({
+    where: { id: attendanceRecordId, lesson: { schoolId: currentUser.schoolId } },
+    select: { childId: true }
+  });
+  // Serialize manual decisions with period application and billing before reading balances.
+  await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${initial.childId}::uuid FOR UPDATE`;
+  await tx.$queryRaw`SELECT "id" FROM "attendance_records" WHERE "id" = ${attendanceRecordId}::uuid FOR UPDATE`;
+
   const existing = await tx.attendanceRecord.findFirstOrThrow({
     where: {
       id: attendanceRecordId,
@@ -224,6 +232,9 @@ export async function finalizeAttendanceInTransaction(
     }
   });
 
+  if (existing.finalStatus && existing.finalStatus !== input.finalStatus) {
+    throw new Error("По этому пропуску уже принято другое решение. Обновите табель и используйте исправление посещаемости.");
+  }
   if (input.finalStatus === "ABSENT_SICK_CONFIRMED" && existing.status !== "ABSENT_SICK_PENDING") {
     throw new Error("Подтвердить болезнь можно только для статуса ожидания справки.");
   }
