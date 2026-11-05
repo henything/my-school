@@ -111,7 +111,7 @@ if [ "$HEALTH_ONLY" -eq 1 ] && [ "$STATUS_ONLY" -eq 1 ]; then
 fi
 
 ensure_control_connection() {
-  if ssh -o BatchMode=yes -o ControlPath="$CONTROL_PATH" -O check "$HOST" >/dev/null 2>&1; then
+  if ssh -n -o BatchMode=yes -o ControlPath="$CONTROL_PATH" -O check "$HOST" >/dev/null 2>&1; then
     return 0
   fi
 
@@ -119,14 +119,14 @@ ensure_control_connection() {
   attempt=1
   while [ "$attempt" -le "$SSH_ATTEMPTS" ]; do
     log "Opening SSH control connection to $HOST (attempt $attempt/$SSH_ATTEMPTS)"
-    if ssh -MNf \
+    if ssh -n -MNf \
       -o ControlMaster=yes \
       -o ControlPath="$CONTROL_PATH" \
       -o ControlPersist=10m \
       -o ServerAliveInterval=15 \
       -o ServerAliveCountMax=2 \
       "$HOST" 2>/dev/null; then
-      if ssh -o ControlPath="$CONTROL_PATH" "$HOST" 'true' >/dev/null 2>&1; then
+      if ssh -n -o ControlPath="$CONTROL_PATH" "$HOST" 'true' >/dev/null 2>&1; then
         return 0
       fi
     fi
@@ -138,19 +138,10 @@ ensure_control_connection() {
 }
 
 ssh_prod() {
-  local attempt
-  attempt=1
-  while [ "$attempt" -le 2 ]; do
-    ensure_control_connection
-    if ssh -o ControlPath="$CONTROL_PATH" "$HOST" "$@"; then
-      return 0
-    fi
-    log "SSH command failed, retrying once"
-    attempt=$((attempt + 1))
-    sleep "$SSH_SLEEP_SECONDS"
-  done
-
-  return 1
+  ensure_control_connection
+  # A remote script consumes stdin. Retrying here would send an empty script,
+  # falsely report success, or replay a partially completed mutation.
+  ssh -o ControlPath="$CONTROL_PATH" "$HOST" "$@"
 }
 
 close_control_connection() {
@@ -222,9 +213,9 @@ server_build() {
 set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
 cd "$APP_DIR"
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm install --frozen-lockfile
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:generate
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm build
+sudo -u "$APP_USER" env CI=true HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm install --frozen-lockfile
+sudo -u "$APP_USER" env CI=true HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm db:generate
+sudo -u "$APP_USER" env CI=true HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm build
 REMOTE
 }
 
@@ -249,7 +240,7 @@ migrate_and_restart() {
 set -Eeuo pipefail
 APP_USER=$(stat -c %U "$(readlink -f "$APP_DIR")")
 cd "$APP_DIR"
-sudo -u "$APP_USER" env HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm exec prisma migrate deploy
+sudo -u "$APP_USER" env CI=true HOME="$APP_DIR" PATH=/opt/node-v24/bin:/usr/local/bin:/usr/bin:/bin pnpm exec prisma migrate deploy
 azbuka-dvizheniya-restart
 REMOTE
 }
