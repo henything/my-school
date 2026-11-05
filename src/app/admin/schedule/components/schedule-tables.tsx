@@ -11,6 +11,8 @@ import { labelForEnum, labelsForSearch } from "@/lib/labels";
 
 type ScheduleTemplate = {
   id: string;
+  validFrom?: string | null;
+  validUntil?: string | null;
   weekday: number;
   startTime: string;
   endTime: string;
@@ -41,8 +43,15 @@ type ScheduleTablesProps = {
 
 const weekdayLabels = ["", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
 const weekdayNames = ["", "понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"];
+function templatePhase(template: ScheduleTemplate, today: string) {
+  if (template.status !== "ACTIVE") return template.status;
+  if (template.validUntil && template.validUntil <= today) return "TEMPLATE_HISTORY";
+  if (template.validFrom && template.validFrom > today) return "TEMPLATE_FUTURE";
+  return "ACTIVE";
+}
 
 export function ScheduleTables({ scheduleTemplates, lessons, children }: ScheduleTablesProps) {
+  const todayKey = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [groupFilter, setGroupFilter] = useState("ALL");
@@ -54,7 +63,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
   const filteredTemplates = useMemo(
     () =>
       scheduleTemplates.filter((template) => {
-        const matchesStatus = statusFilter === "ALL" || template.status === statusFilter;
+        const matchesStatus = statusFilter === "ALL" || templatePhase(template, todayKey) === statusFilter;
         const matchesGroup = groupFilter === "ALL" || template.group.id === groupFilter;
         const matchesQuery =
           normalizedQuery.length === 0 ||
@@ -64,7 +73,7 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
 
         return matchesStatus && matchesGroup && matchesQuery;
       }),
-    [groupFilter, normalizedQuery, scheduleTemplates, statusFilter]
+    [groupFilter, normalizedQuery, scheduleTemplates, statusFilter, todayKey]
   );
 
   const filteredLessons = useMemo(
@@ -120,6 +129,8 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
             <select className="field" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
               <option value="ALL">Все статусы</option>
               <option value="ACTIVE">{labelForEnum("ACTIVE")} · шаблоны</option>
+              <option value="TEMPLATE_HISTORY">История · шаблоны</option>
+              <option value="TEMPLATE_FUTURE">Будущий график · шаблоны</option>
               <option value="SCHEDULED">{labelForEnum("SCHEDULED")} · занятия</option>
               <option value="ATTENDANCE_PENDING">{labelForEnum("ATTENDANCE_PENDING")} · занятия</option>
               <option value="ATTENDANCE_COMPLETED">{labelForEnum("ATTENDANCE_COMPLETED")} · занятия</option>
@@ -198,10 +209,11 @@ export function ScheduleTables({ scheduleTemplates, lessons, children }: Schedul
                   <td>{weekdayLabels[template.weekday]}</td>
                   <td>
                     {formatTimeRange(template.startTime, template.endTime)}
+                    {template.validFrom || template.validUntil ? <div className="mt-1 text-xs text-[var(--muted)]">{template.validFrom ? `С ${formatDate(template.validFrom)}` : "Без даты начала"}{template.validUntil ? ` · до ${formatDate(template.validUntil)} (не включая)` : ""}</div> : null}
                   </td>
                   <td>{template.coach.displayName}</td>
                   <td>
-                    <StatusBadge status={template.status} />
+                    {templatePhase(template, todayKey) === "TEMPLATE_HISTORY" ? <span className="badge bg-[var(--panel-soft)]">История</span> : templatePhase(template, todayKey) === "TEMPLATE_FUTURE" ? <span className="badge bg-[var(--blue-soft)]">Будущий график</span> : <StatusBadge status={template.status} />}
                   </td>
                   <td><DeleteTemplateButton template={template} /></td>
                 </tr>

@@ -1,3 +1,4 @@
+import { isTemplateActiveOnDate, templatePeriodWhere, templatesOnDate } from "@/server/schedule/template-period";
 import { hasRole } from "@/server/rbac/rbac";
 import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
@@ -727,15 +728,18 @@ export async function setChildAttendancePlan(currentUser: CurrentUser, childId: 
 }
 
 export async function assertGroupHasWeekday(tx: Prisma.TransactionClient, schoolId: string, groupId: string, weekday: number, from: Date) {
-  const templates = await tx.scheduleTemplate.findMany({
-    where: { schoolId, groupId, status: "ACTIVE", weekday }, select: { id: true }
-  });
+  const templates = templatesOnDate(await tx.scheduleTemplate.findMany({
+    where: { schoolId, groupId, status: "ACTIVE", weekday, ...templatePeriodWhere(from) },
+    select: { id: true, validFrom: true, validUntil: true }
+  }), from);
   if (templates.length > 1) throw new Error("У группы несколько занятий в этот день. Нельзя настроить режим раз в неделю.");
   const lessons = await tx.lesson.findMany({
     where: { schoolId, groupId, lessonDate: { gte: from }, status: { not: "CANCELLED" } },
-    select: { lessonDate: true }
+    select: { lessonDate: true, scheduleTemplate: { select: { validFrom: true, validUntil: true } } }
   });
-  const matching = lessons.filter((lesson) => weekdayForDate(lesson.lessonDate) === weekday);
+  const matching = lessons.filter((lesson) => weekdayForDate(lesson.lessonDate) === weekday &&
+    (!lesson.scheduleTemplate || (isTemplateActiveOnDate(lesson.scheduleTemplate, from) &&
+      isTemplateActiveOnDate(lesson.scheduleTemplate, lesson.lessonDate))));
   if (!matching.length && templates.length === 0) {
     throw new Error("В выбранной группе нет занятий в этот день недели.");
   }

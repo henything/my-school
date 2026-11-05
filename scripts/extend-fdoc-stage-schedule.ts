@@ -12,13 +12,12 @@ const group = await prisma.trainingGroup.findFirstOrThrow({
 });
 let created = 0;
 for (const weekday of [1, 4]) {
-  const template = await prisma.scheduleTemplate.upsert({
-    where: { groupId_weekday_startTime: { groupId: group.id, weekday, startTime: "20:00" } },
-    create: {
+  const oldTemplate = await prisma.scheduleTemplate.findFirst({ where: { groupId: group.id, weekday, startTime: "20:00", validUntil: null } });
+  const template = oldTemplate ? await prisma.scheduleTemplate.update({ where: { id: oldTemplate.id }, data: { status: "ACTIVE" } }) : await prisma.scheduleTemplate.create({
+    data: {
       schoolId: group.schoolId, groupId: group.id, branchId: group.branchId,
       coachId: group.mainCoachId, weekday, startTime: "20:00", endTime: "20:45"
-    },
-    update: { status: "ACTIVE" }
+    }
   });
   for (let timestamp = Date.UTC(2026, 9, 22); timestamp <= Date.UTC(2026, 10, 30); timestamp += 86400000) {
     const date = new Date(timestamp);

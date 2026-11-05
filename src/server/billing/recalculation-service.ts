@@ -6,7 +6,7 @@ import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, assertRole } from "@/server/rbac/rbac";
 import { admissionStatusAfterLessonBalance } from "./calculations";
 import { applyAvailableCreditsToInvoice } from "./billing-adjustment-service";
-import { additionalPaidCreditKopeks, calculateRecalculatedAmounts, plannedLessonIdsFromHistory, recalculationBlockReason } from "./recalculation";
+import { calculateCreditAwareRecalculation, calculateRecalculatedAmounts, plannedLessonIdsFromHistory, recalculationBlockReason } from "./recalculation";
 
 export async function getRecalculationPreview(currentUser: CurrentUser, subscriptionId: string, tx?: Prisma.TransactionClient) {
   assertRole(currentUser, ADMIN_ROLES);
@@ -38,7 +38,7 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
       await tx.$queryRaw`SELECT "id" FROM "invoices" WHERE "id" = ${initialPreview.invoiceId}::uuid FOR UPDATE`;
     }
     const preview = await buildPreview(tx, currentUser, subscriptionId);
-    if (!preview.canApply && !preview.canApplyPaid) throw new Error(preview.blockReason ?? "Этот счёт нельзя пересчитать автоматически.");
+    if (!preview.canApply && !preview.canApplyPaid && !preview.canRefreshScheduleOnly) throw new Error(preview.blockReason ?? "Этот счёт нельзя пересчитать автоматически.");
     if (preview.canApplyPaid && !input.paidDifferenceAction) throw new Error("Выберите зачёт на следующий месяц или сумму к возврату.");
     if (preview.subscriptionUpdatedAt !== input.expectedSubscriptionUpdatedAt ||
         preview.invoiceUpdatedAt !== input.expectedInvoiceUpdatedAt) {
@@ -55,7 +55,7 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         plannedLessonsCount: preview.nextLessonsCount,
         totalAmountKopeks: preview.nextTotalKopeks,
         baseTotalAmountKopeks: preview.nextBaseTotalKopeks,
-        paymentStatus: preview.canApply && preview.nextInvoiceAmountKopeks === 0 ? "NOT_INVOICED" : preview.canApply && preview.invoiceStatus === "CANCELLED" ? "INVOICED" : undefined,
+        paymentStatus: preview.canApply ? (preview.nextInvoiceAmountKopeks === 0 ? (preview.appliedCreditKopeks > 0 ? "PAID" : "NOT_INVOICED") : "INVOICED") : undefined,
         paymentStatusComment: `Пересчёт: ${input.reason}`
       }
     });
@@ -65,21 +65,23 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         data: {
           amountKopeks: preview.nextInvoiceAmountKopeks,
           amountBeforeDiscountKopeks: preview.nextBaseInvoiceKopeks,
-          discountAmountKopeks: preview.discountPercent ? Math.max(0, preview.nextBaseInvoiceKopeks - preview.nextInvoiceAmountKopeks) : 0,
+          discountAmountKopeks: preview.nextDiscountAmountKopeks,
           dueDate: preview.nextDueDate ? new Date(`${preview.nextDueDate}T00:00:00.000Z`) : undefined,
-          status: preview.nextInvoiceAmountKopeks === 0 ? "CANCELLED" : preview.invoiceStatus === "CANCELLED" || (preview.nextDueDate && preview.invoiceStatus === "OVERDUE") ? "ISSUED" : undefined,
-          cancelledAt: preview.nextInvoiceAmountKopeks === 0 ? new Date() : preview.invoiceStatus === "CANCELLED" ? null : undefined
+          status: preview.nextInvoiceAmountKopeks === 0 ? (preview.appliedCreditKopeks > 0 ? "PAID" : "CANCELLED") : preview.invoiceStatus === "CANCELLED" || preview.creditSettledWithoutCash || (preview.nextDueDate && preview.invoiceStatus === "OVERDUE") ? "ISSUED" : undefined,
+          paidAt: preview.nextInvoiceAmountKopeks === 0 && preview.appliedCreditKopeks > 0 ? new Date() : preview.creditSettledWithoutCash ? null : undefined,
+          cancelledAt: preview.nextInvoiceAmountKopeks === 0 && preview.appliedCreditKopeks === 0 ? new Date() : null
         }
       });
-    } else if (preview.canApplyPaid) {
+    }
+    if (preview.canApplyPaid || (preview.canApply && preview.additionalCreditKopeks > 0)) {
       const source = await tx.invoice.findUniqueOrThrow({ where: { id: preview.invoiceId! }, select: { parentId: true } });
       await tx.billingAdjustment.create({ data: {
         schoolId: currentUser.schoolId, childId: preview.childId, parentId: source.parentId,
         sourceSubscriptionId: subscriptionId, sourceInvoiceId: preview.invoiceId!,
-        kind: input.paidDifferenceAction!, amountKopeks: preview.paidDifferenceKopeks,
+        kind: preview.canApplyPaid ? input.paidDifferenceAction! : "CREDIT", amountKopeks: preview.additionalCreditKopeks,
         reason: input.reason, createdByUserId: currentUser.id
       } });
-      if (input.paidDifferenceAction === "CREDIT") {
+      if (!preview.canApplyPaid || input.paidDifferenceAction === "CREDIT") {
         const laterInvoices = await tx.invoice.findMany({
           where: { schoolId: currentUser.schoolId, childId: preview.childId,
             periodStart: { gt: new Date(`${preview.periodEnd}T00:00:00.000Z`) },
@@ -136,8 +138,9 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         invoiceAmountKopeks: preview.canApply ? preview.nextInvoiceAmountKopeks : preview.previousInvoiceAmountKopeks,
         invoiceId: preview.invoiceId,
         balanceDelta: delta,
-        paidDifferenceAction: preview.canApplyPaid ? input.paidDifferenceAction : null,
-        paidDifferenceKopeks: preview.canApplyPaid ? preview.paidDifferenceKopeks : 0
+        paidDifferenceAction: preview.canApplyPaid ? input.paidDifferenceAction : preview.additionalCreditKopeks > 0 ? "CREDIT" : null,
+        paidDifferenceKopeks: preview.additionalCreditKopeks,
+        preservedAppliedCreditKopeks: preview.appliedCreditKopeks
       },
       comment: input.reason
     }, tx);
@@ -161,7 +164,7 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
         }
       },
       invoices: {
-        include: { attempts: { select: { id: true } }, payments: { select: { id: true } }, billingAdjustmentApplications: { select: { id: true } } },
+        include: { attempts: { select: { id: true } }, payments: { select: { id: true } }, billingAdjustmentApplications: { select: { id: true, amountKopeks: true } } },
         orderBy: { createdAt: "desc" }
       },
       lessonSnapshots: { select: { lessonId: true, lessonDate: true } },
@@ -215,7 +218,7 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     _sum: { amount: true }
   });
   const appliedMakeupCount = -(makeupDiscount._sum.amount ?? 0);
-  const { nextTotalKopeks, nextInvoiceAmountKopeks } = calculateRecalculatedAmounts({
+  const { nextTotalKopeks, nextInvoiceAmountKopeks: nextInvoiceBeforeCreditsKopeks } = calculateRecalculatedAmounts({
     previousLessonsCount: subscription.plannedLessonsCount,
     previousTotalKopeks: subscription.totalAmountKopeks,
     unitPriceKopeks: subscription.lessonPriceKopeks,
@@ -226,6 +229,18 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
   const nextBaseInvoiceKopeks = nextLessonsCount > 0 ? Math.round(nextBaseTotalKopeks * Math.max(0, nextLessonsCount - appliedMakeupCount) / nextLessonsCount) : 0;
   const invoice = subscription.invoices.find((item) => item.status !== "CANCELLED") ?? subscription.invoices.find((item) => item.status === "CANCELLED" && item.amountKopeks === 0) ?? null;
   const activeInvoicesCount = subscription.invoices.filter((item) => item.status !== "CANCELLED").length;
+  const appliedCreditKopeks = invoice?.billingAdjustmentApplications.reduce((sum, application) => sum + application.amountKopeks, 0) ?? 0;
+  const existingAdjustmentsKopeks = subscription.billingAdjustments.reduce((sum, adjustment) => sum + adjustment.amountKopeks, 0);
+  const { nextInvoiceAmountKopeks, nextDiscountAmountKopeks, additionalCreditKopeks } = calculateCreditAwareRecalculation({
+    invoiceBeforeCreditsKopeks: nextInvoiceBeforeCreditsKopeks,
+    baseInvoiceKopeks: nextBaseInvoiceKopeks,
+    appliedCreditKopeks,
+    paidAmountKopeks: invoice?.paidAmountKopeks ?? 0,
+    existingAdjustmentsKopeks
+  });
+  const creditSettledWithoutCash = invoice?.status === "PAID" && invoice.amountKopeks === 0 &&
+    invoice.paidAmountKopeks === 0 && invoice.payments.length === 0 && invoice.attempts.length === 0 && appliedCreditKopeks > 0;
+
   const delta = nextLessonsCount - subscription.plannedLessonsCount;
   const nextBalance = subscription.child.cachedLessonBalance + delta;
   const today = todayInMoscow();
@@ -233,10 +248,16 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     ? new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 7)).toISOString().slice(0, 10)
     : null;
 
+  const oldIds = new Set(subscription.lessonSnapshots.map((snapshot) => snapshot.lessonId));
+  const snapshotComplete = subscription.lessonSnapshots.length === subscription.plannedLessonsCount;
+  const lessonSnapshotChanged = oldIds.size !== nextIds.size || [...nextIds].some((id) => !oldIds.has(id));
+
   const blockReason = invoice?.status === "CANCELLED" && subscription.invoices.length > 1
     ? "У абонемента несколько старых счетов. Проверьте их перед повторным выставлением."
-    : invoice?.billingAdjustmentApplications.length
-    ? "К счёту уже применён зачёт переплаты. Проверьте его вручную перед новым пересчётом."
+    : existingAdjustmentsKopeks > 0 && nextTotalKopeks > subscription.totalAmountKopeks
+    ? "По прежнему расчёту уже создан зачёт или сумма к возврату. Увеличение начисления требует ручной проверки."
+    : invoice?.status === "PAID" && !creditSettledWithoutCash && nextTotalKopeks > subscription.totalAmountKopeks
+    ? "Начисление увеличилось по уже оплаченному месяцу. Нужна проверка администратора; автоматическая доплата не выставляется."
     : recalculationBlockReason({
     hasInvoice: Boolean(invoice),
     activeInvoicesCount,
@@ -247,18 +268,17 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     nextLessonsCount,
     nextInvoiceAmountKopeks,
     nextBalance,
-    unchanged: delta === 0 && invoice?.amountKopeks === nextInvoiceAmountKopeks
+    creditSettledWithoutCash,
+    unchanged: delta === 0 && subscription.totalAmountKopeks === nextTotalKopeks && invoice?.amountKopeks === nextInvoiceAmountKopeks && additionalCreditKopeks === 0 && !lessonSnapshotChanged
     });
-  const paidDifferenceKopeks = additionalPaidCreditKopeks(
-    invoice?.paidAmountKopeks ?? 0,
-    nextInvoiceAmountKopeks,
-    subscription.billingAdjustments.reduce((sum, adjustment) => sum + adjustment.amountKopeks, 0)
-  );
-  const canApplyPaid = invoice?.status === "PAID" && !invoice.billingAdjustmentApplications.length && paidDifferenceKopeks > 0 &&
+  const paidDifferenceKopeks = additionalCreditKopeks;
+  const canApplyPaid = invoice?.status === "PAID" && !creditSettledWithoutCash && paidDifferenceKopeks > 0 &&
     activeInvoicesCount === 1 && nextBalance >= -1 &&
-    (delta !== 0 || subscription.totalAmountKopeks !== nextTotalKopeks);
-  const oldIds = new Set(subscription.lessonSnapshots.map((snapshot) => snapshot.lessonId));
-  const snapshotComplete = subscription.lessonSnapshots.length === subscription.plannedLessonsCount;
+    nextTotalKopeks <= subscription.totalAmountKopeks;
+  // Paid invoices remain immutable, but equal-price schedule replacements still need fresh attribution.
+  const canRefreshScheduleOnly = invoice?.status === "PAID" && !creditSettledWithoutCash && activeInvoicesCount === 1 &&
+    lessonSnapshotChanged && delta === 0 && nextTotalKopeks === subscription.totalAmountKopeks &&
+    paidDifferenceKopeks === 0 && nextBalance >= -1;
 
   return {
     subscriptionId,
@@ -285,6 +305,11 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     discountPercent: subscription.discountPercent,
     previousInvoiceAmountKopeks: invoice?.amountKopeks ?? null,
     nextInvoiceAmountKopeks,
+    nextInvoiceBeforeCreditsKopeks,
+    nextDiscountAmountKopeks,
+    appliedCreditKopeks,
+    additionalCreditKopeks,
+    creditSettledWithoutCash,
     paidAmountKopeks: invoice?.paidAmountKopeks ?? 0,
     appliedMakeupCount,
     currentBalance: subscription.child.cachedLessonBalance,
@@ -292,8 +317,10 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     nextDueDate,
     canApply: blockReason === null,
     canApplyPaid,
+    canRefreshScheduleOnly,
+    lessonSnapshotChanged,
     paidDifferenceKopeks,
-    blockReason: canApplyPaid ? null : blockReason,
+    blockReason: canApplyPaid || canRefreshScheduleOnly ? null : blockReason,
     historyWarning: "Проверьте историю групп и табели за период: старые даты участия могли восстановиться частично."
   };
 }

@@ -39,13 +39,14 @@ export function recalculationBlockReason(input: {
   nextInvoiceAmountKopeks: number;
   nextBalance: number;
   unchanged: boolean;
+  creditSettledWithoutCash?: boolean;
 }) {
   if (!input.hasInvoice) return "По абонементу нет действующего счёта.";
   if (input.activeInvoicesCount > 1) return "По абонементу несколько действующих счетов; нужна ручная проверка.";
-  if (input.paidAmountKopeks > 0 || input.invoiceStatus === "PAID" || input.paymentCount > 0) {
+  if (input.paidAmountKopeks > 0 || (input.invoiceStatus === "PAID" && !input.creditSettledWithoutCash) || input.paymentCount > 0) {
     return "По счёту уже была оплата. Разницу нужно учесть возвратом или зачётом; счёт автоматически не меняется.";
   }
-  if (input.attemptCount > 0 || !["DRAFT", "ISSUED", "OVERDUE", "CANCELLED"].includes(input.invoiceStatus ?? "")) {
+  if (input.attemptCount > 0 || (!["DRAFT", "ISSUED", "OVERDUE", "CANCELLED"].includes(input.invoiceStatus ?? "") && !input.creditSettledWithoutCash)) {
     return "По счёту уже начата оплата или его статус не допускает автоматическое изменение.";
   }
   if (input.nextBalance < -1) return "После пересчёта баланс занятий станет ниже −1; проверьте отметки посещаемости.";
@@ -74,4 +75,23 @@ export function calculateRecalculatedAmounts(input: {
 
 export function additionalPaidCreditKopeks(paidAmountKopeks: number, nextInvoiceAmountKopeks: number, existingAdjustmentsKopeks: number) {
   return Math.max(0, paidAmountKopeks - nextInvoiceAmountKopeks - existingAdjustmentsKopeks);
+}
+
+/** Applied credits remain immutable; any unused value is carried forward, never discarded. */
+export function calculateCreditAwareRecalculation(input: {
+  invoiceBeforeCreditsKopeks: number;
+  baseInvoiceKopeks: number;
+  appliedCreditKopeks: number;
+  paidAmountKopeks: number;
+  existingAdjustmentsKopeks: number;
+}) {
+  return {
+    nextInvoiceAmountKopeks: Math.max(0, input.invoiceBeforeCreditsKopeks - input.appliedCreditKopeks),
+    nextDiscountAmountKopeks: Math.max(0, input.baseInvoiceKopeks - input.invoiceBeforeCreditsKopeks),
+    additionalCreditKopeks: additionalPaidCreditKopeks(
+      input.paidAmountKopeks + input.appliedCreditKopeks,
+      input.invoiceBeforeCreditsKopeks,
+      input.existingAdjustmentsKopeks
+    )
+  };
 }

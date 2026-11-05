@@ -6,6 +6,8 @@ export type TemplateForGeneration = {
   weekday: number;
   startTime: string;
   endTime: string;
+  validFrom?: Date | null;
+  validUntil?: Date | null;
 };
 
 export type LessonCandidate = {
@@ -82,7 +84,9 @@ export function datesForWeekdayInMonth(month: string, weekday: number) {
 
 export function buildLessonCandidates(templates: TemplateForGeneration[], month: string): LessonCandidate[] {
   return templates.flatMap((template) =>
-    datesForWeekdayInMonth(month, template.weekday).map((lessonDate) => ({
+    datesForWeekdayInMonth(month, template.weekday)
+      .filter(date => (!template.validFrom || date >= template.validFrom) && (!template.validUntil || date < template.validUntil))
+      .map((lessonDate) => ({
       scheduleTemplateId: template.id,
       groupId: template.groupId,
       branchId: template.branchId,

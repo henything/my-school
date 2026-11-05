@@ -619,6 +619,8 @@ model ScheduleTemplate {
   startTime String       @map("start_time")
   endTime   String       @map("end_time")
   status    EntityStatus @default(ACTIVE)
+  validFrom DateTime?    @map("valid_from") @db.Date
+  validUntil DateTime?   @map("valid_until") @db.Date
   createdAt DateTime     @default(now()) @map("created_at")
   updatedAt DateTime     @updatedAt @map("updated_at")
 
@@ -628,7 +630,7 @@ model ScheduleTemplate {
   coach   CoachProfile  @relation(fields: [coachId], references: [id], onDelete: Restrict)
   lessons Lesson[]
 
-  @@unique([groupId, weekday, startTime])
+  @@index([groupId, weekday, startTime])
   @@index([schoolId])
   @@index([groupId])
   @@index([branchId])

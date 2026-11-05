@@ -1,3 +1,4 @@
+import { BillingControlPanel } from "@/components/billing-control-panel";
 import { BillingForms } from "@/app/admin/billing/components/billing-forms";
 import { BillingTables } from "@/app/admin/billing/components/billing-tables";
 import { InvoiceForms } from "@/app/admin/billing/components/invoice-forms";
@@ -26,6 +27,8 @@ export default async function BillingPage() {
       <section>
         <h1 className="mt-2 text-2xl font-bold">Абонементы, оплата и балансы</h1>
       </section>
+
+      <BillingControlPanel currentUser={currentUser} />
 
       <WorkQueuePanel
         title="Задачи по счетам и допуску"

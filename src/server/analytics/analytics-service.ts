@@ -4,6 +4,7 @@ import { getPrisma } from "@/server/db/prisma";
 import { countActiveChildren } from "@/server/groups/capacity";
 import { ADMIN_ROLES, assertRole } from "@/server/rbac/rbac";
 import { reconcileReceipts, resolveReceiptPeriod, yookassaIncomeKopeks } from "./receipt-period";
+import { summarizeDebt } from "./debt-summary";
 
 const PAID_PAYMENT_STATUS: PaymentRecordStatus = "SUCCEEDED";
 const NON_DEBT_INVOICE_STATUSES: InvoiceStatus[] = ["PAID", "CANCELLED"];
@@ -60,6 +61,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser, filters: {
       select: {
         amountKopeks: true,
         paidAmountKopeks: true,
+        dueDate: true,
         parentId: true,
         subscription: { select: { groupId: true, lessonSnapshots: { select: { groupId: true } } } }
       }
@@ -158,6 +160,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser, filters: {
   const totalCapacity = sum(activeGroups, (group) => group.capacityLimit);
   const paidSubscriptionCount = subscriptions.filter((subscription) => subscription.paymentStatus === "PAID").length;
   const debtorCount = new Set(invoices.filter((invoice) => invoice.amountKopeks > invoice.paidAmountKopeks).map((invoice) => invoice.parentId)).size;
+  const debt = summarizeDebt(invoices);
   const averageReceiptKopeks = payments.length > 0 ? Math.round(totalReceiptAmountKopeks / payments.length) : 0;
 
   return {
@@ -171,6 +174,7 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser, filters: {
       fillPercent: percent(totalActiveChildren, totalCapacity),
       paidPercent: percent(paidSubscriptionCount, subscriptions.length),
       debtorCount,
+      ...debt,
       averageReceiptKopeks,
       trialCount,
       convertedTrialCount,
