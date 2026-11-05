@@ -5,7 +5,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
-import { finalizeAttendanceInTransaction } from "@/server/makeups/makeup-service";
+import { ensureMonthlySubscriptionsForGroup } from "@/server/billing/billing-service";
+import { todayInMoscow } from "@/server/children/attendance-plan";
+import { applyApprovedCertificatePeriodsInTransaction } from "./period-service";
 import { getActiveParentAccount } from "@/server/parents/parent-auth-service";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
@@ -156,59 +158,54 @@ export async function createMedicalCertificate(currentUser: CurrentUser, input: 
 export async function reviewMedicalCertificate(currentUser: CurrentUser, certificateId: string, input: ReviewMedicalCertificateInput) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => {
-    const existing = await tx.medicalCertificate.findFirstOrThrow({
-      where: { id: certificateId, schoolId: currentUser.schoolId },
-      include: certificateInclude
+  const result = await getPrisma().$transaction(async (tx) => {
+    const initial = await tx.medicalCertificate.findFirstOrThrow({
+      where: { id: certificateId, schoolId: currentUser.schoolId }, select: { childId: true }
     });
-
-    if (existing.status !== "PENDING") {
+    // Same child lock as monthly billing and attendance correction: decisions cannot race transfers.
+    await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${initial.childId}::uuid FOR UPDATE`;
+    const existing = await tx.medicalCertificate.findFirstOrThrow({
+      where: { id: certificateId, schoolId: currentUser.schoolId }, include: certificateInclude
+    });
+    const reapply = existing.status === "APPROVED" && input.status === "APPROVED";
+    if (existing.status !== "PENDING" && !reapply) {
       throw new Error("По этой справке решение уже принято.");
     }
-
-    const updated = await tx.medicalCertificate.update({
+    const updated = reapply ? existing : await tx.medicalCertificate.update({
       where: { id: existing.id },
-      data: {
-        status: input.status,
-        adminComment: input.adminComment ?? null,
-        reviewedByUserId: currentUser.id,
-        reviewedAt: new Date()
-      },
+      data: { status: input.status, adminComment: input.adminComment ?? null,
+        reviewedByUserId: currentUser.id, reviewedAt: new Date() },
       include: certificateInclude
     });
+    const application = input.status === "APPROVED"
+      ? await applyApprovedCertificatePeriodsInTransaction(tx, currentUser, existing.childId,
+        input.adminComment ?? "Справка одобрена: подтверждение болезни за весь период")
+      : { finalizedCount: 0, makeupCount: 0, remainingPendingCount: 0 };
+    await writeAuditLog({
+      schoolId: currentUser.schoolId, actorUserId: currentUser.id,
+      action: reapply ? "MEDICAL_CERTIFICATE_REAPPLIED" : input.status === "APPROVED" ? "MEDICAL_CERTIFICATE_APPROVED" : "MEDICAL_CERTIFICATE_REJECTED",
+      entityType: "MedicalCertificate", entityId: existing.id,
+      oldValue: { status: existing.status, adminComment: existing.adminComment },
+      newValue: { status: updated.status, adminComment: updated.adminComment, ...application },
+      comment: input.adminComment
+    }, tx);
+    return { certificate: serializeMedicalCertificate(updated), application };
+  }, { timeout: 30_000 });
 
-    let finalizedAttendance = null;
-    if (input.status === "APPROVED" && existing.attendanceRecordId) {
-      finalizedAttendance = await finalizeAttendanceInTransaction(tx, currentUser, existing.attendanceRecordId, {
-        finalStatus: "ABSENT_SICK_CONFIRMED",
-        comment: input.adminComment ?? "Справка одобрена"
-      });
-    }
-
-    await writeAuditLog(
-      {
-        schoolId: currentUser.schoolId,
-        actorUserId: currentUser.id,
-        action: input.status === "APPROVED" ? "MEDICAL_CERTIFICATE_APPROVED" : "MEDICAL_CERTIFICATE_REJECTED",
-        entityType: "MedicalCertificate",
-        entityId: existing.id,
-        oldValue: { status: existing.status, adminComment: existing.adminComment },
-        newValue: {
-          status: updated.status,
-          adminComment: updated.adminComment,
-          finalizedAttendanceRecordId: finalizedAttendance?.attendanceRecord.id ?? null,
-          makeupCreditId: finalizedAttendance?.makeup?.id ?? null
-        },
-        comment: input.adminComment
-      },
-      tx
+  if (input.status !== "APPROVED") return { ...result, reconciliation: null, warning: null };
+  // Medical decisions are already committed. A billing outage must not claim they failed or undo them.
+  try {
+    const reconciliation = await ensureMonthlySubscriptionsForGroup(
+      currentUser, todayInMoscow().toISOString().slice(0, 7), undefined, [result.certificate.childId]
     );
-
-    return {
-      certificate: serializeMedicalCertificate(updated),
-      finalizedAttendance
-    };
-  });
+    return { ...result, reconciliation,
+      warning: reconciliation.issues.length
+        ? `Справка применена. Счёт требует проверки: ${reconciliation.issues.map(issue => issue.reason).join(" ")}`
+        : null };
+  } catch {
+    return { ...result, reconciliation: null,
+      warning: "Решение по справке сохранено. Не удалось завершить сверку счёта ребёнка; повторите применение справки или проверку начислений." };
+  }
 }
 
 export async function loadMedicalCertificateFile(currentUser: CurrentUser, certificateId: string) {
