@@ -59,11 +59,11 @@ describe("medical certificate review", () => {
     expect(result.reconciliation).toBeNull();
     expect(result.warning).toContain("сохранено");
   });
-  it("exposes remaining out-of-period sickness blocking a new invoice", async () => {
+  it("exposes independent billing errors after medical approval", async () => {
     state.billing.mockResolvedValueOnce({ createdCount: 0, existingCount: 0, noLessonsCount: 0,
-      issues: [{ childId: "child", reason: "Есть неподтверждённая болезнь" }] });
+      issues: [{ childId: "child", reason: "Нет карточки родителя" }] });
     const result = await reviewMedicalCertificate(admin, "certificate", { status: "APPROVED" });
-    expect(result.warning).toContain("неподтверждённая болезнь");
+    expect(result.warning).toContain("Нет карточки родителя");
   });
   it("denies coach and parent review before transaction", async () => {
     for (const role of ["COACH", "PARENT"] as const) {

@@ -92,16 +92,11 @@ describe("monthly billing reconciliation", () => {
     expect(result).toMatchObject({ createdCount: 0, existingCount: 1, issues: [] });
   });
 
-  it("flags unresolved sickness instead of issuing an incorrect invoice", async () => {
+  it("does not block monthly reconciliation or create a billing issue while a certificate is pending", async () => {
     state.pendingSickness = { id: "attendance" };
     const result = await ensureMonthlySubscriptionsForGroup(admin, "2026-11");
-    expect(result.createdCount).toBe(0);
-    expect(result.issues[0].reason).toContain("болезнь");
-    expect(state.invoiceCreate).not.toHaveBeenCalled();
-    expect(state.taskCreate).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
-      type: "BILLING_RECONCILIATION_REQUIRED",
-      description: expect.stringContaining("болезнь")
-    }));
+    expect(result).toMatchObject({ createdCount: 0, noLessonsCount: 1, issues: [] });
+    expect(state.taskCreate).not.toHaveBeenCalled();
   });
 
   it("flags an enrolled child when no lessons exist yet and creates a review task", async () => {
