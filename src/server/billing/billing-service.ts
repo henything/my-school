@@ -726,17 +726,9 @@ export async function ensureMonthlySubscriptionsForGroup(
           }
         }
 
-        const pendingSickness = await tx.attendanceRecord.findFirst({
-          where: {
-            childId: child.id,
-            status: "ABSENT_SICK_PENDING",
-            finalStatus: null,
-            lesson: { schoolId: currentUser.schoolId, status: { not: "CANCELLED" }, lessonDate: { lt: monthStart } }
-          },
-          select: { id: true }
-        });
-        if (pendingSickness) return "pendingSickness" as const;
-
+        // Waiting for a certificate is a normal state, not a billing blocker.
+        // Only approved makeup credits discount a new invoice; late approvals
+        // remain available for the next new invoice without rewriting this one.
         if (existing) {
           if (existing.periodStart.getTime() !== monthStart.getTime() || existing.periodEnd.getTime() !== monthEnd.getTime() || existing.paymentStatus === "PAID") {
             return "partialSubscription" as const;
@@ -769,9 +761,6 @@ export async function ensureMonthlySubscriptionsForGroup(
               : "У ребёнка нет оплачиваемых занятий в этом месяце. Проверьте расписание, дату начала и график."
           });
         }
-      }
-      if (outcome === "pendingSickness") {
-        issues.push({ childId: child.id, childName: child.fullName, reason: "Есть неподтверждённая болезнь за прошлый месяц — проверьте перенос перед выставлением счёта." });
       }
       if (outcome === "partialSubscription") {
         issues.push({ childId: child.id, childName: child.fullName, reason: "Есть нестандартный абонемент без счёта — проверьте его вручную." });

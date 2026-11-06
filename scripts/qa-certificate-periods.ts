@@ -28,7 +28,7 @@ const branch = await p.branch.create({ data: { schoolId: school.id, name: "Те�
 const group = await p.trainingGroup.create({ data: { schoolId: school.id, branchId: branch.id, mainCoachId: coach.id, name: "Справки — полный период" } });
 const templates = [];
 for (const weekday of [2, 4]) templates.push(await p.scheduleTemplate.create({ data: { schoolId: school.id, groupId: group.id, branchId: branch.id, coachId: coach.id, weekday, startTime: "10:00", endTime: "11:00" } }));
-for (const month of ["2026-10", "2026-11"]) await p.lesson.createMany({ data: buildLessonCandidates(templates, month).map(lesson => ({ schoolId: school.id, ...lesson })) });
+for (const month of ["2026-10", "2026-11", "2026-12"]) await p.lesson.createMany({ data: buildLessonCandidates(templates, month).map(lesson => ({ schoolId: school.id, ...lesson })) });
 
 async function fixture(name: string, sickDays = ["2026-10-27", "2026-10-29"], options: { linked?: boolean; novemberPaid?: boolean; approved?: boolean } = {}) {
   const parent = await p.parent.create({ data: { schoolId: school.id, fullName: `Родитель ${name}` } });
@@ -63,14 +63,32 @@ async function fixture(name: string, sickDays = ["2026-10-27", "2026-10-29"], op
 
 try {
   const main = await fixture("01 Без привязки");
-  await ensureMonthlySubscriptionsForGroup(admin, "2026-11", group.id);
-  assert.equal(await p.invoice.count({ where: { childId: main.child.id } }), 1);
+  const certificateTask = await p.task.create({ data: {
+    schoolId: school.id, type: "CERTIFICATE_PENDING", priority: "HIGH", assigneeUserId: admin.id,
+    relatedEntityType: "AttendanceRecord", relatedEntityId: main.records[0].id,
+    childId: main.child.id, groupId: group.id, title: "Нужна справка: QA"
+  } });
+  const returnLesson = await p.lesson.findFirstOrThrow({ where: { groupId: group.id, lessonDate: date("2026-11-03") } });
+  const returnRecord = await p.attendanceRecord.create({ data: { childId: main.child.id, lessonId: returnLesson.id, status: "PRESENT", markedByUserId: coachUser.id } });
+  const initialBilling = await ensureMonthlySubscriptionsForGroup(admin, "2026-11", group.id);
+  assert.equal(initialBilling.createdCount, 1);
+  assert.equal(initialBilling.issues.length, 0);
+  assert.equal(await p.invoice.count({ where: { childId: main.child.id } }), 2);
+  const issuedBeforeApproval = await p.invoice.findFirstOrThrow({ where: { childId: main.child.id, periodStart: date("2026-11-01") } });
+  assert.equal(issuedBeforeApproval.amountKopeks, 360000);
+  assert.equal(await p.makeupCredit.count({ where: { childId: main.child.id } }), 0);
+  assert.equal((await p.task.findUniqueOrThrow({ where: { id: certificateTask.id } })).status, "OPEN");
+  for (const record of main.records) assert.deepEqual(await p.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } }), record);
+  console.log("PASS: pending certificate does not block full November invoice or finalize illness; contact task stays open");
   const paidOctober = await p.invoice.findUniqueOrThrow({ where: { id: main.october.id } });
   const result = await reviewMedicalCertificate(admin, main.certificate.id, { status: "APPROVED" });
   assert.equal(result.application?.finalizedCount, 2);
   assert.equal(await p.makeupCredit.count({ where: { childId: main.child.id, reason: "SICKNESS" } }), 2);
   const november = await p.invoice.findFirstOrThrow({ where: { childId: main.child.id, periodStart: date("2026-11-01") } });
-  assert.equal(november.amountKopeks, 270000);
+  assert.equal(november.amountKopeks, 360000);
+  assert.deepEqual(november, issuedBeforeApproval);
+  assert.deepEqual(await p.attendanceRecord.findUniqueOrThrow({ where: { id: returnRecord.id } }), returnRecord);
+  assert.equal((await p.task.findUniqueOrThrow({ where: { id: certificateTask.id } })).status, "CLOSED");
   assert.equal(november.status, "ISSUED");
   assert.deepEqual(await p.invoice.findUniqueOrThrow({ where: { id: main.october.id } }), paidOctober);
   const approved = await p.medicalCertificate.findUniqueOrThrow({ where: { id: main.certificate.id } });
@@ -78,16 +96,29 @@ try {
   assert.deepEqual(await p.medicalCertificate.findUniqueOrThrow({ where: { id: main.certificate.id } }), approved);
   assert.deepEqual(await p.invoice.findUniqueOrThrow({ where: { id: november.id } }), november);
   assert.equal(await p.makeupCredit.count({ where: { childId: main.child.id } }), 2);
-  console.log("PASS: unlinked period covers both boundary days, creates 2700 invoice, repeat keeps approval/invoice/payment");
+  const decemberBilling = await ensureMonthlySubscriptionsForGroup(admin, "2026-12", group.id, [main.child.id]);
+  assert.equal(decemberBilling.createdCount, 1);
+  const december = await p.invoice.findFirstOrThrow({ where: { childId: main.child.id, periodStart: date("2026-12-01") } });
+  assert.equal(december.amountKopeks, 360000); // 10 December lessons minus 2 confirmed October transfers.
+  assert.equal((await p.child.findUniqueOrThrow({ where: { id: main.child.id } })).cachedMakeupBalance, 0);
+  await reviewMedicalCertificate(admin, main.certificate.id, { status: "APPROVED" });
+  await ensureMonthlySubscriptionsForGroup(admin, "2026-12", group.id, [main.child.id]);
+  assert.deepEqual(await p.invoice.findUniqueOrThrow({ where: { id: december.id } }), december);
+  assert.equal(await p.makeupCredit.count({ where: { childId: main.child.id } }), 2);
+  assert.equal(await p.invoice.count({ where: { childId: main.child.id, periodStart: date("2026-12-01") } }), 1);
+  console.log("PASS: late approval preserves issued November invoice and return attendance; December uses compensation exactly once");
 
   const partial = await fixture("02 Неполная справка", ["2026-10-27", "2026-10-29", "2026-10-20"], { linked: true });
   const sibling = await fixture("03 Другой ребёнок");
   const partialResult = await reviewMedicalCertificate(admin, partial.certificate.id, { status: "APPROVED" });
   assert.equal(partialResult.application?.finalizedCount, 2);
   assert.equal(await p.attendanceRecord.count({ where: { childId: partial.child.id, finalStatus: null } }), 1);
-  assert.equal(await p.invoice.count({ where: { childId: partial.child.id, periodStart: date("2026-11-01") } }), 0);
+  const partialInvoice = await p.invoice.findFirstOrThrow({ where: { childId: partial.child.id, periodStart: date("2026-11-01") } });
+  assert.equal(partialInvoice.amountKopeks, 270000);
+  assert.equal(partialResult.application?.remainingPendingCount, 1);
+  assert.equal(partialResult.warning, null);
   assert.equal(await p.invoice.count({ where: { childId: sibling.child.id, periodStart: date("2026-11-01") } }), 0);
-  console.log("PASS: linked certificate covers full period, uncovered illness still blocks bill, other child untouched");
+  console.log("PASS: partial certificate discounts only covered days; uncovered illness stays pending without blocking bill; other child untouched");
 
   const concurrent = await fixture("04 Одновременные запросы");
   const attempts = await Promise.allSettled([1, 2].map(() => reviewMedicalCertificate(admin, concurrent.certificate.id, { status: "APPROVED" })));
@@ -165,7 +196,11 @@ try {
   assert.equal(await p.attendanceRecord.count({ where: { childId: archived.child.id, finalStatus: null } }), 2);
   console.log("PASS: daily recovery leaves archived children unchanged");
 
-  await fixture("00 Для ручной проверки");
+  const manual = await fixture("00 Для ручной проверки");
+  await ensureMonthlySubscriptionsForGroup(admin, "2026-11", group.id, [manual.child.id]);
+  await p.task.create({ data: { schoolId: school.id, type: "CERTIFICATE_PENDING", priority: "HIGH", assigneeUserId: admin.id,
+    relatedEntityType: "AttendanceRecord", relatedEntityId: manual.records[0].id, childId: manual.child.id,
+    groupId: group.id, title: "Нужна справка: 00 Для ручной проверки" } });
   await fixture("00 Уже одобрена — применить", undefined, { approved: true });
   console.log(JSON.stringify({ login: admin.login, password: "Certificate-QA-2026!", schoolId: school.id, note: "LOCAL QA ONLY" }));
 } finally { await p.$disconnect(); }
