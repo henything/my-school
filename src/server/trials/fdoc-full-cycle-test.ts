@@ -473,6 +473,10 @@ export async function activatePaidProductionJourney(invoiceId: string) {
   }
   const admin = await testAdmin(journey.schoolId);
   await getPrisma().$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${journey.trial.convertedChildId}::uuid FOR UPDATE`;
+    const childStatus = await tx.child.findUniqueOrThrow({ where: { id: journey.trial.convertedChildId! }, select: { status: true } });
+    // A payment arriving after an administrator archived the child must not enrol them again.
+    if (childStatus.status === "ARCHIVED" || childStatus.status === "LEFT") return;
     await tx.$queryRaw`SELECT "id" FROM "trial_test_journeys" WHERE "id" = ${journey.id}::uuid FOR UPDATE`;
     const latest = await tx.trialTestJourney.findUniqueOrThrow({ where: { id: journey.id } });
     if (latest.paidAt) return;

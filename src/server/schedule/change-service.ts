@@ -34,14 +34,20 @@ export async function changeGroupSchedule(user: CurrentUser, input: ScheduleChan
       const templates = await tx.scheduleTemplate.findMany({ where: { groupId: group.id }, orderBy: { id: "asc" } });
       const lessons = await tx.lesson.findMany({ where: { groupId: group.id, lessonDate: { gte: start } }, orderBy: { id: "asc" },
         include: { attendanceRecords: { orderBy: { id: "asc" } }, trialParticipants: { orderBy: { id: "asc" }, select: { id: true, status: true, updatedAt: true } } } });
-      await tx.$queryRaw`SELECT id FROM children WHERE current_group_id=${group.id}::uuid ORDER BY id FOR UPDATE`;
+      // Historical subscribers may already belong to another group. Lock them too
+      // before their subscriptions/invoices so archive/payment cannot invert the order.
+      await tx.$queryRaw`SELECT c.id FROM children c WHERE c.school_id=${user.schoolId}::uuid AND
+        (c.current_group_id=${group.id}::uuid OR EXISTS (
+          SELECT 1 FROM subscriptions s WHERE s.child_id=c.id AND s.school_id=${user.schoolId}::uuid
+            AND s.group_id=${group.id}::uuid AND s.period_end>=${start}
+        )) ORDER BY c.id FOR UPDATE OF c`;
       const children = await tx.child.findMany({ where: { currentGroupId: group.id, status: { notIn: ["LEFT", "ARCHIVED"] } }, orderBy: { id: "asc" },
         include: { attendancePlans: { orderBy: { effectiveFrom: "asc" } }, groupMemberships: { orderBy: { id: "asc" } },
           parent: { select: { id: true, benefitStatus: true, benefitCategory: true, updatedAt: true } },
           makeupCredits: { orderBy: { id: "asc" }, select: { id: true, status: true, updatedAt: true } } } });
       await tx.$queryRaw`SELECT id FROM subscriptions WHERE group_id=${group.id}::uuid AND period_end>=${start} ORDER BY id FOR UPDATE`;
       await tx.$queryRaw`SELECT i.id FROM invoices i JOIN subscriptions s ON s.id=i.subscription_id WHERE s.group_id=${group.id}::uuid AND s.period_end>=${start} ORDER BY i.id FOR UPDATE OF i`;
-      const subscriptions = await tx.subscription.findMany({ where: { schoolId: user.schoolId, groupId: group.id, periodEnd: { gte: start } }, orderBy: { id: "asc" },
+      const subscriptions = await tx.subscription.findMany({ where: { schoolId: user.schoolId, groupId: group.id, periodEnd: { gte: start }, child: { status: { not: "ARCHIVED" } } }, orderBy: { id: "asc" },
         include: { invoices: { orderBy: { id: "asc" }, include: { attempts: { orderBy: { id: "asc" } }, payments: { orderBy: { id: "asc" } }, billingAdjustmentApplications: { orderBy: { id: "asc" } } } },
           billingAdjustments: { orderBy: { id: "asc" } }, lessonSnapshots: { orderBy: { id: "asc" } } } });
       const childIds = Array.from(new Set([...children.map(c => c.id), ...subscriptions.map(s => s.childId)]));
@@ -171,6 +177,11 @@ export async function changeGroupSchedule(user: CurrentUser, input: ScheduleChan
     if (error instanceof PreviewRollback) {
       if (input.action === "apply") throw new Error(error.preview.blockers.join(" ") || "Получите новый предварительный расчёт.");
       return error.preview;
+    }
+    // Serializable transactions may safely reject a concurrent archive/payment.
+    // Require a new preview instead of exposing driver errors or reusing stale totals.
+    if (error instanceof Error && /could not serialize|TransactionWriteConflict|40001|P2034/.test(error.message)) {
+      throw new Error("Данные изменились во время смены расписания. Обновите предварительный расчёт и повторите действие.");
     }
     throw error;
   }

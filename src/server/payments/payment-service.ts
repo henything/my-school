@@ -6,6 +6,7 @@ import { getPrisma } from "@/server/db/prisma";
 import { admissionStatusAfterLessonBalance } from "@/server/billing/calculations";
 import { getActiveParentAccount } from "@/server/parents/parent-auth-service";
 import { activatePaidProductionJourney } from "@/server/trials/fdoc-full-cycle-test";
+import { createTaskIfNotExists } from "@/server/tasks/task-service";
 import { phoneDigitsForProvider } from "@/server/parents/phone";
 import {
   createYooKassaPayment,
@@ -46,43 +47,54 @@ export async function createParentInvoicePayment(currentUser: CurrentUser, invoi
   const credentials = getYooKassaCredentials();
   const appOrigin = getPublicAppOrigin(requestOrigin);
   const prisma = getPrisma();
-  const invoice = await prisma.invoice.findFirstOrThrow({
-    where: {
-      id: invoiceId,
-      schoolId: currentUser.schoolId,
-      parentId: account.parentId
-    },
-    include: {
-      parent: true,
-      child: { select: { id: true, fullName: true } }
+  const { invoice, attempt } = await prisma.$transaction(async (tx) => {
+    const initial = await tx.invoice.findFirstOrThrow({ where: { id: invoiceId, schoolId: currentUser.schoolId, parentId: account.parentId }, select: { childId: true } });
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${initial.childId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM invoices WHERE id=${invoiceId}::uuid FOR UPDATE`;
+    const invoice = await tx.invoice.findFirstOrThrow({
+      where: {
+        id: invoiceId,
+        schoolId: currentUser.schoolId,
+        parentId: account.parentId
+      },
+      include: {
+        parent: true,
+        child: { select: { id: true, fullName: true, status: true } }
+      }
+    });
+
+    if (invoice.child.status === "ARCHIVED") throw new Error("Ребёнок в архиве. По вопросам оплаты обратитесь к администратору.");
+
+    if (invoice.status === "PAID") {
+      throw new Error("Счёт уже оплачен.");
     }
+
+    if (invoice.status === "CANCELLED") {
+      throw new Error("Отменённый счёт нельзя оплатить.");
+    }
+
+    const amountKopeks = invoice.amountKopeks - invoice.paidAmountKopeks;
+
+    if (amountKopeks <= 0) {
+      throw new Error("У счёта нет суммы к оплате.");
+    }
+
+    phoneDigitsForProvider(invoice.parent.phone);
+    const attempt = await tx.paymentAttempt.create({
+      data: {
+        schoolId: invoice.schoolId,
+        invoiceId: invoice.id,
+        parentId: invoice.parentId,
+        provider: YOOKASSA_PROVIDER,
+        amountKopeks,
+        status: "CREATED"
+      }
+    });
+
+    return { invoice, attempt };
   });
-
-  if (invoice.status === "PAID") {
-    throw new Error("Счёт уже оплачен.");
-  }
-
-  if (invoice.status === "CANCELLED") {
-    throw new Error("Отменённый счёт нельзя оплатить.");
-  }
-
-  const amountKopeks = invoice.amountKopeks - invoice.paidAmountKopeks;
-
-  if (amountKopeks <= 0) {
-    throw new Error("У счёта нет суммы к оплате.");
-  }
-
+  const amountKopeks = attempt.amountKopeks;
   const customerPhone = phoneDigitsForProvider(invoice.parent.phone);
-  const attempt = await prisma.paymentAttempt.create({
-    data: {
-      schoolId: invoice.schoolId,
-      invoiceId: invoice.id,
-      parentId: invoice.parentId,
-      provider: YOOKASSA_PROVIDER,
-      amountKopeks,
-      status: "CREATED"
-    }
-  });
 
   try {
     const payment = await createYooKassaPayment({
@@ -267,13 +279,16 @@ async function applySucceededProviderPayment(payment: { amount: { value: string;
   const amountKopeks = parseYooKassaAmountKopeks(payment.amount.value);
 
   await getPrisma().$transaction(async (tx) => {
+    const initial = await tx.invoice.findFirstOrThrow({ where: { id: invoiceId, schoolId }, select: { childId: true } });
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${initial.childId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM invoices WHERE id=${invoiceId}::uuid FOR UPDATE`;
     const invoice = await tx.invoice.findFirstOrThrow({
       where: {
         id: invoiceId,
         schoolId
       },
       include: {
-        child: { select: { id: true, admissionStatus: true, cachedLessonBalance: true } }
+        child: { select: { id: true, fullName: true, status: true, admissionStatus: true, cachedLessonBalance: true } }
       }
     });
 
@@ -347,6 +362,14 @@ async function applySucceededProviderPayment(payment: { amount: { value: string;
         paidAt: nextInvoiceStatus === "PAID" ? new Date() : null
       }
     });
+
+    if (invoice.child.status === "ARCHIVED") {
+      const admin = await tx.user.findFirst({ where: { schoolId, status: "ACTIVE", role: { in: ["ADMIN", "SUPER_ADMIN"] } }, orderBy: { createdAt: "asc" }, select: { id: true } });
+      await createTaskIfNotExists(tx, { schoolId, type: "BILLING_RECONCILIATION_REQUIRED", priority: "HIGH", assigneeUserId: admin?.id,
+        relatedEntityType: "ChildArchiveBilling", relatedEntityId: invoice.childId, childId: invoice.childId,
+        title: `Проверить расчёт при архивации: ${invoice.child.fullName}`,
+        description: "После архивации получена оплата через ЮKassa. Платёж сохранён. Проверьте сумму к возврату или зачёту; ребёнок автоматически не восстанавливается." });
+    }
 
     if (invoice.subscriptionId) {
       await tx.subscription.update({

@@ -1,4 +1,5 @@
 "use client";
+import { ChildArchiveAction } from "./child-archive-action";
 
 import { DirectoryLifecycle } from "./directory-lifecycle";
 import { Loader2, Pencil, Search, SlidersHorizontal } from "lucide-react";
@@ -301,6 +302,7 @@ export function DirectoryTables({ branches = [], groups, coaches, childRows, chi
                       <div className="grid gap-2">
                         <ChildTransferForm key={`${child.id}-${child.currentGroup?.id ?? "none"}`} childId={child.id} childName={child.fullName} currentGroupId={child.currentGroup?.id ?? ""} groups={groups} />
                         <LeaveChildPanel childId={child.id} status={child.status} />
+                        <ChildArchiveAction childId={child.id} childName={child.fullName} status={child.status} />
                       </div>
                     </td>
                   </tr>
