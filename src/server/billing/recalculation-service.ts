@@ -32,6 +32,11 @@ export async function applyRecalculation(currentUser: CurrentUser, subscriptionI
 }
 
 export async function applyRecalculationInTransaction(tx: Prisma.TransactionClient, currentUser: CurrentUser, subscriptionId: string, input: RecalculationInput) {
+    const initial = await tx.subscription.findFirstOrThrow({ where: { id: subscriptionId, schoolId: currentUser.schoolId }, select: { childId: true } });
+    // Same order as archive/payment: child -> subscription -> invoice.
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${initial.childId}::uuid FOR UPDATE`;
+    const child = await tx.child.findFirstOrThrow({ where: { id: initial.childId, schoolId: currentUser.schoolId }, select: { status: true } });
+    if (child.status === "ARCHIVED") throw new Error("Ребёнок в архиве. Автоматический пересчёт отменённых счетов недоступен.");
     const initialPreview = await buildPreview(tx, currentUser, subscriptionId);
     await tx.$queryRaw`SELECT "id" FROM "subscriptions" WHERE "id" = ${subscriptionId}::uuid FOR UPDATE`;
     if (initialPreview.invoiceId) {

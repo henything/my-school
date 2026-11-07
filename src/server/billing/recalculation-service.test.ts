@@ -24,7 +24,7 @@ function fixture(input: { previous: number; next: number; appliedCredit?: number
     id: "sub", childId: "child", updatedAt: date("2026-11-01"), periodStart: date("2026-11-01"), periodEnd: date("2026-11-30"),
     plannedLessonsCount: input.previous, totalAmountKopeks: input.previous * unit,
     lessonPriceKopeks: unit, baseLessonPriceKopeks: 45000, discountPercent: input.discount ? 10 : 0,
-    child: { id: "child", fullName: "Ребёнок", parentId: "parent", cachedLessonBalance: 20, admissionStatus: "ACTIVE",
+    child: { id: "child", status: "ACTIVE", fullName: "Ребёнок", parentId: "parent", cachedLessonBalance: 20, admissionStatus: "ACTIVE",
       groupMemberships: [{ groupId: "group", startDate: date("2026-11-01"), endDate: null }], attendancePlans: [] },
     invoices: [invoice], lessonSnapshots: [] as Array<{ lessonId: string; lessonDate: Date }>,
     billingAdjustments: [] as Array<{ id: string; amountKopeks: number }>
@@ -49,7 +49,7 @@ function fixture(input: { previous: number; next: number; appliedCredit?: number
       deleteMany: async () => { subscription.lessonSnapshots = []; },
       createMany: async ({ data }: { data: Array<{ lessonId: string; lessonDate: Date }> }) => { subscription.lessonSnapshots = data; }
     },
-    child: { update: async ({ data }: { data: { cachedLessonBalance: { increment: number } } }) => { subscription.child.cachedLessonBalance += data.cachedLessonBalance.increment; } }
+    child: { findFirstOrThrow: async () => subscription.child, update: async ({ data }: { data: { cachedLessonBalance: { increment: number } } }) => { subscription.child.cachedLessonBalance += data.cachedLessonBalance.increment; } }
   } as unknown as Prisma.TransactionClient;
   async function apply() {
     const preview = await getRecalculationPreviewInTransaction(tx, admin, "sub");
@@ -62,6 +62,18 @@ function fixture(input: { previous: number; next: number; appliedCredit?: number
 }
 
 describe("credit preserving invoice recalculation", () => {
+  it("locks the child before subscription/invoice and refuses to revive archived invoices", async () => {
+    const f = fixture({ previous: 9, next: 8 });
+    await f.apply();
+    const locks = vi.mocked(f.tx.$queryRaw).mock.calls.map(call => String(call[0]));
+    expect(locks[0]).toContain("children");
+    expect(locks[1]).toContain("subscriptions");
+    expect(locks[2]).toContain("invoices");
+    f.subscription.child.status = "ARCHIVED";
+    await expect(f.apply()).rejects.toThrow("Ребёнок в архиве");
+    expect(f.invoiceUpdate).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves the 450 ruble credit and does not count it as a family discount", async () => {
     const f = fixture({ previous: 9, next: 8, appliedCredit: 45000 });
     const preview = await getRecalculationPreviewInTransaction(f.tx, admin, "sub");

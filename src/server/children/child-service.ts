@@ -11,6 +11,7 @@ import { closeTasksByCondition, ensureGroupOverCapacityTask } from "@/server/tas
 import { todayInMoscow, weekdayForDate } from "./attendance-plan";
 import { resolveFirstPaidLessonDate } from "./enrollment-dates";
 import { setCurrentGroupMembership } from "./group-membership";
+import { archiveChildBilling } from "./archive-billing";
 import type { CreateChildEnrollmentInput, CreateChildInput, SetChildAttendancePlanInput, UpdateChildInput } from "./schemas";
 
 const childInclude = {
@@ -429,6 +430,7 @@ export async function createChildEnrollment(currentUser: CurrentUser, input: Cre
 export async function updateChild(currentUser: CurrentUser, childId: string, input: UpdateChildInput) {
   return getPrisma().$transaction(async (tx) => {
     const { statusChangeComment, effectiveDate, ...childUpdateData } = input;
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${childId}::uuid AND school_id=${currentUser.schoolId}::uuid FOR UPDATE`;
     const existing = await tx.child.findFirstOrThrow({
       where: {
         id: childId,
@@ -469,10 +471,6 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
     if (childUpdateData.status === "LEFT" && existing.status !== "LEFT") {
       throw new Error("Для статуса «Ушёл» используйте действие «Расчёт ухода» в карточке ребёнка: оно проверит табели и счета.");
     }
-    if (childUpdateData.status === "ARCHIVED" && existing.status === "ACTIVE") {
-      const financialRecords = await tx.invoice.count({ where: { childId } });
-      if (financialRecords > 0) throw new Error("У ребёнка есть счета. Сначала оформите уход и расчёт, затем архивируйте карточку.");
-    }
 
     if (requiresChildStatusChangeComment(existing.status, childUpdateData.status) && !statusChangeComment) {
       throw new Error("Для статуса LEFT или ARCHIVED нужен комментарий.");
@@ -510,6 +508,17 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
       }
     }
 
+    if (childUpdateData.status === "ARCHIVED") {
+      childUpdateData.currentGroupId = null;
+      await archiveChildBilling(tx, currentUser, existing, statusChangeComment ?? "Архивация ребёнка");
+      await closeTasksByCondition(tx, {
+        schoolId: currentUser.schoolId, actorUserId: currentUser.id,
+        where: { childId, type: { in: ["BILLING_RECONCILIATION_REQUIRED", "CHILD_WITHOUT_ACTIVE_SUBSCRIPTION", "CHILD_NOT_ADMITTED", "CHILD_TOOK_CREDIT_LESSON"] },
+          OR: [{ relatedEntityType: null }, { relatedEntityType: { not: "ChildArchiveBilling" } }] },
+        comment: "Ребёнок архивирован; операционные напоминания закрыты. Финансовая проверка при архивации сохраняется отдельно."
+      });
+    }
+
     const updated = await tx.child.update({
       where: { id: existing.id },
       data: childUpdateData,
@@ -521,7 +530,9 @@ export async function updateChild(currentUser: CurrentUser, childId: string, inp
         tx,
         updated.id,
         updated.status === "ACTIVE" ? updated.currentGroupId : null,
-        effectiveDate ?? todayInMoscow()
+        updated.status === "ARCHIVED"
+          ? new Date(Math.max((effectiveDate ?? todayInMoscow()).getTime(), ...existing.groupMemberships.filter(m => m.endDate === null).map(m => m.startDate.getTime())))
+          : effectiveDate ?? todayInMoscow()
       );
     }
 

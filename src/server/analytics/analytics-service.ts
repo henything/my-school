@@ -67,7 +67,8 @@ export async function getAnalyticsDashboard(currentUser: CurrentUser, filters: {
       }
     }),
     prisma.subscription.findMany({
-      where: { schoolId: currentUser.schoolId },
+      // An entirely cancelled subscription is neither planned revenue nor a salary base.
+      where: { schoolId: currentUser.schoolId, OR: [{ invoices: { none: {} } }, { invoices: { some: { status: { not: "CANCELLED" } } } }] },
       select: {
         totalAmountKopeks: true,
         paymentStatus: true,

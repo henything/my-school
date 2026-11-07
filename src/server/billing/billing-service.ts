@@ -469,6 +469,9 @@ export async function markInvoicePaidManually(currentUser: CurrentUser, invoiceI
   assertAdmin(currentUser);
 
   return getPrisma().$transaction(async (tx) => {
+    const initial = await tx.invoice.findFirstOrThrow({ where: { id: invoiceId, schoolId: currentUser.schoolId }, select: { childId: true } });
+    await tx.$queryRaw`SELECT id FROM children WHERE id=${initial.childId}::uuid FOR UPDATE`;
+    await tx.$queryRaw`SELECT id FROM invoices WHERE id=${invoiceId}::uuid FOR UPDATE`;
     const invoice = await tx.invoice.findFirstOrThrow({
       where: {
         id: invoiceId,

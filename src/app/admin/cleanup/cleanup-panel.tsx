@@ -56,7 +56,7 @@ export function CleanupPanel({ parents, childRows }: { parents: Parent[]; childR
       <label className="label">Причина<input className="field" value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например, тестовая карточка" /></label>
       {kind === "parents" ? <label className="label">Объединить с родителем<select className="field" value={targetId} onChange={(event) => setTargetId(event.target.value)}><option value="">Выберите основную карточку</option>{parents.filter((parent) => parent.id !== id).map((parent) => <option key={parent.id} value={parent.id}>{parent.fullName ?? "Без имени"} · {parent.phone ?? "без телефона"}</option>)}</select></label> : null}
       <div className="flex flex-wrap gap-2"><Button type="button" variant="danger" disabled={loading || !reason.trim()} onClick={() => apply("archive")}>Архивировать</Button>{kind === "parents" ? <Button type="button" disabled={loading || !reason.trim() || !targetId} onClick={() => apply("merge")}>Объединить без удаления истории</Button> : null}</div>
-      <p className="text-xs text-[var(--muted)]">Счета, платежи и посещения не удаляются. При объединении связи переносятся в основную карточку; действие записывается в аудит.</p>
+      <p className="text-xs text-[var(--muted)]">При архивации ребёнка неоплаченные счета отменяются. Счета с оплатой, зачётом или незавершённой оплатой сохраняются для проверки администратором. Платежи и посещения не удаляются. При объединении история переносится в основную карточку.</p>
     </div> : null}
     {message ? <p role="status" className="text-sm font-semibold">{message}</p> : null}
   </section>;

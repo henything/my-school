@@ -1,0 +1,137 @@
+/** LOCAL disposable PostgreSQL only; never seed production or call external payment APIs. */
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { getPrisma } from "../src/server/db/prisma";
+import { hashPassword } from "../src/server/auth/password";
+import { updateChild } from "../src/server/children/child-service";
+import { ensureMonthlySubscriptionsForGroup, markInvoicePaidManually } from "../src/server/billing/billing-service";
+import { changeGroupSchedule } from "../src/server/schedule/change-service";
+import { scheduleChangeSchema } from "../src/server/schedule/change-schema";
+import { applyRecalculation, getRecalculationPreview } from "../src/server/billing/recalculation-service";
+import { handleYooKassaWebhook } from "../src/server/payments/payment-service";
+import { getAnalyticsDashboard } from "../src/server/analytics/analytics-service";
+const url = new URL(process.env.DATABASE_URL ?? "");
+assert(["localhost", "127.0.0.1"].includes(url.hostname) && url.pathname.includes("schedule_pipeline_qa"), "Disposable LOCAL QA database required");
+const p = getPrisma(); const run = randomUUID().slice(0,8);
+const date = (s: string) => new Date(`${s}T00:00:00Z`);
+try {
+ const school = await p.school.create({ data: { name: `QA архив ${run}`, slug: `archive-qa-${run}` } });
+ const admin = await p.user.create({ data: { schoolId: school.id, role: "SUPER_ADMIN", login: `archive-qa-${run}`, displayName: "Администратор QA", passwordHash: await hashPassword("Archive-QA-2026!") } });
+ const trainer = await p.user.create({ data: { schoolId: school.id, role: "COACH", login: `archive-coach-${run}`, displayName: "Тренер QA", passwordHash: "disabled" } });
+ const coach = await p.coachProfile.create({ data: { schoolId: school.id, userId: trainer.id } });
+ const branch = await p.branch.create({ data: { schoolId: school.id, name: "QA филиал" } });
+ const group = await p.trainingGroup.create({ data: { schoolId: school.id, branchId: branch.id, mainCoachId: coach.id, name: "QA архив" } });
+ for(const day of [3,5,10,12,17,19,24,26]) await p.lesson.create({ data: { schoolId: school.id, groupId: group.id, branchId: branch.id, coachId: coach.id, lessonDate: date(`2026-11-${String(day).padStart(2,"0")}`), startTime: "10:00", endTime: "11:00" } });
+ async function fixture(name: string, start="2026-11-01") {
+  const parent = await p.parent.create({ data: { schoolId: school.id, fullName: `Родитель ${name}` } });
+  const child = await p.child.create({ data: { schoolId: school.id, parentId: parent.id, currentGroupId: group.id, fullName: name } });
+  await p.childGroupMembership.create({ data: { childId: child.id, groupId: group.id, startDate: date(start) } });
+  await ensureMonthlySubscriptionsForGroup(admin,"2026-11",group.id,[child.id]);
+  const invoice = await p.invoice.findFirstOrThrow({ where: { childId: child.id } });
+  return { child, invoice };
+ }
+ const unpaid = await fixture("01 Неоплаченный");
+ const before = await getAnalyticsDashboard(admin,{from:"2026-11-01",to:"2026-11-30"});
+ assert.equal(before.totals.totalDebtAmountKopeks,360000);
+ assert.equal(before.coachRows.reduce((sum,row)=>sum+row.subscriptionAmountKopeks,0),360000);
+ const lesson = await p.lesson.findFirstOrThrow({where:{groupId:group.id,lessonDate:date("2026-11-03")}});
+ const attendance = await p.attendanceRecord.create({data:{childId:unpaid.child.id,lessonId:lesson.id,status:"PRESENT"}});
+ const oldTask = await p.task.create({data:{schoolId:school.id,childId:unpaid.child.id,type:"BILLING_RECONCILIATION_REQUIRED",relatedEntityType:"BillingReconciliation:2026-11",relatedEntityId:unpaid.child.id,title:"QA старое напоминание",priority:"HIGH"}});
+ const archived = await updateChild(admin,unpaid.child.id,{status:"ARCHIVED",statusChangeComment:"QA архив"});
+ assert.equal((await p.task.findUniqueOrThrow({where:{id:oldTask.id}})).status,"CLOSED");
+ assert.equal(archived.status,"ARCHIVED");assert.equal(archived.currentGroup,null);
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:unpaid.invoice.id}})).status,"CANCELLED");
+ assert.deepEqual(await p.attendanceRecord.findUniqueOrThrow({where:{id:attendance.id}}),attendance);
+ const after = await getAnalyticsDashboard(admin,{from:"2026-11-01",to:"2026-11-30"});
+ assert.equal(after.totals.totalDebtAmountKopeks,0);assert.equal(after.totals.debtorCount,0);assert.equal(after.coachRows.length,0);
+ assert.equal((await ensureMonthlySubscriptionsForGroup(admin,"2026-11",group.id)).createdCount,0);
+ await updateChild(admin,unpaid.child.id,{status:"ARCHIVED"});
+ await assert.rejects(markInvoicePaidManually(admin,unpaid.invoice.id,{comment:"QA"}),/Отменённый/);
+ console.log("PASS: archive cancels unpaid invoice, removes debt/salary base, preserves attendance and prevents new monthly billing/payment");
+ for(const [name, amount] of [["02 Частичная оплата",45000],["03 Полная оплата",360000]] as const) {
+  const item = await fixture(name);
+  await markInvoicePaidManually(admin,item.invoice.id,{amountKopeks:amount,comment:"QA"});
+  const beforeInvoice=await p.invoice.findUniqueOrThrow({where:{id:item.invoice.id}});
+  const beforePayments=await p.payment.findMany({where:{childId:item.child.id}});
+  await updateChild(admin,item.child.id,{status:"ARCHIVED",statusChangeComment:"QA"});
+  await updateChild(admin,item.child.id,{status:"ARCHIVED"});
+  assert.deepEqual(await p.invoice.findUniqueOrThrow({where:{id:item.invoice.id}}),beforeInvoice);
+  assert.deepEqual(await p.payment.findMany({where:{childId:item.child.id}}),beforePayments);
+  assert.equal(await p.task.count({where:{relatedEntityType:"ChildArchiveBilling",relatedEntityId:item.child.id}}),1);
+ }
+ assert.equal((await getAnalyticsDashboard(admin,{from:"2026-11-01",to:"2026-11-30"})).totals.totalReceiptAmountKopeks,405000);
+ console.log("PASS: paid/partially paid invoices and cash remain unchanged; one admin task per child, repeat is idempotent");
+ const pending=await fixture("04 Оплата в процессе");
+ await p.paymentAttempt.create({data:{schoolId:school.id,invoiceId:pending.invoice.id,parentId:pending.invoice.parentId,provider:"LOCAL_QA",amountKopeks:360000,status:"CREATED"}});
+ await updateChild(admin,pending.child.id,{status:"ARCHIVED",statusChangeComment:"QA"});
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:pending.invoice.id}})).status,"ISSUED");
+ assert.equal((await p.child.findUniqueOrThrow({where:{id:pending.child.id}})).status,"ARCHIVED");
+ assert.equal(await p.task.count({where:{relatedEntityType:"ChildArchiveBilling",relatedEntityId:pending.child.id}}),1);
+ const future=await fixture("05 Будущее участие","2026-11-10");
+ await updateChild(admin,future.child.id,{status:"ARCHIVED",statusChangeComment:"QA"});
+ const membership=await p.childGroupMembership.findFirstOrThrow({where:{childId:future.child.id}});
+ assert.equal(membership.endDate?.getTime(),membership.startDate.getTime());
+ console.log("PASS: pending provider operation does not block archive; future membership closes safely");
+ const race=await fixture("06 Одновременная оплата");
+ await Promise.allSettled([updateChild(admin,race.child.id,{status:"ARCHIVED",statusChangeComment:"QA"}),markInvoicePaidManually(admin,race.invoice.id,{comment:"QA"})]);
+ const raceInvoice=await p.invoice.findUniqueOrThrow({where:{id:race.invoice.id}});
+ const racePayments=await p.payment.findMany({where:{invoiceId:race.invoice.id}});
+ assert.equal((await p.child.findUniqueOrThrow({where:{id:race.child.id}})).status,"ARCHIVED");
+ assert.equal(raceInvoice.status,racePayments.length?"PAID":"CANCELLED");
+ assert.equal(raceInvoice.paidAmountKopeks,racePayments.reduce((sum,payment)=>sum+payment.amountKopeks,0));
+ const recalcRace=await fixture("09 Архив и пересчёт одновременно");
+ await p.subscription.update({where:{id:recalcRace.invoice.subscriptionId!},data:{plannedLessonsCount:9,totalAmountKopeks:405000}});
+ await p.invoice.update({where:{id:recalcRace.invoice.id},data:{amountKopeks:405000}});
+ const recalcPreview=await getRecalculationPreview(admin,recalcRace.invoice.subscriptionId!);
+ const recalcResults=await Promise.allSettled([
+  updateChild(admin,recalcRace.child.id,{status:"ARCHIVED",statusChangeComment:"QA"}),
+  applyRecalculation(admin,recalcRace.invoice.subscriptionId!,{reason:"QA",expectedLessonIds:recalcPreview.nextLessons.map(l=>l.id),expectedSubscriptionUpdatedAt:recalcPreview.subscriptionUpdatedAt,expectedInvoiceUpdatedAt:recalcPreview.invoiceUpdatedAt!})
+ ]);
+ assert.equal(recalcResults[0].status,"fulfilled");
+ assert.equal((await p.child.findUniqueOrThrow({where:{id:recalcRace.child.id}})).status,"ARCHIVED");
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:recalcRace.invoice.id}})).status,"CANCELLED");
+ if(recalcResults[1].status==="rejected") assert.match(String(recalcResults[1].reason),/в архиве/);
+ console.log("PASS: concurrent archive/recalculation serializes without deadlock and cannot revive an archived invoice");
+ const makeupCase=await fixture("10 Использованный перенос");
+ await p.invoice.update({where:{id:makeupCase.invoice.id},data:{amountKopeks:315000}});
+ await p.lessonBalanceTransaction.create({data:{schoolId:school.id,childId:makeupCase.child.id,subscriptionId:makeupCase.invoice.subscriptionId!,type:"MAKEUP_USED",balanceType:"MAKEUP_BALANCE",amount:-1,reason:"INVOICE_DISCOUNT"}});
+ await updateChild(admin,makeupCase.child.id,{status:"ARCHIVED",statusChangeComment:"QA"});
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:makeupCase.invoice.id}})).status,"ISSUED");
+ assert.equal(await p.task.count({where:{relatedEntityType:"ChildArchiveBilling",relatedEntityId:makeupCase.child.id}}),1);
+ console.log("PASS: consumed lesson compensation is preserved with archive review rather than silently lost");
+ const transferred=await fixture("11 Перевод и смена старого расписания");
+ const nextGroup=await p.trainingGroup.create({data:{schoolId:school.id,branchId:branch.id,mainCoachId:coach.id,name:"QA новая группа"}});
+ await updateChild(admin,transferred.child.id,{currentGroupId:nextGroup.id});
+ const scheduleInput=scheduleChangeSchema.parse({groupId:group.id,effectiveFrom:"2026-11-10",slots:[{weekday:2,startTime:"10:00",endTime:"11:00"},{weekday:4,startTime:"10:00",endTime:"11:00"}],reason:"QA совместная блокировка"});
+ const oldGroupRace=await Promise.allSettled([changeGroupSchedule(admin,scheduleInput),updateChild(admin,transferred.child.id,{status:"ARCHIVED",statusChangeComment:"QA"})]);
+ assert.equal(oldGroupRace[1].status,"fulfilled");
+ if(oldGroupRace[0].status==="rejected") assert.match(String(oldGroupRace[0].reason),/Обновите предварительный расчёт/);
+ assert.equal((await p.child.findUniqueOrThrow({where:{id:transferred.child.id}})).status,"ARCHIVED");
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:transferred.invoice.id}})).status,"CANCELLED");
+ console.log("PASS: schedule change locks historical subscribers too; transferred child archives concurrently without deadlock");
+ const protectedCase=await fixture("07 Проверка прав");
+ for(const role of ["COACH","PARENT"] as const) await assert.rejects(updateChild({...admin,role},protectedCase.child.id,{status:"ARCHIVED",statusChangeComment:"QA"}));
+ await assert.rejects(updateChild({...admin,schoolId:randomUUID()},protectedCase.child.id,{status:"ARCHIVED",statusChangeComment:"QA"}));
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:protectedCase.invoice.id}})).status,"ISSUED");
+ const late = await fixture("08 Поздняя онлайн оплата");
+ const trial = await p.trialParticipant.create({data:{schoolId:school.id,groupId:group.id,lessonId:lesson.id,coachId:coach.id,convertedChildId:late.child.id,status:"CONVERTED_TO_ACTIVE",trialAttended:true}});
+ await p.trialSigningPackage.create({data:{schoolId:school.id,trialId:trial.id,status:"SIGNED"}});
+ await p.trialTestJourney.create({data:{schoolId:school.id,trialId:trial.id,tokenHash:randomUUID(),mode:"PRODUCTION",invoiceId:late.invoice.id,childBirthDate:date("2020-01-01")}});
+ await updateChild(admin,late.child.id,{status:"ARCHIVED",statusChangeComment:"QA"});
+ process.env.YOOKASSA_SHOP_ID="local-qa"; process.env.YOOKASSA_SECRET_KEY="local-qa";
+ process.env.FDOC_PROD_ENABLED="true";process.env.FDOC_ENVIRONMENT="PRODUCTION";process.env.FDOC_BOOKING_ALL_GROUPS="true";process.env.FDOC_PRODUCTION_SCHOOL_ID=school.id;process.env.APP_BASE_URL="https://azbukadvizheniya.ru";
+ const providerId=`local-archive-qa-${run}`;
+ const providerPayment={id:providerId,status:"succeeded",paid:true,amount:{value:"3600.00",currency:"RUB"},metadata:{invoiceId:late.invoice.id,schoolId:school.id,parentId:late.invoice.parentId,childId:late.child.id}};
+ const originalFetch=globalThis.fetch;
+ globalThis.fetch=async input=>{assert.equal(String(input),`https://api.yookassa.ru/v3/payments/${providerId}`);return new Response(JSON.stringify(providerPayment),{status:200,headers:{"Content-Type":"application/json"}});};
+ try {await handleYooKassaWebhook({type:"notification",event:"payment.succeeded",object:providerPayment});}
+ finally {globalThis.fetch=originalFetch;}
+ assert.equal((await p.child.findUniqueOrThrow({where:{id:late.child.id}})).status,"ARCHIVED");
+ assert.equal((await p.invoice.findUniqueOrThrow({where:{id:late.invoice.id}})).status,"PAID");
+ assert.equal(await p.payment.count({where:{invoiceId:late.invoice.id,status:"SUCCEEDED"}}),1);
+ assert.equal(await p.task.count({where:{relatedEntityType:"ChildArchiveBilling",relatedEntityId:late.child.id}}),1);
+ console.log("PASS: late provider confirmation preserves money, creates a review task and never reactivates archived child; provider HTTP is mocked locally");
+ await fixture("00 Для ручной проверки");
+ console.log("PASS: simultaneous payment/archive never loses money; roles and school boundaries enforced");
+ console.log(JSON.stringify({login:admin.login,password:"Archive-QA-2026!",note:"LOCAL QA ONLY"}));
+}finally{await p.$disconnect();}
