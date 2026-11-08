@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, FileText, Loader2, MessageSquare, Phone, ShieldAlert, UserRoundCheck, UserRoundX } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -58,6 +58,14 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [message, setMessage] = useState("");
+  const [saveError, setSaveError] = useState(false);
+  const messageRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (message && saveError) {
+      messageRef.current?.focus();
+      messageRef.current?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    }
+  }, [message, saveError]);
   const [correctionReason, setCorrectionReason] = useState("");
   const [correctionPreview, setCorrectionPreview] = useState<CorrectionPreview | null>(null);
   const [paidDifferenceAction, setPaidDifferenceAction] = useState<"CREDIT" | "REFUND_DUE">("CREDIT");
@@ -122,41 +130,52 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
 
   async function onSubmit() {
     setMessage("");
+    setSaveError(false);
     if (adminMode && !correctionReason.trim()) {
+      setSaveError(true);
       setMessage("Укажите причину исправления табеля.");
       return;
     }
     setSaving(true);
-    const response = await fetch(adminMode ? `/api/admin/lessons/${lessonId}/attendance` : `/api/coach/lessons/${lessonId}/attendance`, {
-      method: adminMode && !correctionPreview ? "PUT" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        correctionReason: adminMode ? correctionReason.trim() : undefined,
-        expectedRevision: correctionPreview?.revision,
-        paidDifferenceAction: correctionPreview?.changes.some((change) => change.canApplyPaid) ? paidDifferenceAction : undefined,
-        records: displayedChildren.map((child) => ({
-          childId: child.id,
-          status: records[child.id]?.status ?? "NOT_MARKED",
-          comment: records[child.id]?.comment ?? ""
-        }))
-      })
-    });
-    const payload = (await response.json().catch(() => ({}))) as { error?: string; preview?: CorrectionPreview; financialChanges?: number; childrenWithoutSubscription?: string[] };
-    setSaving(false);
+    try {
+      const response = await fetch(adminMode ? `/api/admin/lessons/${lessonId}/attendance` : `/api/coach/lessons/${lessonId}/attendance`, {
+        method: adminMode && !correctionPreview ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          correctionReason: adminMode ? correctionReason.trim() : undefined,
+          expectedRevision: correctionPreview?.revision,
+          paidDifferenceAction: correctionPreview?.changes.some((change) => change.canApplyPaid) ? paidDifferenceAction : undefined,
+          records: displayedChildren.map((child) => ({
+            childId: child.id,
+            status: records[child.id]?.status ?? "NOT_MARKED",
+            comment: records[child.id]?.comment ?? ""
+          }))
+        })
+      });
+      const payload = (await response.json().catch(() => ({}))) as { error?: string; preview?: CorrectionPreview; financialChanges?: number; childrenWithoutSubscription?: string[] };
+      if (!response.ok) {
+        setSaveError(true);
+        setCorrectionPreview(null);
+        setMessage(payload.error ?? "Не удалось сохранить табель. Проверьте данные и повторите предварительный расчёт.");
+        return;
+      }
 
-    if (!response.ok) {
-      setMessage(payload.error ?? "Не удалось сохранить табель.");
-      return;
+      if (adminMode && !correctionPreview) {
+        if (!payload.preview) throw new Error("Missing correction preview");
+        setCorrectionPreview(payload.preview);
+        setMessage("Это предварительный расчёт. Отметки ещё не сохранены. Проверьте суммы и нажмите «Сохранить табель».");
+        return;
+      }
+      setCorrectionPreview(null);
+      setMessage(adminMode ? `Табель сохранён. Пересчитано счетов: ${payload.financialChanges ?? 0}.${payload.childrenWithoutSubscription?.length ? " Нет абонемента: " + payload.childrenWithoutSubscription.join(", ") + "." : ""}` : "Табель сохранён.");
+      startTransition(() => router.refresh());
+    } catch {
+      setSaveError(true);
+      setCorrectionPreview(null);
+      setMessage("Не удалось подтвердить сохранение табеля. Обновите страницу и проверьте отметки перед повторной попыткой.");
+    } finally {
+      setSaving(false);
     }
-
-    if (adminMode && !correctionPreview) {
-      setCorrectionPreview(payload.preview ?? null);
-      setMessage("Проверьте изменения табеля и сумм перед сохранением.");
-      return;
-    }
-    setCorrectionPreview(null);
-    setMessage(adminMode ? `Табель сохранён. Пересчитано счетов: ${payload.financialChanges ?? 0}.${payload.childrenWithoutSubscription?.length ? " Нет абонемента: " + payload.childrenWithoutSubscription.join(", ") + "." : ""}` : "Табель сохранён.");
-    startTransition(() => router.refresh());
   }
 
   if (lessonChildren.length === 0 && !adminMode) {
@@ -176,7 +195,7 @@ export function AttendanceForm({ lessonId, lessonChildren, adminMode = false, ex
           {isPending || saving ? <Loader2 aria-hidden="true" className="animate-spin" size={16} /> : null}
           {adminMode && !correctionPreview ? "Проверить исправление" : "Сохранить табель"}
         </Button>
-        {message ? <div className="w-full text-sm font-semibold text-[var(--muted)]">{message}</div> : null}
+        {message ? <div ref={messageRef} tabIndex={-1} role={saveError ? "alert" : "status"} className={cn("w-full rounded-lg p-3 text-sm font-semibold", saveError ? "border border-[var(--danger)] bg-[var(--red-soft)] text-[var(--danger-strong)]" : "bg-[var(--green-soft)] text-[var(--foreground)]")}>{message}</div> : null}
         {adminMode ? (
           <div className="grid w-full gap-3 sm:grid-cols-2">
             <label className="label">
