@@ -39,13 +39,20 @@ const fingerprint = (value: unknown) => createHash("sha256").update(JSON.stringi
 
 async function affectedSubscriptions(tx: Prisma.TransactionClient, user: CurrentUser, lessonId: string, input: CorrectAttendanceInput) {
   const lesson = await tx.lesson.findFirstOrThrow({ where: { id: lessonId, schoolId: user.schoolId }, select: {
-    id: true, lessonDate: true, updatedAt: true, attendanceRecords: { select: { childId: true, status: true, comment: true, updatedAt: true } }
+    id: true, lessonDate: true, updatedAt: true, attendanceRecords: { select: { childId: true, status: true, comment: true, updatedAt: true }, orderBy: { childId: "asc" } }
   } });
   const childIds = input.records.map((record) => record.childId);
   const subscriptions = await tx.subscription.findMany({ where: {
     schoolId: user.schoolId, childId: { in: childIds }, periodStart: { lte: lesson.lessonDate }, periodEnd: { gte: lesson.lessonDate }
-  }, select: { id: true, childId: true, updatedAt: true, invoices: { select: { id: true, updatedAt: true } } }, orderBy: { id: "asc" } });
-  const currentRevision = fingerprint({ lesson, subscriptions, input });
+  }, select: { id: true, childId: true, updatedAt: true, invoices: { select: { id: true, updatedAt: true }, orderBy: { id: "asc" } } }, orderBy: { id: "asc" } });
+  // POST also carries expectedRevision and settlement controls. Only the reviewed
+  // attendance fields belong in the revision; hashing the token itself rejects every save.
+  const reviewedInput = {
+    correctionReason: input.correctionReason,
+    records: input.records.map(({ childId, status, comment }) => ({ childId, status, comment }))
+      .sort((left, right) => left.childId.localeCompare(right.childId))
+  };
+  const currentRevision = fingerprint({ lesson, subscriptions, input: reviewedInput });
   return { lesson, subscriptions, currentRevision };
 }
 
@@ -75,7 +82,7 @@ async function simulate(tx: Prisma.TransactionClient, user: CurrentUser, lessonI
   const withoutIds = input.records.filter((record) => ["PRESENT", "ABSENT_UNEXCUSED"].includes(record.status) && !subscribedIds.has(record.childId)).map((record) => record.childId);
   const withoutChildren = withoutIds.length ? await tx.child.findMany({ where: { id: { in: withoutIds } }, select: { fullName: true } }) : [];
   const preview = {
-    revision: fingerprint({ before: before.currentRevision, outcomes: afterPreviews.map((item) => [item.subscriptionId, item.nextLessons.map((lesson) => lesson.id), item.nextInvoiceAmountKopeks]) }),
+    revision: fingerprint({ before: before.currentRevision, outcomes: afterPreviews.map((item) => [item.subscriptionId, item.nextLessons.map((lesson) => lesson.id).sort(), item.nextInvoiceAmountKopeks]) }),
     changes,
     childrenWithoutSubscription: withoutChildren.map((child) => child.fullName)
   };
