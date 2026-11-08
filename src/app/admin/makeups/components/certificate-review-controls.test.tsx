@@ -47,4 +47,14 @@ describe("certificate period review", () => {
     await waitFor(() => expect(screen.getByText(/Решение сохранено\. Сверка не завершена\./)).toBeTruthy());
     expect(screen.queryByText(/Создано счетов:/)).toBeNull();
   });
+  it("reports preserved presence conflicts and points the administrator to tasks", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ result: {
+      application: { finalizedCount: 1, makeupCount: 1, remainingPendingCount: 0, conflictCount: 1 },
+      reconciliation: { createdCount: 0, issues: [] }, warning: null
+    } }) }));
+    render(<CertificateReviewControls certificate={certificate} />);
+    fireEvent.click(screen.getByRole("button", { name: "Одобрить" }));
+    await screen.findByText(/Справка пересекается с посещениями: 1.*Отметки «Был» сохранены.*задачи администратора/);
+  });
+
 });

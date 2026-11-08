@@ -546,7 +546,7 @@ export function CertificateReviewControls({ certificate }: { certificate: Medica
 
     try {
       const payload = await submitJson<{ result: {
-        application: { finalizedCount: number; makeupCount: number; remainingPendingCount: number } | null;
+        application: { finalizedCount: number; makeupCount: number; remainingPendingCount: number; conflictCount?: number } | null;
         reconciliation: { createdCount: number; issues: Array<{ reason: string }> } | null;
         warning: string | null;
       } }>(`/api/admin/medical-certificates/${certificate.id}/review`, {
@@ -559,6 +559,7 @@ export function CertificateReviewControls({ certificate }: { certificate: Medica
         setMessage([
           certificate.status === "APPROVED" ? "Период проверен." : "Справка одобрена.",
           `Подтверждено занятий: ${application?.finalizedCount ?? 0}. Переносов: ${application?.makeupCount ?? 0}.`,
+          application?.conflictCount ? `Справка пересекается с посещениями: ${application.conflictCount}. Отметки «Был» сохранены; проверьте задачи администратора.` : null,
           reconciliation?.createdCount ? `Создано счетов: ${reconciliation.createdCount}.` : null,
           application?.remainingPendingCount ? `Остались неразобранные болезни: ${application.remainingPendingCount}.` : null,
           ...(warning ? [] : reconciliation?.issues.map(issue => issue.reason) ?? []),
