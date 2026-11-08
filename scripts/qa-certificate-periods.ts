@@ -172,11 +172,23 @@ try {
   const cancelledLesson = await p.lesson.create({ data: { schoolId: school.id, groupId: group.id, branchId: branch.id, coachId: coach.id, lessonDate: date("2026-10-22"), startTime: "12:00", endTime: "13:00", status: "CANCELLED" } });
   const cancelledRecord = await p.attendanceRecord.create({ data: { childId: protectedCase.child.id, lessonId: cancelledLesson.id, status: "ABSENT_SICK_PENDING" } });
   protectedRecords.push(cancelledRecord);
+  const trialLesson = await p.lesson.findFirstOrThrow({ where: { groupId: group.id, lessonDate: date("2026-10-20") } });
+  const freeTrialRecord = await p.attendanceRecord.create({ data: { childId: protectedCase.child.id, lessonId: trialLesson.id, status: "ABSENT_UNEXCUSED" } });
+  await p.trialParticipant.create({ data: { schoolId: school.id, lessonId: trialLesson.id, groupId: group.id, coachId: coach.id, convertedChildId: protectedCase.child.id, childName: "QA пробное", createdByUserId: admin.id } });
   await reviewMedicalCertificate(admin, protectedCase.certificate.id, { status: "APPROVED" });
-  for (const record of protectedRecords) assert.deepEqual(await p.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } }), record);
-  assert.equal(await p.makeupCredit.count({ where: { childId: protectedCase.child.id } }), 2);
-  assert.equal((await p.invoice.findFirstOrThrow({ where: { childId: protectedCase.child.id, periodStart: date("2026-11-01") } })).amountKopeks, 270000);
-  console.log("PASS: present/unmarked/paid/quarantine/finalized and cancelled lessons are preserved; cancelled pending does not block invoice");
+  assert.deepEqual(await p.attendanceRecord.findUniqueOrThrow({ where: { id: freeTrialRecord.id } }), freeTrialRecord);
+  assert.equal(await p.makeupCredit.count({ where: { sourceAttendanceRecordId: freeTrialRecord.id } }), 0);
+  for (const record of protectedRecords) {
+    const updated = await p.attendanceRecord.findUniqueOrThrow({ where: { id: record.id } });
+    if (record.status === "ABSENT_UNEXCUSED" && !record.finalStatus) {
+      assert.equal(updated.status, "ABSENT_SICK_PENDING");
+      assert.equal(updated.finalStatus, "ABSENT_SICK_CONFIRMED");
+    } else assert.deepEqual(updated, record);
+  }
+  assert.equal(await p.makeupCredit.count({ where: { childId: protectedCase.child.id } }), 3);
+  assert.equal((await p.invoice.findFirstOrThrow({ where: { childId: protectedCase.child.id, periodStart: date("2026-11-01") } })).amountKopeks, 225000);
+  assert.equal(await p.task.count({ where: { childId: protectedCase.child.id, relatedEntityType: "CertificateAttendanceConflict" } }), 1);
+  console.log("PASS: ordinary absence corrected; present/unmarked/quarantine/finalized/cancelled protected; presence conflict task created");
 
   const race = await fixture("08 Решение администратора");
   const medicalAndManual = await Promise.allSettled([

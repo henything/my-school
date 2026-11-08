@@ -2,6 +2,7 @@ import { BillingControlPanel } from "@/components/billing-control-panel";
 import { type ReactNode } from "react";
 import { BenefitReviewLink } from "@/components/benefit-review-link";
 import Image from "next/image";
+import Link from "next/link";
 import {
   AlertTriangle,
   CalendarDays,
@@ -131,6 +132,7 @@ export default async function OperationsPage() {
                     </dl>
                   </div>
                   <div className="rounded-lg border border-[var(--line)] bg-white/85 p-3">
+                    {task.relatedEntityType === "CertificateAttendanceConflict" && task.relatedEntityId ? <Link className="mb-3 block font-bold text-[var(--accent-strong)]" href={`/admin/attendance/${task.relatedEntityId}`}>Проверить табель</Link> : null}
                     <div className="mb-3 text-sm font-bold text-[var(--muted)]">Закрытие задачи</div>
                     {task.type === "BENEFIT_REVIEW_REQUIRED" ? <BenefitReviewLink parentId={task.relatedEntityId} /> : <TaskCloseForm taskId={task.id} requiresComment={requiresCloseComment(task)} allowCancel />}
                   </div>
