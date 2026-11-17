@@ -58,6 +58,8 @@ The product goal for MVP v1 is to replace scattered Excel/chat operations with o
 | [Смена расписания и контроль начислений](docs/features/schedule-change-and-billing-control.md) | Пошаговая инструкция, финансовые сценарии и локальная проверка |
 | [Сверка абонементов и счетов](docs/billing-reconciliation.md) | Ежедневный цикл, задачи администратору и работа со справками |
 | [Архивация ребёнка со счетами](docs/features/child-archive.md) | Отмена неоплаченных счетов, сохранение реальных оплат и проверка расчёта |
+| [Ручные изменения занятий и счёта](docs/features/manual-billing-corrections.md) | Изменение неоплаченного счёта или остатка занятий, предварительный расчёт, история и отмена |
+| [Спецификация ручных корректировок](docs/specs/manual-billing-and-lesson-corrections.md) | Денежные поправки, защита платежей, конкуренция и критерии приёмки |
 | [Справки за весь период](docs/features/certificate-periods.md) | Одобрение, повторное применение и восстановление недостающего счёта |
 | [Спецификация применения справок](docs/specs/certificate-period-reconciliation.md) | Границы периода, сохранение счетов, ежедневное восстановление и критерии приёмки |
 | [Спецификация смены расписания](docs/specs/schedule-change-and-billing-control.md) | Периоды шаблонов, безопасный пересчёт, ограничения и критерии приёмки |
