@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MAX_MANUAL_LESSONS } from "./manual-correction-rules";
 import { requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 import { DEFAULT_LESSON_PRICE_KOPEKS } from "./calculations";
 
@@ -46,9 +47,9 @@ export const markInvoicePaidSchema = z.object({
 
 export const manualBalanceAdjustmentSchema = z.object({
   balanceType: z.enum(["LESSON_BALANCE", "MAKEUP_BALANCE"]).default("LESSON_BALANCE"),
-  amount: z.coerce.number().int().refine((value) => value !== 0, "Корректировка не может быть нулевой."),
+  amount: z.coerce.number().int().min(-MAX_MANUAL_LESSONS).max(MAX_MANUAL_LESSONS).refine((value) => value !== 0, "Корректировка не может быть нулевой."),
   comment: requiredCommentSchema
-});
+}).refine(input => input.balanceType === "LESSON_BALANCE", "Для отработок создайте перенос в разделе переносов.");
 
 export const admissionStatusJobSchema = z.object({
   now: z.coerce.date().optional()

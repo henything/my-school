@@ -76,6 +76,7 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                     {child.latestSubscription.totalAmountKopeks > child.latestSubscription.invoice.amountKopeks ? (
                       <div>Учтено при выставлении счёта: −{formatKopeks(child.latestSubscription.totalAmountKopeks - child.latestSubscription.invoice.amountKopeks)}</div>
                     ) : null}
+                    {child.latestSubscription.invoice.manualAdjustmentKopeks !== 0 ? <div>Ручная корректировка: {child.latestSubscription.invoice.manualAdjustmentKopeks > 0 ? "+" : "−"}{formatKopeks(Math.abs(child.latestSubscription.invoice.manualAdjustmentKopeks))}</div> : null}
                     <div className="font-bold">Выставленный счёт: {formatKopeks(child.latestSubscription.invoice.amountKopeks)}</div>
                     <div>Осталось оплатить: {formatKopeks(child.latestSubscription.invoice.remainingAmountKopeks)}</div>
                   </div>

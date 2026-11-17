@@ -21,6 +21,7 @@ type Preview = {
   nextInvoiceAmountKopeks: number;
   paidAmountKopeks: number;
   appliedMakeupCount: number;
+  manualAdjustmentKopeks?: number;
   currentBalance: number;
   nextBalance: number;
   canApply: boolean;
@@ -112,6 +113,7 @@ export function InvoiceRecalculationPanel({ subscriptions }: { subscriptions: Su
           <div className="font-bold">{preview.childName} · счёт {preview.invoiceNumber ?? "не выставлен"}</div>
           <div>Занятия: {preview.previousLessonsCount} → {preview.nextLessonsCount}</div>
           <div>Сумма: {money.format((preview.previousInvoiceAmountKopeks ?? 0) / 100)} → {money.format(preview.nextInvoiceAmountKopeks / 100)}</div>
+          {preview.manualAdjustmentKopeks ? <div>Сохранённая ручная поправка: {money.format(preview.manualAdjustmentKopeks / 100)}</div> : null}
           <div>Оплачено: {money.format(preview.paidAmountKopeks / 100)} · зачтено переносов: {preview.appliedMakeupCount}</div>
           <div>Баланс занятий: {preview.currentBalance} → {preview.nextBalance}</div>
           <div>Новые платные даты: {preview.nextLessons.map((lesson) => lesson.date).join(", ") || "нет"}</div>

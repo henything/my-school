@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Loader2, ShieldAlert, SlidersHorizontal, WalletCards } from "lucide-react";
+import { CreditCard, Loader2, ShieldAlert, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { labelForEnum } from "@/lib/labels";
@@ -54,10 +54,9 @@ export function BillingForms({ childOptions }: BillingFormsProps) {
 
   return (
     <section className="grid gap-4">
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-2">
         <CreateSubscriptionForm childOptions={activeChildren} />
         <PaymentStatusForm childOptions={activeChildren} />
-        <ManualAdjustmentForm childOptions={activeChildren} />
       </div>
       <AdmissionCheckForm />
     </section>
@@ -181,68 +180,6 @@ function PaymentStatusForm({ childOptions }: { childOptions: Child[] }) {
         <input className="field" name="comment" minLength={1} required disabled={disabled} />
       </label>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Обновить" disabled={disabled} />
-    </form>
-  );
-}
-
-function ManualAdjustmentForm({ childOptions }: { childOptions: Child[] }) {
-  const router = useRouter();
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const disabled = childOptions.length === 0;
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-
-    try {
-      await submitJson(`/api/children/${formData.get("childId")}/manual-balance-adjustment`, "POST", {
-        balanceType: formData.get("balanceType"),
-        amount: formData.get("amount"),
-        comment: formData.get("comment")
-      });
-      form.reset();
-      setMessage("Баланс скорректирован.");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <form className="panel grid content-start gap-4 p-5" onSubmit={onSubmit}>
-      <h2 className="flex items-center gap-2 text-lg font-bold">
-        <SlidersHorizontal aria-hidden="true" size={18} />
-        Корректировка
-      </h2>
-      <label className="label">
-        Ребёнок
-        <ChildSelect childOptions={childOptions} disabled={disabled} />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="label">
-          Баланс
-          <select className="field" name="balanceType" disabled={disabled}>
-            <option value="LESSON_BALANCE">Занятия</option>
-            <option value="MAKEUP_BALANCE">Отработки</option>
-          </select>
-        </label>
-        <label className="label">
-          Движение
-          <input className="field" name="amount" type="number" required disabled={disabled} />
-        </label>
-      </div>
-      <label className="label">
-        Комментарий
-        <input className="field" name="comment" minLength={1} required disabled={disabled} />
-      </label>
-      <FormFooter isSubmitting={isSubmitting} message={message} label="Сохранить" disabled={disabled} />
     </form>
   );
 }

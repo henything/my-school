@@ -33,7 +33,7 @@ type Subscription = {
 };
 
 type Invoice = {
-  discountPercent?: number; discountCategory?: string | null; discountAmountKopeks?: number; amountBeforeDiscountKopeks?: number | null;
+  manualAdjustmentKopeks?: number; discountPercent?: number; discountCategory?: string | null; discountAmountKopeks?: number; amountBeforeDiscountKopeks?: number | null;
   id: string;
   subscriptionId: string | null;
   issuedAt: string;

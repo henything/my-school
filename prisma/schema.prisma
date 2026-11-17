@@ -247,6 +247,7 @@ enum ImportIssueSeverity {
 }
 
 model School {
+  billingCorrections BillingCorrectionOperation[]
   id        String   @id @default(uuid()) @db.Uuid
   name      String
   slug      String   @unique
@@ -288,6 +289,7 @@ model School {
 }
 
 model User {
+  billingCorrections BillingCorrectionOperation[]
   id           String     @id @default(uuid()) @db.Uuid
   schoolId     String     @map("school_id") @db.Uuid
   login        String
@@ -502,6 +504,7 @@ model ParentInvite {
 }
 
 model Child {
+  billingCorrections BillingCorrectionOperation[]
   id                  String          @id @default(uuid()) @db.Uuid
   schoolId            String          @map("school_id") @db.Uuid
   parentId            String?         @map("parent_id") @db.Uuid
@@ -950,6 +953,8 @@ model GroupEvent {
 }
 
 model LessonBalanceTransaction {
+  sourceCorrection BillingCorrectionOperation? @relation("CorrectionSource")
+  balanceCorrection BillingCorrectionOperation? @relation("CorrectionBalance")
   id                 String                 @id @default(uuid()) @db.Uuid
   schoolId           String                 @map("school_id") @db.Uuid
   childId            String                 @map("child_id") @db.Uuid
@@ -1024,6 +1029,9 @@ model PasswordResetToken {
 }
 
 model Invoice {
+  manualAdjustmentKopeks Int @default(0) @map("manual_adjustment_kopeks")
+  manualBasisKopeks Int? @map("manual_basis_kopeks")
+  billingCorrections BillingCorrectionOperation[]
   amountBeforeDiscountKopeks Int? @map("amount_before_discount_kopeks")
   discountAmountKopeks Int @default(0) @map("discount_amount_kopeks")
   discountPercent Int @default(0) @map("discount_percent")
@@ -1372,4 +1380,38 @@ model AuditLog {
   @@index([createdAt])
   @@index([action])
   @@map("audit_logs")
+}
+
+model BillingCorrectionOperation {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  childId String @map("child_id") @db.Uuid
+  invoiceId String? @map("invoice_id") @db.Uuid
+  operationId String @map("operation_id") @db.Uuid
+  kind String
+  requestHash String @map("request_hash")
+  delta Int
+  previousValue Int @map("previous_value")
+  nextValue Int @map("next_value")
+  reason String
+  result Json
+  reversedOperationId String? @unique @map("reversed_operation_id") @db.Uuid
+  sourceTransactionId String? @unique @map("source_transaction_id") @db.Uuid
+  balanceTransactionId String? @unique @map("balance_transaction_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  actor User @relation(fields: [actorUserId], references: [id], onDelete: Restrict)
+  child Child @relation(fields: [childId], references: [id], onDelete: Restrict)
+  invoice Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  reversedOperation BillingCorrectionOperation? @relation("CorrectionReversal", fields: [reversedOperationId], references: [id], onDelete: Restrict)
+  reversal BillingCorrectionOperation? @relation("CorrectionReversal")
+  sourceTransaction LessonBalanceTransaction? @relation("CorrectionSource", fields: [sourceTransactionId], references: [id], onDelete: Restrict)
+  balanceTransaction LessonBalanceTransaction? @relation("CorrectionBalance", fields: [balanceTransactionId], references: [id], onDelete: Restrict)
+
+  @@unique([schoolId, operationId])
+  @@index([childId, createdAt])
+  @@index([invoiceId, createdAt])
+  @@map("billing_correction_operations")
 }

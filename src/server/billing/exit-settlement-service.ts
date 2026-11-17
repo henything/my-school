@@ -35,6 +35,7 @@ export async function getExitSettlement(currentUser: CurrentUser, childId: strin
               number: true,
               status: true,
               amountKopeks: true,
+              manualAdjustmentKopeks: true,
               paidAmountKopeks: true,
               billingAdjustmentApplications: { select: { id: true } },
               payments: { select: { status: true } }
@@ -72,7 +73,9 @@ export async function getExitSettlement(currentUser: CurrentUser, childId: strin
       invoiceAmountKopeks
     });
     const appliedMakeupDiscountCount = -subscription.balanceTransactions.reduce((sum, transaction) => sum + transaction.amount, 0);
-    const earnedAfterDiscountKopeks = Math.max(0, periodCalculation.earnedAmountKopeks - appliedMakeupDiscountCount * subscription.lessonPriceKopeks);
+    const ordinaryEarnedKopeks = Math.max(0, periodCalculation.earnedAmountKopeks - appliedMakeupDiscountCount * subscription.lessonPriceKopeks);
+    const manualAdjustmentKopeks = subscription.invoices.reduce((sum, invoice) => sum + invoice.manualAdjustmentKopeks, 0);
+    const earnedAfterDiscountKopeks = Math.max(0, ordinaryEarnedKopeks + manualAdjustmentKopeks);
     return {
       subscriptionId: subscription.id,
       periodStart: subscription.periodStart.toISOString().slice(0, 10),
@@ -88,6 +91,8 @@ export async function getExitSettlement(currentUser: CurrentUser, childId: strin
       })),
       ...periodCalculation,
       appliedMakeupDiscountCount,
+      ordinaryEarnedKopeks,
+      manualAdjustmentKopeks,
       earnedAfterDiscountKopeks
     };
   });
@@ -202,8 +207,9 @@ export async function leaveChild(currentUser: CurrentUser, childId: string, reas
         }
         await tx.invoice.update({ where: { id: invoice.id }, data: {
           amountKopeks: nextAmount,
+          manualBasisKopeks: period.ordinaryEarnedKopeks,
           amountBeforeDiscountKopeks: Math.max(0, nextCount - period.appliedMakeupDiscountCount) * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks),
-          discountAmountKopeks: subscription.discountPercent ? Math.max(0, Math.max(0, nextCount - period.appliedMakeupDiscountCount) * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks) - nextAmount) : 0,
+          discountAmountKopeks: subscription.discountPercent ? Math.max(0, Math.max(0, nextCount - period.appliedMakeupDiscountCount) * (subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks) - period.ordinaryEarnedKopeks) : 0,
           status: nextAmount === 0 ? "CANCELLED" : "ISSUED",
           cancelledAt: nextAmount === 0 ? new Date() : undefined
         } });
