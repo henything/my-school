@@ -19,7 +19,7 @@ export async function listDiscrepancies(currentUser: CurrentUser) {
     prisma.subscription.findMany({ where: { schoolId: currentUser.schoolId }, select: {
       id: true, childId: true, periodStart: true, periodEnd: true, plannedLessonsCount: true, totalAmountKopeks: true, lessonPriceKopeks: true,
       child: { select: { fullName: true, groupMemberships: { select: { groupId: true, startDate: true, endDate: true } }, attendancePlans: { select: { effectiveFrom: true, weekday: true } }, convertedTrials: { select: { lessonId: true } } } },
-      invoices: { where: { status: { not: "CANCELLED" } }, select: { id: true, number: true, status: true, amountKopeks: true, paidAmountKopeks: true,
+      invoices: { where: { status: { not: "CANCELLED" } }, select: { id: true, number: true, status: true, amountKopeks: true, manualAdjustmentKopeks: true, paidAmountKopeks: true,
         billingAdjustmentApplications: { select: { amountKopeks: true } } } },
       billingAdjustments: { select: { id: true } }
     } }),
@@ -62,10 +62,11 @@ export async function listDiscrepancies(currentUser: CurrentUser) {
       detail: `${label}: в абонементе ${subscription.plannedLessonsCount}, по истории ${ids.size}.`, href: "/admin/billing" });
     for (const invoice of subscription.invoices) {
       const creditedKopeks = invoice.billingAdjustmentApplications.reduce((sum, application) => sum + application.amountKopeks, 0);
-      const expectedInvoiceKopeks = Math.max(0, next.nextInvoiceAmountKopeks - creditedKopeks);
-      if (invoice.status === "PAID" && invoice.paidAmountKopeks > next.nextInvoiceAmountKopeks && subscription.billingAdjustments.length === 0) {
+      const afterManualKopeks = Math.max(0, next.nextInvoiceAmountKopeks + invoice.manualAdjustmentKopeks);
+      const expectedInvoiceKopeks = Math.max(0, afterManualKopeks - creditedKopeks);
+      if (invoice.status === "PAID" && invoice.paidAmountKopeks > afterManualKopeks && subscription.billingAdjustments.length === 0) {
         issues.push({ kind: "Оплаченный счёт уменьшился", childName: subscription.child.fullName,
-          detail: `${label}, счёт ${invoice.number}: разница ${(invoice.paidAmountKopeks - next.nextInvoiceAmountKopeks) / 100} ₽ требует зачёта или возврата.`, href: "/admin/billing" });
+          detail: `${label}, счёт ${invoice.number}: разница ${(invoice.paidAmountKopeks - afterManualKopeks) / 100} ₽ требует зачёта или возврата.`, href: "/admin/billing" });
       } else if (invoice.status !== "PAID" && invoice.amountKopeks !== expectedInvoiceKopeks) {
         issues.push({ kind: "Счёт не совпадает с занятиями", childName: subscription.child.fullName,
           detail: `${label}, счёт ${invoice.number}: ${invoice.amountKopeks / 100} ₽ вместо ${expectedInvoiceKopeks / 100} ₽ после зачётов.`, href: "/admin/billing" });

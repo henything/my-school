@@ -1,4 +1,5 @@
 import { BillingControlPanel } from "@/components/billing-control-panel";
+import { ManualCorrectionPanel } from "@/app/admin/billing/components/manual-correction-panel";
 import { BillingForms } from "@/app/admin/billing/components/billing-forms";
 import { BillingTables } from "@/app/admin/billing/components/billing-tables";
 import { InvoiceForms } from "@/app/admin/billing/components/invoice-forms";
@@ -36,6 +37,8 @@ export default async function BillingPage() {
         tasks={billingTasks}
         tone="critical"
       />
+
+      <ManualCorrectionPanel childOptions={children} invoices={invoices} />
 
       <InvoiceRecalculationPanel subscriptions={subscriptions} />
 

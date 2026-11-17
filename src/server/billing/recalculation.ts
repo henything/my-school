@@ -81,16 +81,18 @@ export function additionalPaidCreditKopeks(paidAmountKopeks: number, nextInvoice
 export function calculateCreditAwareRecalculation(input: {
   invoiceBeforeCreditsKopeks: number;
   baseInvoiceKopeks: number;
+  manualAdjustmentKopeks?: number;
   appliedCreditKopeks: number;
   paidAmountKopeks: number;
   existingAdjustmentsKopeks: number;
 }) {
+  const adjustedCharge = Math.max(0, input.invoiceBeforeCreditsKopeks + (input.manualAdjustmentKopeks ?? 0));
   return {
-    nextInvoiceAmountKopeks: Math.max(0, input.invoiceBeforeCreditsKopeks - input.appliedCreditKopeks),
+    nextInvoiceAmountKopeks: Math.max(0, adjustedCharge - input.appliedCreditKopeks),
     nextDiscountAmountKopeks: Math.max(0, input.baseInvoiceKopeks - input.invoiceBeforeCreditsKopeks),
     additionalCreditKopeks: additionalPaidCreditKopeks(
       input.paidAmountKopeks + input.appliedCreditKopeks,
-      input.invoiceBeforeCreditsKopeks,
+      adjustedCharge,
       input.existingAdjustmentsKopeks
     )
   };

@@ -69,6 +69,7 @@ export async function applyRecalculationInTransaction(tx: Prisma.TransactionClie
         where: { id: preview.invoiceId! },
         data: {
           amountKopeks: preview.nextInvoiceAmountKopeks,
+          manualBasisKopeks: preview.nextInvoiceBeforeCreditsKopeks,
           amountBeforeDiscountKopeks: preview.nextBaseInvoiceKopeks,
           discountAmountKopeks: preview.nextDiscountAmountKopeks,
           dueDate: preview.nextDueDate ? new Date(`${preview.nextDueDate}T00:00:00.000Z`) : undefined,
@@ -239,6 +240,7 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
   const { nextInvoiceAmountKopeks, nextDiscountAmountKopeks, additionalCreditKopeks } = calculateCreditAwareRecalculation({
     invoiceBeforeCreditsKopeks: nextInvoiceBeforeCreditsKopeks,
     baseInvoiceKopeks: nextBaseInvoiceKopeks,
+    manualAdjustmentKopeks: invoice?.manualAdjustmentKopeks ?? 0,
     appliedCreditKopeks,
     paidAmountKopeks: invoice?.paidAmountKopeks ?? 0,
     existingAdjustmentsKopeks
@@ -313,6 +315,7 @@ async function buildPreview(tx: Prisma.TransactionClient, currentUser: CurrentUs
     nextInvoiceBeforeCreditsKopeks,
     nextDiscountAmountKopeks,
     appliedCreditKopeks,
+    manualAdjustmentKopeks: invoice?.manualAdjustmentKopeks ?? 0,
     additionalCreditKopeks,
     creditSettledWithoutCash,
     paidAmountKopeks: invoice?.paidAmountKopeks ?? 0,

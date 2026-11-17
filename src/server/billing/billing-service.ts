@@ -1,3 +1,4 @@
+import { manualBalanceAdjustmentSchema } from "./schemas";
 import { benefitMonth, benefitPricing } from "./benefit-pricing";
 import type {
   AdmissionStatus,
@@ -212,6 +213,7 @@ export function serializeInvoice(invoice: InvoiceRecord) {
     number: invoice.number,
     status: invoice.status,
     amountKopeks: invoice.amountKopeks,
+    manualAdjustmentKopeks: invoice.manualAdjustmentKopeks,
     amountBeforeDiscountKopeks: invoice.amountBeforeDiscountKopeks,
     discountAmountKopeks: invoice.discountAmountKopeks,
     discountPercent: invoice.discountPercent,
@@ -1029,6 +1031,7 @@ export async function updateChildPaymentStatus(currentUser: CurrentUser, childId
 
 export async function createManualBalanceAdjustment(currentUser: CurrentUser, childId: string, input: ManualBalanceAdjustmentInput) {
   assertAdmin(currentUser);
+  input = manualBalanceAdjustmentSchema.parse(input);
 
   return getPrisma().$transaction(async (tx) => {
     const child = await tx.child.findFirstOrThrow({

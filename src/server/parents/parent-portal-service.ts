@@ -354,6 +354,7 @@ function serializeInvoiceSummary(invoice: {
   number: string;
   status: InvoiceStatus;
   amountKopeks: number;
+  manualAdjustmentKopeks?: number;
   amountBeforeDiscountKopeks?: number | null;
   discountAmountKopeks?: number;
   discountPercent?: number;
@@ -366,6 +367,7 @@ function serializeInvoiceSummary(invoice: {
     number: invoice.number,
     status: invoice.status,
     amountKopeks: invoice.amountKopeks,
+    manualAdjustmentKopeks: invoice.manualAdjustmentKopeks ?? 0,
     amountBeforeDiscountKopeks: invoice.amountBeforeDiscountKopeks ?? null,
     discountAmountKopeks: invoice.discountAmountKopeks ?? 0,
     discountPercent: invoice.discountPercent ?? 0,
@@ -381,6 +383,7 @@ function serializeInvoice(invoice: {
   number: string;
   status: InvoiceStatus;
   amountKopeks: number;
+  manualAdjustmentKopeks?: number;
   amountBeforeDiscountKopeks?: number | null;
   discountAmountKopeks?: number;
   discountPercent?: number;
