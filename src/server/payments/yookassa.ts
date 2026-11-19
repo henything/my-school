@@ -123,6 +123,7 @@ export function buildYooKassaPaymentPayload(input: YooKassaPaymentInput) {
       currency: "RUB"
     },
     capture: true,
+    payment_method_data: { type: "sbp" },
     confirmation: {
       type: "redirect",
       return_url: input.returnUrl

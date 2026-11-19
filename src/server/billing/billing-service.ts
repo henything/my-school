@@ -17,6 +17,7 @@ import { attendanceBalanceDelta, debitTransactionTypeForStatus, desiredAttendanc
 import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
+import { CALCULATED_PAYMENT_STATUS_MESSAGE, isCalculatedPaymentStatus } from "@/lib/payment-status";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { dateToKey } from "@/server/schedule/generation";
 import { isLessonInChildPlan, todayInMoscow, type AttendancePlan } from "@/server/children/attendance-plan";
@@ -32,6 +33,7 @@ import {
   canUseCreditLesson,
   DEFAULT_LESSON_PRICE_KOPEKS
 } from "./calculations";
+import { markInvoicePaidSchema } from "./schemas";
 import type {
   AdmissionStatusJobInput,
   CreateInvoiceInput,
@@ -104,7 +106,7 @@ type SubscriptionListRecord = {
   paymentStatusChangedAt: Date | null;
   paymentStatusComment: string | null;
   createdAt: Date;
-  _count?: { balanceTransactions: number };
+  _count?: { balanceTransactions: number; payments?: number; invoices?: number };
   child: {
     id: string;
     fullName: string;
@@ -180,6 +182,7 @@ export function serializeSubscription(subscription: SubscriptionListRecord) {
     totalAmountKopeks: subscription.totalAmountKopeks,
     appliedMakeupCount: subscription._count?.balanceTransactions ?? 0,
     paymentStatus: subscription.paymentStatus,
+    manualPaymentStatusLocked: isCalculatedPaymentStatus(subscription.paymentStatus) || (subscription._count?.payments ?? 0) > 0 || (subscription._count?.invoices ?? 0) > 0,
     paymentStatusChangedAt: subscription.paymentStatusChangedAt?.toISOString() ?? null,
     paymentStatusComment: subscription.paymentStatusComment,
     createdBy: subscription.createdBy,
@@ -469,6 +472,7 @@ async function createInvoiceForSubscription(
 
 export async function markInvoicePaidManually(currentUser: CurrentUser, invoiceId: string, input: MarkInvoicePaidInput) {
   assertAdmin(currentUser);
+  input = markInvoicePaidSchema.parse(input);
 
   return getPrisma().$transaction(async (tx) => {
     const initial = await tx.invoice.findFirstOrThrow({ where: { id: invoiceId, schoolId: currentUser.schoolId }, select: { childId: true } });
@@ -850,6 +854,10 @@ async function createSubscriptionInTransaction(
   currentUser: CurrentUser,
   input: SubscriptionCreationInput
 ) {
+  if (isCalculatedPaymentStatus(input.paymentStatus)) {
+    throw new Error(CALCULATED_PAYMENT_STATUS_MESSAGE);
+  }
+
   await tx.$queryRaw`SELECT "id" FROM "children" WHERE "id" = ${input.childId}::uuid FOR UPDATE`;
   const overlapping = await tx.subscription.findFirst({
     where: {
@@ -974,6 +982,9 @@ async function createSubscriptionInTransaction(
 
 export async function updateChildPaymentStatus(currentUser: CurrentUser, childId: string, input: UpdatePaymentStatusInput) {
   assertAdmin(currentUser);
+  if (isCalculatedPaymentStatus(input.status)) {
+    throw new Error(CALCULATED_PAYMENT_STATUS_MESSAGE);
+  }
 
   return getPrisma().$transaction(async (tx) => {
     await tx.child.findFirstOrThrow({
@@ -989,17 +1000,33 @@ export async function updateChildPaymentStatus(currentUser: CurrentUser, childId
         childId,
         schoolId: currentUser.schoolId
       },
-      orderBy: [{ periodEnd: "desc" }, { createdAt: "desc" }],
+      orderBy: [{ periodEnd: "desc" }, { createdAt: "desc" }, { id: "desc" }],
       include: subscriptionListInclude
     });
 
-    const updated = await tx.subscription.update({
-      where: { id: existing.id },
+    // Check payment evidence in the UPDATE too, so a settled subscription cannot
+    // be reset using a stale form or a status read before payment confirmation.
+    const result = await tx.subscription.updateMany({
+      where: {
+        id: existing.id,
+        schoolId: currentUser.schoolId,
+        paymentStatus: { notIn: ["PAID", "PARTIALLY_PAID"] },
+        payments: { none: { status: "SUCCEEDED" } },
+        invoices: { none: { OR: [{ paidAmountKopeks: { gt: 0 } }, { payments: { some: { status: "SUCCEEDED" } } }] } }
+      },
       data: {
         paymentStatus: input.status,
         paymentStatusChangedAt: new Date(),
         paymentStatusComment: input.comment
-      },
+      }
+    });
+
+    if (result.count === 0) {
+      throw new Error(CALCULATED_PAYMENT_STATUS_MESSAGE);
+    }
+
+    const updated = await tx.subscription.findUniqueOrThrow({
+      where: { id: existing.id },
       include: subscriptionListInclude
     });
 
@@ -1366,7 +1393,9 @@ export async function runAdmissionStatusCheck(currentUser: CurrentUser, input: A
 const subscriptionListInclude = {
   _count: {
     select: {
-      balanceTransactions: { where: { type: "MAKEUP_USED", reason: "INVOICE_DISCOUNT" } }
+      balanceTransactions: { where: { type: "MAKEUP_USED", reason: "INVOICE_DISCOUNT" } },
+      payments: { where: { status: "SUCCEEDED" } },
+      invoices: { where: { OR: [{ paidAmountKopeks: { gt: 0 } }, { payments: { some: { status: "SUCCEEDED" } } }] } }
     }
   },
   child: {
@@ -1385,7 +1414,7 @@ const subscriptionListInclude = {
       login: true
     }
   }
-} as const;
+} satisfies Prisma.SubscriptionInclude;
 
 async function countRemainingLessonsForChild(
   tx: Prisma.TransactionClient,

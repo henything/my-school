@@ -292,7 +292,7 @@ test("v1 makeups flow: sick pending safety, confirmed sickness, vacation, quaran
     periodStart: today,
     periodEnd: dateKey(14),
     plannedLessonsCount: 3,
-    paymentStatus: "PAID"
+    paymentStatus: "NOT_PAID"
   });
 
   const coachContext = await browser.newContext();

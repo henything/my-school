@@ -1,6 +1,6 @@
 {
   "name": "azbuka-dvizheniya",
-  "version": "0.2.5.0",
+  "version": "0.2.6.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.5.1",
@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:payments:integration": "node scripts/test-payments-integration.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "deploy:prod": "scripts/deploy-prod.sh",

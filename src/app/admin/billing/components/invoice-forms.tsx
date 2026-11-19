@@ -148,7 +148,7 @@ function ManualPaymentForm({ invoices }: { invoices: InvoiceOption[] }) {
     <form className="panel grid content-start gap-4 p-5" onSubmit={onSubmit}>
       <h2 className="flex items-center gap-2 text-lg font-bold">
         <Receipt aria-hidden="true" size={18} />
-        Ручная оплата
+        Ручная оплата — исключение
       </h2>
       <div className="label">
         <span>Счёт</span>
@@ -169,7 +169,7 @@ function ManualPaymentForm({ invoices }: { invoices: InvoiceOption[] }) {
         <input className="field" name="amountRub" type="number" min={1} step={1} placeholder="Весь остаток" disabled={disabled} />
       </label>
       <label className="label">
-        Комментарий
+        Причина ручной оплаты
         <input className="field" name="comment" minLength={1} required disabled={disabled} />
       </label>
       <FormFooter isSubmitting={isSubmitting} message={message} label="Сохранить" disabled={disabled} />

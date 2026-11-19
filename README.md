@@ -175,6 +175,27 @@ pnpm test
 pnpm build
 ```
 
+## Payments
+
+New online invoice payments use SBP through YooKassa (`payment_method_data.type = sbp`).
+Enable SBP for the shop and configure the existing YooKassa credentials before launch.
+Previously issued checkout links continue to be processed normally.
+
+Admins can record an exceptional manual payment with an amount and a required reason.
+Paid and partially paid statuses follow recorded payments or an automatic makeup credit settlement.
+Direct manual status changes cannot set these statuses or reset a subscription that already has payment evidence.
+Existing payment history is preserved.
+
+Run the payment service integration checks with:
+
+```bash
+pnpm test:payments:integration
+```
+
+The runner requires a local PostgreSQL connection in `DATABASE_URL` and permission to create a database.
+It creates and removes its own temporary database, applies project migrations there, and mocks the external payment API.
+The regular `pnpm test` command runs unit and UI tests; these database integration checks run separately.
+
 ## Production Deploy
 
 After local acceptance and a clean push to `origin/main`, deploy production with:
