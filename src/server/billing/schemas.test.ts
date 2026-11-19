@@ -29,8 +29,22 @@ describe("billing schemas", () => {
   });
 
   it("requires a payment status comment", () => {
-    expect(updatePaymentStatusSchema.safeParse({ status: "PAID", comment: "Оплачено наличными" }).success).toBe(true);
-    expect(updatePaymentStatusSchema.safeParse({ status: "PAID", comment: " " }).success).toBe(false);
+    expect(updatePaymentStatusSchema.safeParse({ status: "NOT_PAID", comment: "Ожидаем оплату" }).success).toBe(true);
+    expect(updatePaymentStatusSchema.safeParse({ status: "NOT_PAID", comment: " " }).success).toBe(false);
+  });
+
+  it.each(["PAID", "PARTIALLY_PAID"])("rejects direct %s status on both creation and manual updates", (status) => {
+    expect(updatePaymentStatusSchema.safeParse({ status, comment: "Ручная смена" }).success).toBe(false);
+    expect(createSubscriptionSchema.safeParse({
+      childId, periodStart: "2026-11-01", periodEnd: "2026-11-30", paymentStatus: status
+    }).success).toBe(false);
+  });
+
+  it.each(["NOT_INVOICED", "INVOICED", "NOT_PAID", "OVERDUE"])("allows manual unpaid status %s", (status) => {
+    expect(updatePaymentStatusSchema.parse({ status, comment: "Проверено" }).status).toBe(status);
+    expect(createSubscriptionSchema.parse({
+      childId, periodStart: "2026-11-01", periodEnd: "2026-11-30", paymentStatus: status
+    }).paymentStatus).toBe(status);
   });
 
   it("requires manual adjustment comment and non-zero amount", () => {
@@ -45,5 +59,6 @@ describe("billing schemas", () => {
     expect(markInvoicePaidSchema.safeParse({ comment: "Оплата по переводу" }).success).toBe(true);
     expect(markInvoicePaidSchema.safeParse({ amountKopeks: 0, comment: "Оплата" }).success).toBe(false);
     expect(markInvoicePaidSchema.safeParse({ amountKopeks: 1000, comment: "" }).success).toBe(false);
+    expect(markInvoicePaidSchema.safeParse({ amountKopeks: 1000, comment: "   " }).success).toBe(false);
   });
 });

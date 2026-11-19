@@ -1,9 +1,11 @@
 import { z } from "zod";
 import { MAX_MANUAL_LESSONS } from "./manual-correction-rules";
 import { requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
+import { CALCULATED_PAYMENT_STATUS_MESSAGE, isCalculatedPaymentStatus } from "@/lib/payment-status";
 import { DEFAULT_LESSON_PRICE_KOPEKS } from "./calculations";
 
 export const paymentStatusSchema = z.enum(["NOT_INVOICED", "INVOICED", "NOT_PAID", "PAID", "PARTIALLY_PAID", "OVERDUE"]);
+export const manualPaymentStatusSchema = paymentStatusSchema.refine((status) => !isCalculatedPaymentStatus(status), CALCULATED_PAYMENT_STATUS_MESSAGE);
 
 const dateOnlySchema = z
   .string()
@@ -19,7 +21,7 @@ export const createSubscriptionSchema = z
     plannedLessonsCount: z.coerce.number().int().positive().optional(),
     totalAmountRub: z.coerce.number().positive("Сумма абонемента должна быть больше 0.").optional(),
     lessonPriceKopeks: z.coerce.number().int().positive().default(DEFAULT_LESSON_PRICE_KOPEKS),
-    paymentStatus: paymentStatusSchema.default("NOT_INVOICED")
+    paymentStatus: manualPaymentStatusSchema.default("NOT_INVOICED")
   })
   .transform((input) => ({
     ...input,
@@ -31,7 +33,7 @@ export const createSubscriptionSchema = z
   });
 
 export const updatePaymentStatusSchema = z.object({
-  status: paymentStatusSchema,
+  status: manualPaymentStatusSchema,
   comment: requiredCommentSchema
 });
 

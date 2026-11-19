@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CreditCard, Loader2 } from "lucide-react";
+import { QrCode, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type PayButtonProps = {
@@ -38,8 +38,8 @@ export function PayButton({ invoiceId, disabled = false }: PayButtonProps) {
   return (
     <div className="grid min-w-[180px] gap-2">
       <Button type="button" size="sm" onClick={onPay} disabled={disabled || isSubmitting}>
-        {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <CreditCard aria-hidden="true" size={14} />}
-        Оплатить
+        {isSubmitting ? <Loader2 aria-hidden="true" className="animate-spin" size={14} /> : <QrCode aria-hidden="true" size={14} />}
+        Оплатить через СБП
       </Button>
       {message ? <span className="text-xs font-semibold text-[var(--danger)]">{message}</span> : null}
     </div>

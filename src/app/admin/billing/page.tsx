@@ -43,7 +43,7 @@ export default async function BillingPage() {
       <InvoiceRecalculationPanel subscriptions={subscriptions} />
 
       <BillingTables childRows={children} subscriptions={subscriptions} invoices={invoices} payments={payments} transactions={transactions}>
-        <BillingForms childOptions={children} />
+        <BillingForms childOptions={children} subscriptions={subscriptions} />
         <InvoiceForms subscriptions={subscriptions} invoices={invoices} />
       </BillingTables>
     </div>

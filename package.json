@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
+    "test:payments:integration": "node scripts/test-payments-integration.mjs",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "deploy:prod": "scripts/deploy-prod.sh",

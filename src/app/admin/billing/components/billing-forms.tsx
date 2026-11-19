@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CreditCard, Loader2, ShieldAlert, WalletCards } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,14 +18,22 @@ type Child = {
 
 type BillingFormsProps = {
   childOptions: Child[];
+  subscriptions: PaymentStatusSubscription[];
+};
+
+type PaymentStatusSubscription = {
+  id: string;
+  childId: string;
+  periodEnd: string;
+  createdAt: string;
+  paymentStatus: string;
+  manualPaymentStatusLocked: boolean;
 };
 
 const paymentStatuses = [
   ["NOT_INVOICED", "Не выставлен"],
   ["INVOICED", "Выставлен"],
   ["NOT_PAID", "Не оплачен"],
-  ["PAID", "Оплачен"],
-  ["PARTIALLY_PAID", "Частично"],
   ["OVERDUE", "Просрочен"]
 ] as const;
 
@@ -49,14 +57,14 @@ async function submitJson<T = unknown>(path: string, method: "POST" | "PATCH", b
   return payload;
 }
 
-export function BillingForms({ childOptions }: BillingFormsProps) {
+export function BillingForms({ childOptions, subscriptions }: BillingFormsProps) {
   const activeChildren = childOptions.filter((child) => child.status !== "ARCHIVED");
 
   return (
     <section className="grid gap-4">
       <div className="grid gap-4 lg:grid-cols-2">
         <CreateSubscriptionForm childOptions={activeChildren} />
-        <PaymentStatusForm childOptions={activeChildren} />
+        <PaymentStatusForm childOptions={activeChildren} subscriptions={subscriptions} />
       </div>
       <AdmissionCheckForm />
     </section>
@@ -132,14 +140,28 @@ function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
   );
 }
 
-function PaymentStatusForm({ childOptions }: { childOptions: Child[] }) {
+function PaymentStatusForm({ childOptions, subscriptions }: BillingFormsProps) {
   const router = useRouter();
   const [message, setMessage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedChildId, setSelectedChildId] = useState("");
   const disabled = childOptions.length === 0;
+  const latestSubscriptions = useMemo(() => {
+    const latest = new Map<string, PaymentStatusSubscription>();
+    const sorted = [...subscriptions].sort((a, b) =>
+      b.periodEnd.localeCompare(a.periodEnd) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
+    );
+    for (const subscription of sorted) {
+      if (!latest.has(subscription.childId)) latest.set(subscription.childId, subscription);
+    }
+    return latest;
+  }, [subscriptions]);
+  const subscription = latestSubscriptions.get(selectedChildId);
+  const statusDisabled = disabled || !subscription || subscription.manualPaymentStatusLocked;
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (statusDisabled || isSubmitting) return;
     setMessage("");
     setIsSubmitting(true);
 
@@ -169,17 +191,26 @@ function PaymentStatusForm({ childOptions }: { childOptions: Child[] }) {
       </h2>
       <label className="label">
         Ребёнок
-        <ChildSelect childOptions={childOptions} disabled={disabled} />
+        <ChildSelect childOptions={childOptions} disabled={disabled} onValueChange={setSelectedChildId} />
       </label>
       <label className="label">
         Статус
-        <PaymentStatusSelect name="status" disabled={disabled} />
+        {subscription?.manualPaymentStatusLocked ? (
+          <input className="field" value={labelForEnum(subscription.paymentStatus)} readOnly disabled />
+        ) : (
+          <PaymentStatusSelect name="status" disabled={statusDisabled || isSubmitting} />
+        )}
       </label>
       <label className="label">
         Комментарий
-        <input className="field" name="comment" minLength={1} required disabled={disabled} />
+        <input className="field" name="comment" minLength={1} required disabled={statusDisabled || isSubmitting} />
       </label>
-      <FormFooter isSubmitting={isSubmitting} message={message} label="Обновить" disabled={disabled} />
+      {subscription?.manualPaymentStatusLocked ? (
+        <p className="text-sm text-[var(--muted)]">Статус рассчитан по оплатам или зачётам</p>
+      ) : selectedChildId && !subscription ? (
+        <p className="text-sm text-[var(--muted)]">Сначала создайте абонемент ребёнку.</p>
+      ) : null}
+      <FormFooter isSubmitting={isSubmitting} message={message} label="Обновить" disabled={statusDisabled} />
     </form>
   );
 }
@@ -228,12 +259,13 @@ function AdmissionCheckForm() {
   );
 }
 
-function ChildSelect({ childOptions, disabled }: { childOptions: Child[]; disabled: boolean }) {
+function ChildSelect({ childOptions, disabled, onValueChange }: { childOptions: Child[]; disabled: boolean; onValueChange?: (value: string) => void }) {
   return (
     <SearchableCombobox
       name="childId"
       required
       disabled={disabled}
+      onValueChange={onValueChange}
       placeholder="Найти ребёнка"
       options={childOptions.map((child) => ({
         value: child.id,

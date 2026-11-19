@@ -1,5 +1,5 @@
 import { BenefitBreakdown } from "@/components/benefit-breakdown";
-import { CreditCard } from "lucide-react";
+import { QrCode } from "lucide-react";
 import { StatusBadge } from "@/components/badges";
 import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
@@ -23,11 +23,12 @@ export default async function ParentPaymentsPage() {
       <section>
         <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">Кабинет родителя</p>
         <h1 className="mt-2 text-2xl font-bold">Оплаты</h1>
+        <p className="mt-2 text-sm text-[var(--muted)]">Оплата через СБП. На телефоне выберите банк, на компьютере отсканируйте QR-код.</p>
       </section>
 
       <section className="panel">
         <div className="flex items-center gap-2 border-b border-[var(--line)] px-5 py-4">
-          <CreditCard aria-hidden="true" size={18} />
+          <QrCode aria-hidden="true" size={18} />
           <h2 className="text-lg font-bold">Счета</h2>
         </div>
         <div className="table-shell">

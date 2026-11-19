@@ -37,6 +37,11 @@ describe("YooKassa helpers", () => {
 
     expect(payload.amount.value).toBe("4500.00");
     expect(payload.capture).toBe(true);
+    expect(payload.payment_method_data).toEqual({ type: "sbp" });
+    expect(payload.confirmation).toEqual({
+      type: "redirect",
+      return_url: "https://azbukadvizheniya.ru/parent/payments?invoice=invoice-id"
+    });
     expect(payload.receipt.tax_system_code).toBe(6);
     expect(payload.receipt.customer.phone).toBe("79991234567");
     expect(payload.receipt.items[0]).toMatchObject({
