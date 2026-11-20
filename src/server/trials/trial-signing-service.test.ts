@@ -2,13 +2,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CurrentUser } from "@/server/auth/current-user";
 
 const mocks = vi.hoisted(() => ({
-  findTrial: vi.fn(), findJourney: vi.fn(), upsert: vi.fn(), claim: vi.fn(), update: vi.fn(), send: vi.fn()
+  findTrial: vi.fn(), findJourney: vi.fn(), upsert: vi.fn(), claim: vi.fn(), update: vi.fn(), send: vi.fn(), tariff: vi.fn()
 }));
 vi.mock("@/server/db/prisma", () => ({ getPrisma: () => ({
+  $transaction: (work: (tx: object) => unknown) => work({}),
   trialParticipant: { findFirstOrThrow: mocks.findTrial },
   trialTestJourney: { findUnique: mocks.findJourney },
   trialSigningPackage: { upsert: mocks.upsert, updateMany: mocks.claim, update: mocks.update }
 }) }));
+vi.mock("@/server/billing/branch-tariff-service", () => ({ resolveBranchTariff: mocks.tariff }));
 vi.mock("./fdoc-client", () => ({ assertFdocConfigured: vi.fn(), sendFdocPackage: mocks.send }));
 vi.mock("./fdoc-full-cycle-test", () => ({ finalizeSignedTestJourneyByTrialId: vi.fn() }));
 vi.mock("@/server/audit/audit-service", () => ({ writeAuditLog: vi.fn() }));
@@ -22,10 +24,11 @@ beforeEach(() => {
   vi.stubEnv("FDOC_CONTRACT_DYNAMIC_TERMS", "true");
   vi.stubEnv("FDOC_CONTRACT_WEEKLY_SCHEDULE_PARAM_ID", "16");
   vi.stubEnv("FDOC_CONTRACT_LESSON_PRICE_PARAM_ID", "17");
+  mocks.tariff.mockResolvedValue({ lessonPriceKopeks: 45000 });
   mocks.findTrial.mockResolvedValue({
     childName: "Ребёнок Пример", parentName: "Родитель Пример", parentPhone: "89990000000",
     status: "WANTS_TO_CONTINUE", trialAttended: true, coach: { userId: "coach" },
-    group: { name: "81 сад (корпус 2)", scheduleTemplates: [{ weekday: 2 }, { weekday: 4 }] }
+    group: { name: "81 сад (корпус 2)", branchId: "branch", scheduleTemplates: [{ weekday: 2 }, { weekday: 4 }] }
   });
   mocks.findJourney.mockResolvedValue(journey);
   mocks.upsert.mockResolvedValue({ id: "package", method: "FDOC", status: "PENDING" });
@@ -49,6 +52,18 @@ it("uses both group days when the parent selected the full schedule", async () =
   expect(mocks.send).toHaveBeenCalledWith("package", expect.objectContaining({
     weeklySchedule: "2 занятия в неделю, по вторникам и четвергам"
   }));
+});
+
+it("sends the garden tariff for the agreed first-paid month, without changing existing packages", async () => {
+  mocks.findJourney.mockResolvedValue({ ...journey, firstPaidLessonDate: new Date("2026-12-03") });
+  mocks.tariff.mockResolvedValue({ lessonPriceKopeks: 37500 });
+  await startTrialSigning(user, "trial");
+  expect(mocks.tariff).toHaveBeenCalledWith({}, user.schoolId, "branch", new Date("2026-12-03"));
+  expect(mocks.send).toHaveBeenCalledWith("package", expect.objectContaining({ lessonPriceRub: "375" }));
+  mocks.send.mockClear();
+  mocks.upsert.mockResolvedValue({ id: "package", method: "FDOC", status: "WAITING" });
+  await startTrialSigning(user, "trial");
+  expect(mocks.send).not.toHaveBeenCalled();
 });
 
 it("rejects a removed weekday before claiming a package or sending any document", async () => {

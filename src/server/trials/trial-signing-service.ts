@@ -5,7 +5,7 @@ import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import { ADMIN_ROLES, hasRole } from "@/server/rbac/rbac";
 import { writeAuditLog } from "@/server/audit/audit-service";
-import { DEFAULT_LESSON_PRICE_KOPEKS } from "@/server/billing/calculations";
+import { resolveBranchTariff } from "@/server/billing/branch-tariff-service";
 import { assertFdocConfigured, fdocSignedPdf, fdocStatus, sendFdocPackage } from "./fdoc-client";
 import { countUnclaimedInvites } from "./enrollment-reservations";
 import { reservationDeadline } from "./test-journey-rules";
@@ -32,7 +32,7 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   const prisma = getPrisma();
   const trial = await prisma.trialParticipant.findFirstOrThrow({
     where: { id: trialId, schoolId: user.schoolId },
-    include: { coach: { select: { userId: true } }, group: { select: { name: true, scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true, validFrom: true, validUntil: true } } } }, convertedChild: { select: { birthDate: true, parent: { select: { account: { select: { userId: true } } } } } } }
+    include: { coach: { select: { userId: true } }, group: { select: { name: true, branchId: true, scheduleTemplates: { where: { status: "ACTIVE" }, select: { weekday: true, validFrom: true, validUntil: true } } } }, convertedChild: { select: { birthDate: true, parent: { select: { account: { select: { userId: true } } } } } } }
   });
   assertAccess(user, trial.coach.userId, trial.convertedChild?.parent?.account?.userId);
   const testJourney = await prisma.trialTestJourney.findUnique({ where: { trialId } });
@@ -54,9 +54,12 @@ export async function startTrialSigning(user: CurrentUser, trialId: string) {
   if (dynamicTerms && (!testJourney || !testJourney.scheduleChosenAt)) {
     throw new Error("Для нового договора родителю нужно выбрать график в заявке после пробного.");
   }
+  const referenceDate = signingScheduleReferenceDate(testJourney);
   const weeklySchedule = testJourney && process.env.FDOC_CONTRACT_WEEKLY_SCHEDULE_PARAM_ID ?
-    describeWeeklySchedule(templatesOnDate(trial.group.scheduleTemplates, signingScheduleReferenceDate(testJourney)).map((item) => item.weekday), testJourney.attendanceWeekday) : undefined;
-  const lessonPriceRub = testJourney && process.env.FDOC_CONTRACT_LESSON_PRICE_PARAM_ID ? String(DEFAULT_LESSON_PRICE_KOPEKS / 100) : undefined;
+    describeWeeklySchedule(templatesOnDate(trial.group.scheduleTemplates, referenceDate).map((item) => item.weekday), testJourney.attendanceWeekday) : undefined;
+  const tariff = testJourney && process.env.FDOC_CONTRACT_LESSON_PRICE_PARAM_ID ?
+    await prisma.$transaction(tx => resolveBranchTariff(tx, user.schoolId, trial.group.branchId, referenceDate)) : null;
+  const lessonPriceRub = tariff ? String(tariff.lessonPriceKopeks / 100) : undefined;
 
   if (testJourney?.reserveExpiresAt && testJourney.reserveExpiresAt < new Date()) {
     throw new Error("Срок резерва места истёк. Администратор должен проверить доступность группы.");
