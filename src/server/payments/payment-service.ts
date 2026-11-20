@@ -38,7 +38,9 @@ type YooKassaWebhookPayload = {
   };
 };
 
-export async function createParentInvoicePayment(currentUser: CurrentUser, invoiceId: string, requestOrigin?: string) {
+export class InvoicePaymentConflict extends Error {}
+
+export async function createParentInvoicePayment(currentUser: CurrentUser, invoiceId: string, expectedAmountKopeks: number, requestOrigin?: string) {
   if (currentUser.role !== "PARENT") {
     throw new Error("Онлайн-оплата доступна только в кабинете родителя.");
   }
@@ -65,6 +67,11 @@ export async function createParentInvoicePayment(currentUser: CurrentUser, invoi
 
     if (invoice.child.status === "ARCHIVED") throw new Error("Ребёнок в архиве. По вопросам оплаты обратитесь к администратору.");
 
+    const amountKopeks = invoice.amountKopeks - invoice.paidAmountKopeks;
+    if (!Number.isSafeInteger(expectedAmountKopeks) || expectedAmountKopeks <= 0 || expectedAmountKopeks !== amountKopeks) {
+      throw new InvoicePaymentConflict("Сумма счёта изменилась. Проверьте обновлённый счёт перед оплатой.");
+    }
+
     if (invoice.status === "PAID") {
       throw new Error("Счёт уже оплачен.");
     }
@@ -72,8 +79,6 @@ export async function createParentInvoicePayment(currentUser: CurrentUser, invoi
     if (invoice.status === "CANCELLED") {
       throw new Error("Отменённый счёт нельзя оплатить.");
     }
-
-    const amountKopeks = invoice.amountKopeks - invoice.paidAmountKopeks;
 
     if (amountKopeks <= 0) {
       throw new Error("У счёта нет суммы к оплате.");

@@ -151,7 +151,7 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("payment services with Postg
       });
     });
     vi.stubGlobal("fetch", fetchMock);
-    expect(await createParentInvoicePayment(parentUser, invoice.id, "http://localhost:3000")).toEqual({ checkoutUrl: "https://example.test/sbp" });
+    expect(await createParentInvoicePayment(parentUser, invoice.id, 90000, "http://localhost:3000")).toEqual({ checkoutUrl: "https://example.test/sbp" });
     expect(requestBody.payment_method_data).toEqual({ type: "sbp" });
     expect((await prisma().invoice.findUniqueOrThrow({ where: { id: invoice.id } })).paidAmountKopeks).toBe(0);
     const notification = { type: "notification", event: "payment.succeeded", object: {
@@ -171,7 +171,7 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("payment services with Postg
     const { invoice } = await fixture();
     const fetchMock = vi.fn(async () => Response.json({ description: "СБП недоступна" }, { status: 400 }));
     vi.stubGlobal("fetch", fetchMock);
-    await expect(createParentInvoicePayment(parentUser, invoice.id, "http://localhost:3000")).rejects.toThrow("СБП недоступна");
+    await expect(createParentInvoicePayment(parentUser, invoice.id, 90000, "http://localhost:3000")).rejects.toThrow("СБП недоступна");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const stored = await prisma().invoice.findUniqueOrThrow({ where: { id: invoice.id } });
     expect(stored.status).toBe("ISSUED");
@@ -191,7 +191,17 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("payment services with Postg
     const strangerParent = await prisma().parent.create({ data: { schoolId: admin.schoolId, fullName: "Другой родитель" } });
     await prisma().invoice.update({ where: { id: invoice.id }, data: { parentId: strangerParent.id } });
     vi.stubGlobal("fetch", vi.fn());
-    await expect(createParentInvoicePayment(parentUser, invoice.id, "http://localhost:3000")).rejects.toThrow();
+    await expect(createParentInvoicePayment(parentUser, invoice.id, 90000, "http://localhost:3000")).rejects.toThrow();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each(["increased", "decreased", "partial-payment", "already-paid"])("rejects an outdated displayed amount without creating a payment: %s", async (kind) => {
+    const { invoice } = await fixture();
+    await prisma().invoice.update({ where: { id: invoice.id }, data: kind === "increased" ? { amountKopeks: 100000 } : kind === "decreased" ? { amountKopeks: 80000 } : kind === "already-paid" ? { paidAmountKopeks: 90000, status: "PAID" } : { paidAmountKopeks: 10000, status: "PARTIALLY_PAID" } });
+    vi.stubGlobal("fetch", vi.fn());
+    await expect(createParentInvoicePayment(parentUser, invoice.id, 90000, "http://localhost:3000")).rejects.toThrow("Сумма счёта изменилась");
+    expect(fetch).not.toHaveBeenCalled();
+    expect(await prisma().paymentAttempt.count({ where: { invoiceId: invoice.id } })).toBe(0);
+    expect(await prisma().payment.count({ where: { invoiceId: invoice.id } })).toBe(0);
   });
 });

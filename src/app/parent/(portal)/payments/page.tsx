@@ -5,7 +5,7 @@ import { formatDate } from "@/lib/date-format";
 import { requireRole } from "@/server/auth/current-user";
 import { listParentInvoices } from "@/server/parents/parent-portal-service";
 import { hasYooKassaSecretKey, hasYooKassaShopId } from "@/server/payments/yookassa";
-import { PayButton } from "./pay-button";
+import { InvoiceRefresh, PayButton } from "./pay-button";
 
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
@@ -20,6 +20,7 @@ export default async function ParentPaymentsPage() {
 
   return (
     <div className="grid gap-6">
+      <InvoiceRefresh />
       <section>
         <p className="text-sm font-semibold uppercase text-[var(--accent-strong)]">Кабинет родителя</p>
         <h1 className="mt-2 text-2xl font-bold">Оплаты</h1>
@@ -61,7 +62,7 @@ export default async function ParentPaymentsPage() {
                     ) : invoice.status === "CANCELLED" ? (
                       <span className="font-semibold text-[var(--muted)]">Отменён</span>
                     ) : onlinePaymentsReady ? (
-                      <PayButton invoiceId={invoice.id} />
+                      <PayButton invoiceId={invoice.id} expectedAmountKopeks={invoice.remainingAmountKopeks} />
                     ) : (
                       <span className="font-semibold text-[var(--muted)]">Ждём ключ ЮKassa</span>
                     )}
