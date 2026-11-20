@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 
 type TariffData = {
@@ -14,7 +14,9 @@ function currentMonth() {
   return `${parts.find(p => p.type === "year")!.value}-${parts.find(p => p.type === "month")!.value}`;
 }
 const money = (n: number) => new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB", maximumFractionDigits: 2 }).format(n / 100);
-export function BranchTariffPanel({ branchId }: { branchId: string }) {
+export function BranchTariffPanel({ branchId, branchName }: { branchId: string; branchName?: string }) {
+  const dialog = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   const [open, setOpen] = useState(false);
   const [month, setMonth] = useState(currentMonth);
   const [data, setData] = useState<TariffData | null>(null);
@@ -23,6 +25,12 @@ export function BranchTariffPanel({ branchId }: { branchId: string }) {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const sequence = useRef(0);
+  useEffect(() => {
+    if (!open) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [open]);
   async function load(selectedMonth: string) {
     const requestId = ++sequence.current;
     setBusy(true); setConfirm(false);
@@ -48,8 +56,19 @@ export function BranchTariffPanel({ branchId }: { branchId: string }) {
   }
   const editable = data && data.month === month && month >= data.currentMonth && data.branch.status === "ACTIVE";
   return <div className="mt-3 border-t border-[var(--line)] pt-3">
-    <Button type="button" variant="secondary" size="sm" aria-expanded={open} onClick={() => { setOpen(!open); if (!open) { setMessage(""); void load(month); } }}>Тарифы</Button>
-    {open ? <div className="mt-3 grid gap-3">
+    <Button type="button" variant="secondary" size="sm" aria-haspopup="dialog" onClick={() => { dialog.current?.showModal(); setOpen(true); setData(null); setMessage(""); void load(month); }}>Тарифы</Button>
+    <dialog ref={dialog} aria-labelledby={titleId} className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-xl overflow-y-auto rounded-xl border border-[var(--line)] bg-white p-5 text-[var(--foreground)] shadow-xl backdrop:bg-black/40"
+      onClose={() => setOpen(false)}
+      onClick={event => {
+        if (event.target !== event.currentTarget) return;
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.currentTarget.close();
+      }}>
+    {open ? <div className="grid gap-4">
+      <div className="flex items-start justify-between gap-3">
+        <div><h2 id={titleId} className="text-xl font-bold">Тарифы сада</h2>{branchName ? <p className="mt-1 text-sm text-[var(--muted)]">{branchName}</p> : null}</div>
+        <Button type="button" variant="secondary" size="sm" onClick={() => dialog.current?.close()}>Закрыть</Button>
+      </div>
       <label className="label">Месяц действия<input className="field" type="month" value={month} disabled={busy} onChange={e => { setMonth(e.target.value); setData(null); setMessage(""); if (e.target.value) void load(e.target.value); }} /></label>
       {busy ? <p role="status" className="text-sm">Загружаем тариф…</p> : null}
       {data ? <>
@@ -70,5 +89,6 @@ export function BranchTariffPanel({ branchId }: { branchId: string }) {
       </> : null}
       {message ? <p role="status" className="text-sm font-semibold">{message}</p> : null}
     </div> : null}
+    </dialog>
   </div>;
 }

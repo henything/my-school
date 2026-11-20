@@ -185,7 +185,7 @@ export function DirectoryTables({ branches = [], groups, coaches, childRows, chi
               <p className="mt-1 text-sm text-[var(--muted)]">{branch.address ?? "Адрес не указан"} · Групп: {branch.groupsCount}</p>
               <div className="my-3"><StatusBadge status={branch.status} /></div>
               <DirectoryLifecycle kind="branches" entry={branch} />
-              <BranchTariffPanel branchId={branch.id} />
+              <BranchTariffPanel branchId={branch.id} branchName={branch.name} />
             </div>)}
             {!branches.length ? <p className="text-sm text-[var(--muted)]">Филиалов пока нет.</p> : null}
           </div>

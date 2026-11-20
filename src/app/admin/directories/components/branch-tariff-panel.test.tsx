@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BranchTariffPanel } from "./branch-tariff-panel";
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+beforeEach(() => {
+  Object.defineProperty(HTMLDialogElement.prototype, "showModal", { configurable: true, value: function (this: HTMLDialogElement) { this.setAttribute("open", ""); } });
+  Object.defineProperty(HTMLDialogElement.prototype, "close", { configurable: true, value: function (this: HTMLDialogElement) { this.removeAttribute("open"); this.dispatchEvent(new Event("close")); } });
+});
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const data = { month: "2026-12", currentMonth: "2026-11", lessonPriceKopeks: 45000, branch: { status: "ACTIVE" }, tariffs: [], changes: [] };
 const reply = (body: unknown, status = 200) => ({ ok: status < 400, status, json: async () => body });
 it("shows a comparison before saving and refreshes a conflicting edit", async () => {
