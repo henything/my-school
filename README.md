@@ -181,6 +181,12 @@ New online invoice payments use SBP through YooKassa (`payment_method_data.type 
 Enable SBP for the shop and configure the existing YooKassa credentials before launch.
 Previously issued checkout links continue to be processed normally.
 
+Checkout submits the remaining amount displayed to the parent. The server checks it
+against the locked invoice before creating a payment attempt; changed amounts return
+HTTP 409 and require reviewing the refreshed invoice and clicking again. Clients
+without a displayed amount must reload before paying. The payments page refreshes
+when visible on focus/return and every 30 seconds.
+
 Admins can record an exceptional manual payment with an amount and a required reason.
 Paid and partially paid statuses follow recorded payments or an automatic makeup credit settlement.
 Direct manual status changes cannot set these statuses or reset a subscription that already has payment evidence.
