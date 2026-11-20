@@ -19,7 +19,8 @@ try {
   source.pathname = `/${databaseName}`;
   const env = { ...process.env, DATABASE_URL: source.toString(), SBP_TEST_DATABASE_URL: source.toString() };
   await run(["exec", "prisma", "migrate", "deploy"], env);
-  await run(["exec", "vitest", "run", "src/server/billing/billing-payments.integration.test.ts"], env);
+  // Both suites assert absence of audit writes in this isolated database.
+  await run(["exec", "vitest", "run", "--no-file-parallelism", "src/server/billing/billing-payments.integration.test.ts", "src/server/billing/branch-tariffs.integration.test.ts"], env);
 } finally {
   if (created) await connection.query(`DROP DATABASE "${databaseName}"`);
   await connection.end();

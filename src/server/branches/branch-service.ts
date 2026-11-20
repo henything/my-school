@@ -3,6 +3,9 @@ import { writeAuditLog } from "@/server/audit/audit-service";
 import type { CurrentUser } from "@/server/auth/current-user";
 import { getPrisma } from "@/server/db/prisma";
 import type { CreateBranchInput, UpdateBranchInput } from "./schemas";
+import { createBranchSchema } from "./schemas";
+import { saveBranchTariffInTransaction } from "@/server/billing/branch-tariff-service";
+import { todayInMoscow } from "@/server/children/attendance-plan";
 
 export function serializeBranch(branch: {
   id: string;
@@ -37,17 +40,22 @@ export async function listBranches(currentUser: CurrentUser) {
 }
 
 export async function createBranch(currentUser: CurrentUser, input: CreateBranchInput) {
+  const parsed = createBranchSchema.parse(input);
   return getPrisma().$transaction(async (tx) => {
     const branch = await tx.branch.create({
       data: {
         schoolId: currentUser.schoolId,
-        name: input.name,
-        address: input.address,
-        inventoryNotes: input.inventoryNotes,
-        comment: input.comment
+        name: parsed.name,
+        address: parsed.address,
+        inventoryNotes: parsed.inventoryNotes,
+        comment: parsed.comment
       },
       include: { _count: { select: { groups: true } } }
     });
+
+    await saveBranchTariffInTransaction(tx, currentUser, branch.id, {
+      lessonPriceKopeks: parsed.lessonPriceKopeks, expectedVersion: 0
+    }, todayInMoscow().toISOString().slice(0, 7));
 
     await writeAuditLog(
       {

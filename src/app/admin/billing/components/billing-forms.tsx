@@ -1,8 +1,10 @@
 "use client";
 
+import { CreateSubscriptionForm } from "./subscription-create-form";
+
 import { FormEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CreditCard, Loader2, ShieldAlert, WalletCards } from "lucide-react";
+import { CreditCard, Loader2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { labelForEnum } from "@/lib/labels";
@@ -37,11 +39,6 @@ const paymentStatuses = [
   ["OVERDUE", "Просрочен"]
 ] as const;
 
-function optionalNumber(value: FormDataEntryValue | null) {
-  const text = typeof value === "string" ? value.trim() : "";
-  return text.length > 0 ? Number(text) : undefined;
-}
-
 async function submitJson<T = unknown>(path: string, method: "POST" | "PATCH", body: unknown) {
   const response = await fetch(path, {
     method,
@@ -68,75 +65,6 @@ export function BillingForms({ childOptions, subscriptions }: BillingFormsProps)
       </div>
       <AdmissionCheckForm />
     </section>
-  );
-}
-
-function CreateSubscriptionForm({ childOptions }: { childOptions: Child[] }) {
-  const router = useRouter();
-  const [message, setMessage] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const disabled = childOptions.length === 0;
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setMessage("");
-    setIsSubmitting(true);
-
-    const form = event.currentTarget;
-    const formData = new FormData(form);
-    const plannedLessonsCount = optionalNumber(formData.get("plannedLessonsCount"));
-    const totalAmountRub = optionalNumber(formData.get("totalAmountRub"));
-
-    try {
-      await submitJson("/api/subscriptions", "POST", {
-        childId: formData.get("childId"),
-        periodStart: formData.get("periodStart"),
-        periodEnd: formData.get("periodEnd"),
-        ...(plannedLessonsCount !== undefined ? { plannedLessonsCount } : {}),
-        ...(totalAmountRub !== undefined ? { totalAmountRub } : {})
-      });
-      form.reset();
-      setMessage("Абонемент и счёт созданы.");
-      router.refresh();
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Не удалось сохранить.");
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  return (
-    <form className="panel grid content-start gap-4 p-5" onSubmit={onSubmit}>
-      <h2 className="flex items-center gap-2 text-lg font-bold">
-        <WalletCards aria-hidden="true" size={18} />
-        Абонемент
-      </h2>
-      <label className="label">
-        Ребёнок
-        <ChildSelect childOptions={childOptions} disabled={disabled} />
-      </label>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="label">
-          Начало
-          <input className="field" name="periodStart" type="date" required disabled={disabled} />
-        </label>
-        <label className="label">
-          Конец
-          <input className="field" name="periodEnd" type="date" required disabled={disabled} />
-        </label>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="label">
-          Занятий
-          <input className="field" name="plannedLessonsCount" type="number" min={1} placeholder="По расписанию" disabled={disabled} />
-        </label>
-        <label className="label">
-          Сумма абонемента, ₽
-          <input className="field" name="totalAmountRub" type="number" min={1} step="1" placeholder="3600" required disabled={disabled} />
-        </label>
-      </div>
-      <FormFooter isSubmitting={isSubmitting} message={message} label="Создать" disabled={disabled} />
-    </form>
   );
 }
 

@@ -47,9 +47,13 @@ export async function deleteDirectory(user: CurrentUser, kind: DirectoryKind, id
     const record = kind === "branches"
       ? await tx.branch.findFirstOrThrow({ where, include: { _count: true } })
       : await tx.trainingGroup.findFirstOrThrow({ where, include: { _count: true } });
-    const dependencies = Object.entries(record._count).filter(([, count]) => count > 0).map(([key, count]) => `${relationLabels[key] ?? key}: ${count}`);
+    const dependencies = Object.entries(record._count).filter(([key, count]) => count > 0 && !(kind === "branches" && key === "tariffs")).map(([key, count]) => `${relationLabels[key] ?? key}: ${count}`);
     if (dependencies.length) throw new Error(`Удаление невозможно — есть связанные данные: ${dependencies.join(", ")}. Используйте архивирование, чтобы сохранить историю.`);
-    if (kind === "branches") await tx.branch.delete({ where: { id: record.id } });
+    if (kind === "branches") {
+      // An empty branch may have its initial price; audit history remains available.
+      if ("tariffs" in record._count && record._count.tariffs) await tx.branchTariff.deleteMany({ where: { branchId: record.id, schoolId: user.schoolId } });
+      await tx.branch.delete({ where: { id: record.id } });
+    }
     else await tx.trainingGroup.delete({ where: { id: record.id } });
     await writeAuditLog({ schoolId: user.schoolId, actorUserId: user.id, action: kind === "branches" ? "BRANCH_DELETED" : "GROUP_DELETED", entityType: kind === "branches" ? "Branch" : "Group", entityId: record.id, oldValue: { name: record.name, status: record.status } }, tx);
     return { deleted: true };

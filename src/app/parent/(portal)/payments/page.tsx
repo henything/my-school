@@ -10,7 +10,8 @@ import { InvoiceRefresh, PayButton } from "./pay-button";
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
   currency: "RUB",
-  maximumFractionDigits: 0
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
 });
 
 export default async function ParentPaymentsPage() {

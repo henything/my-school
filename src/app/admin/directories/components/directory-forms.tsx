@@ -118,6 +118,7 @@ function CreateBranchForm() {
     try {
       await submitJson("/api/branches", {
         name: formData.get("name"),
+        lessonPriceKopeks: Number(formData.get("lessonPriceKopeks")),
         address: nullable(formData.get("address")),
         inventoryNotes: nullable(formData.get("inventoryNotes")),
         comment: nullable(formData.get("comment"))
@@ -138,6 +139,10 @@ function CreateBranchForm() {
         <Building2 aria-hidden="true" size={18} />
         Филиал
       </h2>
+      <label className="label">Цена занятия<select className="field" name="lessonPriceKopeks" defaultValue={45000} disabled={isSubmitting}>
+        <option value={45000}>450 ₽ — 3 600 ₽ за 8 занятий</option>
+        <option value={37500}>375 ₽ — 3 000 ₽ за 8 занятий</option>
+      </select></label>
       <label className="label">
         Название
         <input className="field" name="name" minLength={2} required />
