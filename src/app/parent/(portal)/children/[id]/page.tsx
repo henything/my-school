@@ -8,7 +8,8 @@ import { getParentChildDetail } from "@/server/parents/parent-portal-service";
 const rubFormatter = new Intl.NumberFormat("ru-RU", {
   style: "currency",
   currency: "RUB",
-  maximumFractionDigits: 0
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2
 });
 
 type ParentChildPageProps = {
@@ -66,7 +67,9 @@ export default async function ParentChildPage({ params }: ParentChildPageProps) 
                   {formatDate(child.latestSubscription.periodStart)} - {formatDate(child.latestSubscription.periodEnd)}
                 </div>
                 <div className="mt-2 text-sm text-[var(--muted)]">
-                  {child.latestSubscription.plannedLessonsCount} занятий · полная стоимость {formatKopeks(child.latestSubscription.totalAmountKopeks)}
+                  {child.latestSubscription.plannedLessonsCount} занятий · базовая цена {formatKopeks(child.latestSubscription.baseLessonPriceKopeks)} за занятие
+                  <div>Базовая стоимость: {formatKopeks(child.latestSubscription.baseTotalAmountKopeks)}</div>
+                  <div>Стоимость после льготы: {formatKopeks(child.latestSubscription.totalAmountKopeks)}</div>
                 </div>
                 {child.latestSubscription.invoice ? (
                   <div className="mt-3 grid gap-1 border-t border-[var(--line)] pt-3 text-sm">

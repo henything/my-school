@@ -246,7 +246,34 @@ enum ImportIssueSeverity {
   WARNING
 }
 
+enum SubscriptionPricingSource {
+  BRANCH_TARIFF
+  DEFAULT
+  MANUAL
+}
+
+model BranchTariff {
+  id String @id @default(uuid()) @db.Uuid
+  schoolId String @map("school_id") @db.Uuid
+  branchId String @map("branch_id") @db.Uuid
+  effectiveMonth DateTime @map("effective_month") @db.Date
+  lessonPriceKopeks Int @map("lesson_price_kopeks")
+  version Int @default(1)
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  updatedByUserId String @map("updated_by_user_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  school School @relation(fields: [schoolId], references: [id], onDelete: Restrict)
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  createdBy User @relation("TariffCreatedBy", fields: [createdByUserId], references: [id], onDelete: Restrict)
+  updatedBy User @relation("TariffUpdatedBy", fields: [updatedByUserId], references: [id], onDelete: Restrict)
+  subscriptions Subscription[]
+  @@unique([schoolId, branchId, effectiveMonth])
+  @@map("branch_tariffs")
+}
+
 model School {
+  branchTariffs BranchTariff[]
   billingCorrections BillingCorrectionOperation[]
   id        String   @id @default(uuid()) @db.Uuid
   name      String
@@ -289,6 +316,8 @@ model School {
 }
 
 model User {
+  createdBranchTariffs BranchTariff[] @relation("TariffCreatedBy")
+  updatedBranchTariffs BranchTariff[] @relation("TariffUpdatedBy")
   billingCorrections BillingCorrectionOperation[]
   id           String     @id @default(uuid()) @db.Uuid
   schoolId     String     @map("school_id") @db.Uuid
@@ -369,6 +398,8 @@ model CoachProfile {
 }
 
 model Branch {
+  tariffs BranchTariff[]
+  pricedSubscriptions Subscription[] @relation("SubscriptionPricingBranch")
   id             String       @id @default(uuid()) @db.Uuid
   schoolId       String       @map("school_id") @db.Uuid
   name           String
@@ -784,6 +815,12 @@ model VacationRequest {
 }
 
 model Subscription {
+  pricingSource SubscriptionPricingSource? @map("pricing_source")
+  pricingBranchId String? @map("pricing_branch_id") @db.Uuid
+  branchTariffId String? @map("branch_tariff_id") @db.Uuid
+  branchTariffVersion Int? @map("branch_tariff_version")
+  pricingBranch Branch? @relation("SubscriptionPricingBranch", fields: [pricingBranchId], references: [id], onDelete: Restrict)
+  branchTariff BranchTariff? @relation(fields: [branchTariffId], references: [id], onDelete: Restrict)
   baseLessonPriceKopeks Int? @map("base_lesson_price_kopeks")
   baseTotalAmountKopeks Int? @map("base_total_amount_kopeks")
   discountPercent Int @default(0) @map("discount_percent")

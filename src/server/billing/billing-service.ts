@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { resolveBranchTariff } from "./branch-tariff-service";
+import { PricingConflict } from "./branch-tariff-rules";
 import { manualBalanceAdjustmentSchema } from "./schemas";
 import { benefitMonth, benefitPricing } from "./benefit-pricing";
 import type {
@@ -99,6 +102,10 @@ type SubscriptionListRecord = {
   lessonPriceKopeks: number;
   baseLessonPriceKopeks?: number | null;
   baseTotalAmountKopeks?: number | null;
+  pricingSource?: string | null;
+  pricingBranchId?: string | null;
+  branchTariffId?: string | null;
+  branchTariffVersion?: number | null;
   discountPercent?: number;
   discountCategory?: string | null;
   totalAmountKopeks: number;
@@ -155,14 +162,11 @@ type AttendanceBalanceRecord = {
 };
 
 type SubscriptionCreationInput = {
-  childId: string;
-  periodStart: Date;
-  periodEnd: Date;
-  plannedLessonsCount?: number;
-  totalAmountKopeks?: number;
-  lessonPriceKopeks: number;
-  paymentStatus: PaymentStatus;
+  childId: string; periodStart: Date; periodEnd: Date; paymentStatus: PaymentStatus;
+  plannedLessonsCount?: number; totalAmountKopeks?: number; lessonPriceKopeks?: number;
+  pricingMode?: "BRANCH_TARIFF" | "MANUAL"; manualReason?: string; pricingToken?: string;
 };
+
 
 export { DEFAULT_LESSON_PRICE_KOPEKS };
 
@@ -175,6 +179,10 @@ export function serializeSubscription(subscription: SubscriptionListRecord) {
     periodEnd: dateToKey(subscription.periodEnd),
     plannedLessonsCount: subscription.plannedLessonsCount,
     lessonPriceKopeks: subscription.lessonPriceKopeks,
+    pricingSource: subscription.pricingSource ?? null,
+    pricingBranchId: subscription.pricingBranchId ?? null,
+    branchTariffId: subscription.branchTariffId ?? null,
+    branchTariffVersion: subscription.branchTariffVersion ?? null,
     baseLessonPriceKopeks: subscription.baseLessonPriceKopeks ?? subscription.lessonPriceKopeks,
     baseTotalAmountKopeks: subscription.baseTotalAmountKopeks ?? subscription.totalAmountKopeks,
     discountPercent: subscription.discountPercent ?? 0,
@@ -613,10 +621,57 @@ export async function getChildBalance(currentUser: CurrentUser, childId: string)
   };
 }
 
-export async function createSubscription(currentUser: CurrentUser, input: CreateSubscriptionInput) {
+type PricingChild = {
+  id: string; parentId: string | null; currentGroup: { branchId: string } | null;
+  attendancePlans: AttendancePlan[];
+};
+
+async function prepareSubscriptionPricing(tx: Prisma.TransactionClient, user: CurrentUser, input: SubscriptionCreationInput, child: PricingChild) {
+  const manual = input.pricingMode === "MANUAL" || (!input.pricingMode && (input.totalAmountKopeks !== undefined || input.lessonPriceKopeks !== undefined));
+  if (!manual && (input.totalAmountKopeks !== undefined || input.lessonPriceKopeks !== undefined)) throw new Error("В тарифном режиме сумма рассчитывается по занятиям.");
+  if (input.pricingMode === "MANUAL" && (!input.manualReason?.trim() || input.manualReason.trim().length < 3 || input.totalAmountKopeks === undefined || input.lessonPriceKopeks !== undefined)) throw new Error("Для ручного расчёта укажите базовую сумму и причину.");
+  if (!manual && input.periodStart.toISOString().slice(0, 7) !== input.periodEnd.toISOString().slice(0, 7)) throw new Error("Тарифный абонемент должен быть в пределах одного календарного месяца. Для нестандартного периода выберите ручной расчёт.");
+  const lessons = await listRemainingLessonsForChild(tx, user.schoolId, child.id, input.periodStart, input.periodEnd, child.attendancePlans);
+  const plannedLessonsCount = manual ? input.plannedLessonsCount ?? lessons.length : lessons.length;
+  if (!manual && input.plannedLessonsCount !== undefined && input.plannedLessonsCount !== lessons.length) throw new Error("Количество занятий изменилось. Проверьте расписание и обновите расчёт.");
+  if (plannedLessonsCount <= 0) throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
+  const branches = manual ? [] : [...new Set(lessons.map(l => l.group.branchId))];
+  if (!manual && branches.length !== 1) throw new Error("В периоде занятия разных филиалов. Нужен ручной расчёт абонемента.");
+  const rate = manual ? { pricingSource: "MANUAL" as const, pricingBranchId: child.currentGroup?.branchId ?? null, branchTariffId: null, branchTariffVersion: null, lessonPriceKopeks: input.lessonPriceKopeks ?? DEFAULT_LESSON_PRICE_KOPEKS } : await resolveBranchTariff(tx, user.schoolId, branches[0], input.periodStart);
+  const baseTotalAmountKopeks = input.totalAmountKopeks ?? calculateSubscriptionTotal(plannedLessonsCount, rate.lessonPriceKopeks);
+  const baseLessonPriceKopeks = input.totalAmountKopeks !== undefined ? Math.round(baseTotalAmountKopeks / plannedLessonsCount) : rate.lessonPriceKopeks;
+  if (!Number.isSafeInteger(baseTotalAmountKopeks) || baseTotalAmountKopeks <= 0 || !Number.isSafeInteger(baseLessonPriceKopeks) || baseLessonPriceKopeks <= 0) throw new Error("Укажите положительную сумму и цену занятия в копейках.");
+  if (!child.parentId) throw new Error("Нельзя создать счёт: у ребёнка нет родителя.");
+  await tx.$queryRaw`SELECT id FROM parents WHERE id = ${child.parentId}::uuid FOR UPDATE`;
+  const parent = await tx.parent.findFirstOrThrow({ where: { id: child.parentId, schoolId: user.schoolId } });
+  const makeups = await findApplicableMakeupCredits(tx, user.schoolId, { childId: child.id, periodStart: input.periodStart, plannedLessonsCount });
+  const provisionalParent = { ...parent, benefitFirstInvoiceMonth: parent.benefitFirstInvoiceMonth ?? benefitMonth(input.periodStart) };
+  const pricing = benefitPricing({ plannedLessonsCount, lessonPriceKopeks: baseLessonPriceKopeks, totalAmountKopeks: baseTotalAmountKopeks, baseLessonPriceKopeks, baseTotalAmountKopeks, discountPercent: 0, discountCategory: null }, provisionalParent, false, makeups.length, input.periodStart);
+  const credits = await tx.billingAdjustment.findMany({ where: { schoolId: user.schoolId, childId: child.id, parentId: child.parentId, kind: "CREDIT", sourceSubscription: { periodEnd: { lt: input.periodStart } } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], select: { id: true, amountKopeks: true, appliedAmountKopeks: true } });
+  const creditAmountKopeks = Math.min(pricing.amountKopeks, credits.reduce((sum, c) => sum + Math.max(0, c.amountKopeks - c.appliedAmountKopeks), 0));
+  const snapshot = { pricingSource: rate.pricingSource, pricingBranchId: rate.pricingBranchId, branchTariffId: rate.branchTariffId, branchTariffVersion: rate.branchTariffVersion };
+  const preview = { branchId: rate.pricingBranchId, pricingSource: rate.pricingSource, tariffId: rate.branchTariffId, tariffVersion: rate.branchTariffVersion, effectiveMonth: input.periodStart.toISOString().slice(0, 7), plannedLessonsCount, baseLessonPriceKopeks, baseTotalAmountKopeks,
+    discountAmountKopeks: pricing.discountAmountKopeks, discountPercent: pricing.discountPercent, appliedMakeupCount: makeups.length, creditAmountKopeks, invoiceAmountKopeks: pricing.amountKopeks - creditAmountKopeks };
+  const pricingToken = createHash("sha256").update(JSON.stringify({ schoolId: user.schoolId, childId: child.id, periodStart: dateToKey(input.periodStart), periodEnd: dateToKey(input.periodEnd), pricingMode: manual ? "MANUAL" : "BRANCH_TARIFF", manualReason: input.manualReason ?? null,
+    lessons: lessons.map(l => ({ id: l.id, groupId: l.groupId, date: dateToKey(l.lessonDate) })).sort((a, b) => a.id.localeCompare(b.id)), snapshot, preview, discountCategory: pricing.discountCategory, makeups: makeups.map(m => m.id).sort(), credits: [...credits].sort((a, b) => a.id.localeCompare(b.id)) })).digest("hex");
+  return { snapshot, preview: { ...preview, pricingToken }, lessons, manualReason: manual ? input.manualReason ?? "Устаревший запрос: ручная сумма/цена" : null };
+}
+
+export async function previewSubscription(currentUser: CurrentUser, input: CreateSubscriptionInput) {
+  assertAdmin(currentUser);
+  return getPrisma().$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM children WHERE id = ${input.childId}::uuid AND school_id = ${currentUser.schoolId}::uuid FOR UPDATE`;
+    const child = await tx.child.findFirstOrThrow({ where: { id: input.childId, schoolId: currentUser.schoolId, status: { not: "ARCHIVED" } }, include: { currentGroup: { select: { branchId: true } }, attendancePlans: true } });
+    const result = await prepareSubscriptionPricing(tx, currentUser, input, child);
+    const branch = result.preview.branchId ? await tx.branch.findFirstOrThrow({ where: { id: result.preview.branchId, schoolId: currentUser.schoolId }, select: { name: true } }) : null;
+    return { ...result.preview, branchName: branch?.name ?? "Без филиала" };
+  }, { timeout: 20_000 });
+}
+
+export async function createSubscription(currentUser: CurrentUser, input: CreateSubscriptionInput, requirePreview = false) {
   assertAdmin(currentUser);
 
-  return getPrisma().$transaction(async (tx) => createSubscriptionInTransaction(tx, currentUser, input));
+  return getPrisma().$transaction(async (tx) => createSubscriptionInTransaction(tx, currentUser, input, requirePreview), { timeout: 20_000 });
 }
 
 export async function ensureCurrentMonthSubscriptionForChild(
@@ -664,18 +719,13 @@ export async function ensureCurrentMonthSubscriptionForChild(
     return null;
   }
 
-  const previousSubscription = await tx.subscription.findFirst({
-    where: { schoolId: currentUser.schoolId, childId, periodEnd: { lt: periodStart } },
-    orderBy: { periodEnd: "desc" },
-    select: { lessonPriceKopeks: true, baseLessonPriceKopeks: true }
-  });
 
   return createSubscriptionInTransaction(tx, currentUser, {
     childId,
     periodStart,
     periodEnd,
     plannedLessonsCount,
-    lessonPriceKopeks: previousSubscription?.baseLessonPriceKopeks ?? previousSubscription?.lessonPriceKopeks ?? DEFAULT_LESSON_PRICE_KOPEKS,
+    pricingMode: "BRANCH_TARIFF",
     paymentStatus: "NOT_INVOICED"
   });
 }
@@ -852,7 +902,8 @@ async function syncMonthlyBillingIssues(
 async function createSubscriptionInTransaction(
   tx: Prisma.TransactionClient,
   currentUser: CurrentUser,
-  input: SubscriptionCreationInput
+  input: SubscriptionCreationInput,
+  requirePreview = false
 ) {
   if (isCalculatedPaymentStatus(input.paymentStatus)) {
     throw new Error(CALCULATED_PAYMENT_STATUS_MESSAGE);
@@ -880,8 +931,9 @@ async function createSubscriptionInTransaction(
       id: true,
       fullName: true,
       parentId: true,
-      parent: { select: { id: true, fullName: true, phone: true } },
+      parent: true,
       currentGroupId: true,
+      currentGroup: { select: { branchId: true } },
       attendancePlans: { select: { effectiveFrom: true, weekday: true } },
       cachedLessonBalance: true,
       cachedMakeupBalance: true,
@@ -893,18 +945,14 @@ async function createSubscriptionInTransaction(
     throw new Error("Нельзя создать абонемент и счёт: у ребёнка нет родителя.");
   }
 
-  const plannedLessonsCount =
-    input.plannedLessonsCount ??
-    (await countRemainingLessonsForChild(tx, currentUser.schoolId, child.id, input.periodStart, input.periodEnd, child.attendancePlans));
-
-  if (plannedLessonsCount <= 0) {
-    throw new Error("Для абонемента нужно хотя бы одно запланированное занятие.");
+  const prepared = await prepareSubscriptionPricing(tx, currentUser, input, child);
+  if ((requirePreview || input.pricingToken) && input.pricingToken !== prepared.preview.pricingToken) {
+    throw new PricingConflict("Расчёт изменился. Получите новый предварительный расчёт и подтвердите создание ещё раз.");
   }
-
-  const totalAmountKopeks = input.totalAmountKopeks ?? calculateSubscriptionTotal(plannedLessonsCount, input.lessonPriceKopeks);
-  const lessonPriceKopeks = input.totalAmountKopeks ? Math.round(totalAmountKopeks / plannedLessonsCount) : input.lessonPriceKopeks;
+  const { plannedLessonsCount, baseLessonPriceKopeks: lessonPriceKopeks, baseTotalAmountKopeks: totalAmountKopeks } = prepared.preview;
   const subscription = await tx.subscription.create({
     data: {
+      ...prepared.snapshot,
       schoolId: currentUser.schoolId,
       childId: child.id,
       groupId: child.currentGroupId,
@@ -921,7 +969,7 @@ async function createSubscriptionInTransaction(
     include: subscriptionListInclude
   });
 
-  const snapshotLessons = await listRemainingLessonsForChild(tx, currentUser.schoolId, child.id, input.periodStart, input.periodEnd, child.attendancePlans);
+  const snapshotLessons = prepared.lessons;
   if (snapshotLessons.length === plannedLessonsCount) {
     await tx.subscriptionLesson.createMany({ data: snapshotLessons.map((lesson) => ({
       subscriptionId: subscription.id, lessonId: lesson.id, groupId: lesson.groupId, lessonDate: lesson.lessonDate
@@ -958,7 +1006,7 @@ async function createSubscriptionInTransaction(
       action: "SUBSCRIPTION_CREATED",
       entityType: "Subscription",
       entityId: subscription.id,
-      newValue: serializeSubscription(subscription)
+      newValue: { ...serializeSubscription(subscription), manualReason: prepared.manualReason }
     },
     tx
   );
@@ -1465,7 +1513,7 @@ async function listRemainingLessonsForChild(
       },
       status: { not: "CANCELLED" }
     },
-    select: { id: true, groupId: true, lessonDate: true }
+    select: { id: true, groupId: true, lessonDate: true, group: { select: { branchId: true } } }
   });
   return lessons.filter((lesson) => !trialLessonIds.has(lesson.id) && !quarantinedLessonIds.has(lesson.id) &&
     memberships.some((membership) => membership.groupId === lesson.groupId && isMemberOnDate(membership, lesson.lessonDate)) &&
@@ -1475,7 +1523,7 @@ async function listRemainingLessonsForChild(
 async function findApplicableMakeupCredits(
   tx: Prisma.TransactionClient,
   schoolId: string,
-  subscription: InvoiceSubscriptionRecord
+  subscription: Pick<InvoiceSubscriptionRecord, "childId" | "periodStart" | "plannedLessonsCount">
 ): Promise<ApplicableMakeupCredit[]> {
   return tx.makeupCredit.findMany({
     where: {

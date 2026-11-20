@@ -2,7 +2,6 @@ import { z } from "zod";
 import { MAX_MANUAL_LESSONS } from "./manual-correction-rules";
 import { requiredCommentSchema, uuidSchema } from "@/server/shared/schemas";
 import { CALCULATED_PAYMENT_STATUS_MESSAGE, isCalculatedPaymentStatus } from "@/lib/payment-status";
-import { DEFAULT_LESSON_PRICE_KOPEKS } from "./calculations";
 
 export const paymentStatusSchema = z.enum(["NOT_INVOICED", "INVOICED", "NOT_PAID", "PAID", "PARTIALLY_PAID", "OVERDUE"]);
 export const manualPaymentStatusSchema = paymentStatusSchema.refine((status) => !isCalculatedPaymentStatus(status), CALCULATED_PAYMENT_STATUS_MESSAGE);
@@ -20,8 +19,15 @@ export const createSubscriptionSchema = z
     periodEnd: dateOnlySchema,
     plannedLessonsCount: z.coerce.number().int().positive().optional(),
     totalAmountRub: z.coerce.number().positive("Сумма абонемента должна быть больше 0.").optional(),
-    lessonPriceKopeks: z.coerce.number().int().positive().default(DEFAULT_LESSON_PRICE_KOPEKS),
+    lessonPriceKopeks: z.coerce.number().int().positive().optional(),
+    pricingMode: z.enum(["BRANCH_TARIFF", "MANUAL"]).optional(),
+    manualReason: z.string().trim().min(3, "Укажите причину ручного расчёта.").optional(),
+    pricingToken: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     paymentStatus: manualPaymentStatusSchema.default("NOT_INVOICED")
+  })
+  .superRefine((input, ctx) => {
+    if (input.pricingMode === "BRANCH_TARIFF" && (input.totalAmountRub !== undefined || input.lessonPriceKopeks !== undefined)) ctx.addIssue({ code: "custom", message: "В тарифном режиме сумма рассчитывается по занятиям.", path: ["totalAmountRub"] });
+    if (input.pricingMode === "MANUAL" && (input.totalAmountRub === undefined || !input.manualReason || input.lessonPriceKopeks !== undefined)) ctx.addIssue({ code: "custom", message: "Для ручного расчёта укажите базовую сумму и причину, без отдельной цены занятия.", path: ["totalAmountRub"] });
   })
   .transform((input) => ({
     ...input,

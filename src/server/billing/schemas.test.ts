@@ -14,7 +14,7 @@ describe("billing schemas", () => {
     });
 
     expect(input.totalAmountKopeks).toBe(360000);
-    expect(input.lessonPriceKopeks).toBe(45000);
+    expect(input.lessonPriceKopeks).toBeUndefined();
   });
 
   it("rejects subscription periods where end is before start", () => {
