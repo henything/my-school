@@ -5,7 +5,10 @@ import { getPrisma } from "@/server/db/prisma";
 import { createSubscriptionSchema } from "./schemas";
 import { createSubscription, ensureCurrentMonthSubscriptionForChild, ensureMonthlySubscriptionsForGroup, previewSubscription } from "./billing-service";
 import { ensureEnrollmentSubscriptions } from "@/server/children/child-service";
-import { listBranchTariffs, saveBranchTariff } from "./branch-tariff-service";
+import { listBranchTariffs, saveBranchTariff, saveBranchTariffInTransaction } from "./branch-tariff-service";
+import * as attendancePlan from "@/server/children/attendance-plan";
+import { createBranch } from "@/server/branches/branch-service";
+import { deleteDirectory } from "@/server/directories/lifecycle-service";
 import { monthDate, PricingConflict, TariffNotFound } from "./branch-tariff-rules";
 import { getRecalculationPreview } from "./recalculation-service";
 
@@ -21,12 +24,13 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("branch tariffs with Postgre
     const url = new URL(process.env.SBP_TEST_DATABASE_URL!);
     if (!url.pathname.startsWith("/azbuka_sbp_test_")) throw new Error("Use disposable database runner.");
     vi.stubEnv("DATABASE_URL", url.toString());
+    vi.spyOn(attendancePlan, "todayInMoscow").mockReturnValue(date(0));
     const school = await db().school.create({ data: { name: "Тест тарифов", slug: randomUUID() } });
     const user = await db().user.create({ data: { schoolId: school.id, login: randomUUID(), passwordHash: "unused", displayName: "Администратор тарифов", role: "ADMIN" } });
     admin = { id: user.id, schoolId: school.id, login: user.login, displayName: user.displayName, role: user.role };
     coachId = (await db().coachProfile.create({ data: { schoolId: school.id, userId: user.id } })).id;
   });
-  afterAll(async () => { await db().$disconnect(); vi.unstubAllEnvs(); });
+  afterAll(async () => { await db().$disconnect(); vi.unstubAllEnvs(); vi.restoreAllMocks(); });
   async function fixture(count = 3) {
     const branch = await db().branch.create({ data: { schoolId: admin.schoolId, name: randomUUID() } });
     const group = await db().trainingGroup.create({ data: { schoolId: admin.schoolId, branchId: branch.id, name: randomUUID(), mainCoachId: coachId } });
@@ -38,7 +42,9 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("branch tariffs with Postgre
     return { branch, group, parent, child, lessons };
   }
   const inputFor = (childId: string, extra: Record<string, unknown> = {}) => createSubscriptionSchema.parse({ childId, periodStart: `${month}-01`, periodEnd: `${month}-31`, pricingMode: "BRANCH_TARIFF", ...extra });
-  const rate = (branchId: string, price: 37500 | 45000 = 37500, expectedVersion = 0, effectiveMonth = month) => saveBranchTariff(admin, branchId, { effectiveMonth, lessonPriceKopeks: price, expectedVersion });
+  const rate = (branchId: string, price: 37500 | 45000 = 37500, expectedVersion = 0, effectiveMonth?: string) => effectiveMonth
+    ? db().$transaction(tx => saveBranchTariffInTransaction(tx, admin, branchId, { lessonPriceKopeks: price, expectedVersion }, effectiveMonth))
+    : saveBranchTariff(admin, branchId, { expectedEffectiveMonth: month, lessonPriceKopeks: price, expectedVersion });
   async function createReviewed(childId: string, extra: Record<string, unknown> = {}) {
     const input = inputFor(childId, extra);
     const preview = await previewSubscription(admin, input);
@@ -56,7 +62,7 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("branch tariffs with Postgre
     await rate(f.branch.id, 45000, 1);
     expect(await db().subscription.findUniqueOrThrow({ where: { id: result.id } })).toEqual(before);
     expect(await db().invoice.findUniqueOrThrow({ where: { id: invoice.id } })).toEqual(invoice);
-    const history = await listBranchTariffs(admin, f.branch.id, month);
+    const history = await listBranchTariffs(admin, f.branch.id);
     expect(history.changes).toHaveLength(2);
     expect(history.changes[0].author).toBe(admin.displayName);
   });
@@ -68,7 +74,22 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("branch tariffs with Postgre
     expect(result).toMatchObject({ lessonPriceKopeks: 45000, pricingSource: "DEFAULT" });
     const other = await fixture();
     expect((await createReviewed(other.child.id)).lessonPriceKopeks).toBe(45000);
-    expect((await listBranchTariffs(admin, f.branch.id, nextMonth)).lessonPriceKopeks).toBe(37500);
+    expect((await listBranchTariffs(admin, f.branch.id)).lessonPriceKopeks).toBe(45000);
+  });
+  it("schedules edits for next month while new branches start at their selected price", async () => {
+    const branch = await createBranch(admin, { name: randomUUID(), lessonPriceKopeks: 37500 });
+    const initial = await listBranchTariffs(admin, branch.id);
+    expect(initial).toMatchObject({ currentLessonPriceKopeks: 37500, lessonPriceKopeks: 37500, effectiveMonth: month, expectedVersion: 0 });
+    await rate(branch.id, 45000);
+    expect(await listBranchTariffs(admin, branch.id)).toMatchObject({ currentLessonPriceKopeks: 37500, lessonPriceKopeks: 45000, expectedVersion: 1 });
+    const current = await db().branchTariff.findMany({ where: { branchId: branch.id }, orderBy: { effectiveMonth: "asc" } });
+    expect(current.map(t => [t.effectiveMonth.toISOString().slice(0, 7), t.lessonPriceKopeks])).toEqual([[`${year - 1}-12`, 37500], [month, 45000]]);
+    await rate(branch.id, 37500, 1);
+    expect(await listBranchTariffs(admin, branch.id)).toMatchObject({ currentLessonPriceKopeks: 37500, lessonPriceKopeks: 37500, expectedVersion: 2 });
+    const standard = await createBranch(admin, { name: randomUUID() });
+    expect((await listBranchTariffs(admin, standard.id)).currentLessonPriceKopeks).toBe(45000);
+    await deleteDirectory(admin, "branches", standard.id);
+    expect(await db().branch.findUnique({ where: { id: standard.id } })).toBeNull();
   });
   it("applies the tariff during enrollment and automatic monthly generation, idempotently", async () => {
     const f = await fixture();
@@ -184,15 +205,15 @@ describe.skipIf(!process.env.SBP_TEST_DATABASE_URL)("branch tariffs with Postgre
     const next = await db().$transaction(tx => ensureCurrentMonthSubscriptionForChild(tx, admin, mixed.child.id, monthDate(nextMonth)));
     expect(next).toMatchObject({ pricingBranchId: destination.branch.id, baseLessonPriceKopeks: 37500 });
   });
-  it("rejects foreign schools, unauthorized roles, archived branches and completed months", async () => {
+  it("rejects foreign schools, unauthorized roles, archived branches and a stale effective month", async () => {
     const f = await fixture();
     const stranger = await db().school.create({ data: { name: "Чужая школа", slug: randomUUID() } });
-    await expect(saveBranchTariff({ ...admin, schoolId: stranger.id }, f.branch.id, { effectiveMonth: month, lessonPriceKopeks: 37500, expectedVersion: 0 })).rejects.toBeInstanceOf(TariffNotFound);
+    await expect(saveBranchTariff({ ...admin, schoolId: stranger.id }, f.branch.id, { expectedEffectiveMonth: month, lessonPriceKopeks: 37500, expectedVersion: 0 })).rejects.toBeInstanceOf(TariffNotFound);
     for (const role of ["COACH", "PARENT"] as const) {
-      await expect(saveBranchTariff({ ...admin, role }, f.branch.id, { effectiveMonth: month, lessonPriceKopeks: 37500, expectedVersion: 0 })).rejects.toThrow("Недостаточно прав");
+      await expect(saveBranchTariff({ ...admin, role }, f.branch.id, { expectedEffectiveMonth: month, lessonPriceKopeks: 37500, expectedVersion: 0 })).rejects.toThrow("Недостаточно прав");
       await expect(previewSubscription({ ...admin, role }, inputFor(f.child.id))).rejects.toThrow();
     }
-    await expect(rate(f.branch.id, 37500, 0, "2000-01")).rejects.toThrow("завершённого месяца");
+    await expect(saveBranchTariff(admin, f.branch.id, { expectedEffectiveMonth: "2000-01", lessonPriceKopeks: 37500, expectedVersion: 0 })).rejects.toBeInstanceOf(PricingConflict);
     await db().branch.update({ where: { id: f.branch.id }, data: { status: "ARCHIVED" } });
     await expect(rate(f.branch.id)).rejects.toThrow("активного филиала");
     expect(await db().branchTariff.count({ where: { branchId: f.branch.id } })).toBe(0);

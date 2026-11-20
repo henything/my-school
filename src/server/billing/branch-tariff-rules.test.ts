@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { branchTariffInputSchema, monthDate, priceForMonth } from "./branch-tariff-rules";
+import { branchTariffInputSchema, monthDate, nextTariffMonth, priceForMonth } from "./branch-tariff-rules";
 import { calculateSubscriptionTotal } from "./calculations";
 import { createSubscriptionSchema } from "./schemas";
 
@@ -15,8 +15,13 @@ describe("branch tariff rules", () => {
     expect(() => monthDate(month)).toThrow();
   });
   it("rejects unsupported prices and missing/concurrent versions", () => {
-    expect(branchTariffInputSchema.safeParse({ effectiveMonth: "2027-01", lessonPriceKopeks: 30000, expectedVersion: 0 }).success).toBe(false);
-    expect(branchTariffInputSchema.safeParse({ effectiveMonth: "2027-01", lessonPriceKopeks: 37500, expectedVersion: -1 }).success).toBe(false);
+    expect(branchTariffInputSchema.safeParse({ lessonPriceKopeks: 30000, expectedVersion: 0 }).success).toBe(false);
+    expect(branchTariffInputSchema.safeParse({ lessonPriceKopeks: 37500, expectedVersion: -1 }).success).toBe(false);
+  });
+  it("automatically chooses the next month including December rollover", () => {
+    expect(nextTariffMonth(new Date("2026-11-20"))).toBe("2026-12");
+    expect(nextTariffMonth(new Date("2026-12-31"))).toBe("2027-01");
+    expect(branchTariffInputSchema.safeParse({ effectiveMonth: "2026-11", lessonPriceKopeks: 37500, expectedVersion: 0 }).success).toBe(false);
   });
   it("distinguishes omitted prices from legacy explicit prices and enforces new manual reason", () => {
     const base = { childId: "11111111-1111-4111-8111-111111111111", periodStart: "2027-01-01", periodEnd: "2027-01-31" };

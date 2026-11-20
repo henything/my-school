@@ -4,7 +4,6 @@ import { requireApiUser } from "@/server/auth/api-user";
 import { errorMessage, jsonError } from "@/lib/http";
 import { listBranchTariffs, saveBranchTariff } from "@/server/billing/branch-tariff-service";
 import { branchTariffInputSchema, PricingConflict, TariffNotFound } from "@/server/billing/branch-tariff-rules";
-import { todayInMoscow } from "@/server/children/attendance-plan";
 
 type Context = { params: Promise<{ id: string }> };
 function failure(error: unknown) {
@@ -16,7 +15,7 @@ export async function GET(request: Request, context: Context) {
   try {
     const { id } = await context.params;
     z.string().uuid().parse(id);
-    return NextResponse.json(await listBranchTariffs(auth.user, id, new URL(request.url).searchParams.get("month") ?? todayInMoscow().toISOString().slice(0, 7)));
+    return NextResponse.json(await listBranchTariffs(auth.user, id));
   } catch (error) { return failure(error); }
 }
 export async function PUT(request: Request, context: Context) {

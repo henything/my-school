@@ -3,13 +3,16 @@ import { DEFAULT_LESSON_PRICE_KOPEKS } from "./calculations";
 
 export const tariffMonthSchema = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Выберите месяц в формате ГГГГ-ММ.");
 export const branchTariffInputSchema = z.object({
-  effectiveMonth: tariffMonthSchema,
+  expectedEffectiveMonth: tariffMonthSchema.optional(),
   lessonPriceKopeks: z.union([z.literal(45000), z.literal(37500)]),
   expectedVersion: z.number().int().nonnegative()
 }).strict();
 export type BranchTariffInput = z.infer<typeof branchTariffInputSchema>;
 export class PricingConflict extends Error {}
 export class TariffNotFound extends Error {}
+export function nextTariffMonth(today: Date) {
+  return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1)).toISOString().slice(0, 7);
+}
 export function monthDate(month: string) {
   return new Date(`${tariffMonthSchema.parse(month)}-01T00:00:00.000Z`);
 }
